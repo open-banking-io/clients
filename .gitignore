@@ -1,0 +1,22 @@
+# .NET
+bin/
+obj/
+*.user
+
+# Node
+node_modules/
+*.tsbuildinfo
+
+# Python
+__pycache__/
+*.egg-info/
+.venv/
+.pytest_cache/
+*.pyc
+
+# Build output (both node tsup + python build)
+dist/
+build/
+
+# misc
+.DS_Store

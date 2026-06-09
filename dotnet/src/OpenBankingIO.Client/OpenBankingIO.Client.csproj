@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- DTO/record properties are self-documenting; don't require XML docs on each. -->
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+
+    <PackageId>OpenBankingIO.Client</PackageId>
+    <Version>0.1.0</Version>
+    <Authors>open-banking.io</Authors>
+    <Description>Server-to-server client for open-banking.io: API-key auth + client-side decryption of the zero-knowledge data envelopes with your exported private key.</Description>
+    <PackageTags>open-banking;psd2;zero-knowledge;encryption;fintech</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/open-banking-io/clients</RepositoryUrl>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" Condition="Exists('README.md')" />
+    <InternalsVisibleTo Include="OpenBankingIO.Client.Tests" />
+  </ItemGroup>
+
+</Project>

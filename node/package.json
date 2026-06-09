@@ -1,0 +1,48 @@
+{
+  "name": "@open-banking-io/client",
+  "version": "0.1.0",
+  "description": "Server-to-server client for open-banking.io: API-key auth + client-side decryption of the zero-knowledge data envelopes with your exported private key.",
+  "type": "module",
+  "license": "MIT",
+  "author": "open-banking.io",
+  "keywords": [
+    "open-banking",
+    "psd2",
+    "zero-knowledge",
+    "encryption",
+    "fintech"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/open-banking-io/clients"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.42",
+    "tsup": "^8.3.5",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/OpenBankingIO.Client/OpenBankingIO.Client.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/OpenBankingIO.Client.Tests/OpenBankingIO.Client.Tests.csproj" />
+  </Folder>
+</Solution>

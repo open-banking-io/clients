@@ -1,0 +1,12 @@
+[
+  {
+    "sessionId": "22222222-2222-4222-8222-222222222222",
+    "aspspName": "Lunar",
+    "aspspCountry": "DK",
+    "validUntil": "2026-09-07T16:00:00.000Z",
+    "status": "Active",
+    "accountCount": 1,
+    "lastSyncedAt": "2026-06-09T16:00:00.000Z",
+    "psuType": "business"
+  }
+]
