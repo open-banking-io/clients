@@ -1,5 +1,8 @@
 name: Publish Python
 
+# Publishes open-banking-io to PyPI via a Trusted Publisher (OIDC) — no token.
+# Requires a PyPI trusted publisher for the project (this repo, this workflow, "Production" environment).
+
 on:
   push:
     tags: ['v*']
@@ -8,31 +11,17 @@ on:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: python
+    environment: Production
+    permissions:
+      id-token: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-
-      - name: Check for PyPI token
-        id: guard
-        env:
-          PYPI_API_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
-        run: |
-          if [ -z "$PYPI_API_TOKEN" ]; then
-            echo "No PYPI_API_TOKEN secret set — skipping publish."
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-          fi
-
-      - run: pip install build twine
+      - run: pip install build
       - run: python -m build
-
-      - name: Upload to PyPI
-        if: steps.guard.outputs.skip != 'true'
-        env:
-          TWINE_USERNAME: __token__
-          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
-        run: twine upload dist/*
+        working-directory: python
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: python/dist

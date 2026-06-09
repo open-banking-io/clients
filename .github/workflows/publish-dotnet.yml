@@ -1,5 +1,8 @@
 name: Publish .NET
 
+# Publishes OpenBankingIO.Client to NuGet via Trusted Publishing (OIDC) — no API key secret.
+# Requires a NuGet Trusted Publishing policy for this package, repo, and the "Production" environment.
+
 on:
   push:
     tags: ['v*']
@@ -8,26 +11,23 @@ on:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    environment: Production
+    permissions:
+      id-token: write
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
 
-      - name: Check for NuGet API key
-        id: guard
-        env:
-          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
-        run: |
-          if [ -z "$NUGET_API_KEY" ]; then
-            echo "No NUGET_API_KEY secret set — skipping publish."
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-          fi
-
       - run: dotnet pack dotnet/src/OpenBankingIO.Client -c Release -o out
 
-      - name: Push to NuGet
-        if: steps.guard.outputs.skip != 'true'
-        env:
-          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
-        run: dotnet nuget push "out/*.nupkg" --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json --skip-duplicate
+      - name: Authenticate to NuGet (trusted publishing)
+        uses: NuGet/login@v1
+        id: login
+        with:
+          user: open-banking-io
+
+      - name: Push
+        run: dotnet nuget push "out/*.nupkg" --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate
