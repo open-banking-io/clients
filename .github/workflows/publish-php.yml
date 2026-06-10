@@ -39,6 +39,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          # Don't persist the github-actions[bot] credential — it sets an http.extraheader
+          # that would override our inline MIRROR_TOKEN and 403 on the other repo.
+          persist-credentials: false
 
       - name: Compute mirror tag
         run: echo "MIRROR_TAG=${GITHUB_REF_NAME#php/}" >> "$GITHUB_ENV"
