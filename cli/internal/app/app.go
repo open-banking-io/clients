@@ -28,6 +28,8 @@ func (a *App) Run(args []string) error {
 	}
 	cmd, rest := args[0], args[1:]
 	switch cmd {
+	case "login":
+		return a.login(rest)
 	case "accounts":
 		return a.accounts(rest)
 	case "transactions":
@@ -58,6 +60,7 @@ Usage:
   obank <command> [flags]
 
 Commands:
+  login                          Sign in via the browser and save an API key (--api --timeout)
   accounts                       List your accounts with balances
   transactions <account-id>      Show an account's statement (--from --to --limit --offset)
   connections                    List your bank connections
