@@ -62,3 +62,6 @@ dotnet_diagnostic.CA1819.severity = none
 dotnet_diagnostic.CA1707.severity = none
 # MockServer._loop intentionally roots the accept-loop Task for the server's lifetime.
 dotnet_diagnostic.IDE0052.severity = none
+# JSON002: tests embed API responses as JSON string literals on purpose; the "probable JSON
+# string" hint is noise for fixtures (and some are intentionally malformed for negative tests).
+dotnet_diagnostic.JSON002.severity = none
