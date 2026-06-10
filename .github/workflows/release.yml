@@ -16,6 +16,7 @@ on:
           - go
           - ruby
           - php
+          - cli
       version:
         description: New version, e.g. 0.2.0 (no leading "v")
         required: true
@@ -67,12 +68,12 @@ jobs:
           git config user.email "bot@open-banking.io"
 
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
-        if: ${{ env.PACKAGE != 'go' && env.PACKAGE != 'php' }}
+        if: ${{ env.PACKAGE != 'go' && env.PACKAGE != 'php' && env.PACKAGE != 'cli' }}
         with:
           node-version: 20
 
       - name: Verify the manifest is already at the target version
-        if: ${{ env.PACKAGE != 'go' && env.PACKAGE != 'php' }}
+        if: ${{ env.PACKAGE != 'go' && env.PACKAGE != 'php' && env.PACKAGE != 'cli' }}
         run: |
           node tools/bump-version.mjs "$PACKAGE" "$VERSION"
           if ! git diff --quiet; then
@@ -90,6 +91,9 @@ jobs:
           echo "::notice::pushed ${TAG} via PAT — publish-${PACKAGE}.yml will trigger"
 
       - name: Create GitHub Release
+        # The cli package's publish-cli.yml owns its release (it attaches the built binaries), so
+        # don't create an empty one here that would collide with it.
+        if: ${{ env.PACKAGE != 'cli' }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release create "${TAG}" --title "${PACKAGE} v${VERSION}" --generate-notes --verify-tag

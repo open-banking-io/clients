@@ -30,9 +30,7 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency "rake", "~> 13.0"
   spec.add_development_dependency "rspec", "~> 3.0"
   spec.add_development_dependency "simplecov", "~> 0.22"
-  spec.add_development_dependency "simplecov-cobertura", "~> 2.1"
-  # simplecov-cobertura 2.1 builds its XML via REXML in a way the strict REXML 3.4 parser
-  # rejects ("No root element"); pin to the last compatible line.
-  spec.add_development_dependency "rexml", "~> 3.3", "< 3.4"
+  spec.add_development_dependency "simplecov-cobertura", "~> 3.1"
+  spec.add_development_dependency "rexml", "~> 3.4"
   spec.add_development_dependency "standard", "~> 1.0"
 end
