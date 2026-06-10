@@ -72,19 +72,15 @@ jobs:
         with:
           node-version: 20
 
-      - name: Bump manifest version (all packages except go)
-        if: ${{ env.PACKAGE != 'go' && env.PACKAGE != 'php' && env.PACKAGE != 'cli' }}
-        run: node tools/bump-version.mjs "$PACKAGE" "$VERSION"
-
-      - name: Commit manifest bump to main
+      - name: Verify the manifest is already at the target version
         if: ${{ env.PACKAGE != 'go' && env.PACKAGE != 'php' && env.PACKAGE != 'cli' }}
         run: |
-          if git diff --quiet; then
-            echo "::error::bump-version made no changes for ${PACKAGE} ${VERSION}"
+          node tools/bump-version.mjs "$PACKAGE" "$VERSION"
+          if ! git diff --quiet; then
+            echo "::error::${PACKAGE} manifest is not at ${VERSION} — bump it via a PR and merge to main before releasing"
+            git checkout -- .
             exit 1
           fi
-          git commit -am "release(${PACKAGE}): v${VERSION}"
-          git push origin HEAD:main
 
       - name: Create and push tag
         run: |

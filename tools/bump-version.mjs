@@ -90,6 +90,14 @@ const bumpers = {
 
   ruby(version) {
     setRubyGemVersion(version);
+    // Keep the gem's own pin in Gemfile.lock in sync (two occurrences) so
+    // bundler's frozen install in CI doesn't reject the bump.
+    const rel = "ruby/Gemfile.lock";
+    if (existsSync(join(ROOT, rel))) {
+      const src = read(rel);
+      const out = src.replace(/(open-banking-io \()[0-9][^)]*(\))/g, `$1${version}$2`);
+      if (out !== src) write(rel, out);
+    }
   },
 
   go() {

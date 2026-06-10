@@ -1,7 +1,7 @@
 # Releasing
 
-This monorepo ships **seven independent client SDKs** from one repo. Each is
-released on its own, and **only the package you tag gets published**.
+This monorepo ships **eight independent client SDKs** from one repo. Each is released on its own, and
+**only the package you tag gets published**.
 
 ## The tag scheme (the contract)
 
@@ -11,50 +11,51 @@ Every release is a **package-prefixed git tag**:
 <dir>/vX.Y.Z
 ```
 
-where `<dir>` is one of: `dotnet`, `node`, `python`, `rust`, `java`, `go`, `ruby`,
-and `X.Y.Z` is a [SemVer](https://semver.org) version (no leading `v` in the
-version part — the literal `v` is part of the prefix, e.g. `node/v0.2.0`).
+where `<dir>` ∈ `dotnet`, `node`, `python`, `rust`, `java`, `go`, `ruby`, `php`, and `X.Y.Z` is a
+[SemVer](https://semver.org) version (the literal `v` is part of the prefix, e.g. `node/v0.2.0`).
 
-Each `publish-<dir>.yml` workflow triggers **only** on its own `<dir>/v*` tags, so
-tagging `node/v0.2.0` publishes the Node package and nothing else.
+Each `publish-<dir>.yml` triggers **only** on its own `<dir>/v*` tags, so tagging `node/v0.2.0` publishes
+the Node package and nothing else.
 
 ## Where each package's version lives
 
-For all packages except Go, the version is kept in a manifest and **must match the
-tag** — each `publish-<dir>.yml` has a gate that fails the publish if `tag != manifest`.
-
-| Package | Manifest (source of truth) | Also updated |
+| Package | Source of truth | Also updated |
 |---|---|---|
 | `dotnet` | `dotnet/src/OpenBankingIO.Client/OpenBankingIO.Client.csproj` (`<Version>`) | — |
 | `node`   | `node/package.json` (`version`) | `node/package-lock.json` |
 | `python` | `python/pyproject.toml` (`[project].version`) | — |
 | `rust`   | `rust/Cargo.toml` (`[package].version`) | `rust/Cargo.lock` |
 | `java`   | `java/pom.xml` (project `<version>`) | — |
-| `ruby`   | `ruby/lib/open_banking_io/version.rb` (`VERSION`) / gemspec | — |
-| `go`     | **none** — the version *is* the tag | — |
+| `ruby`   | `ruby/lib/open_banking_io/version.rb` (`VERSION`) | gemspec |
+| `go`     | **none** — version *is* the tag; `Version` const in `go/client.go` is cosmetic (User-Agent) | — |
+| `php`    | **none** — Packagist derives version from the tag; `Client::VERSION` const is cosmetic | — |
 
-## Cutting a release (the normal path)
+## Cutting a release (two steps — `main` is protected)
 
-Use the **Release** workflow — it does the manifest bump, the commit, and the tag
-for you.
+`main` is a protected branch (PRs + status checks required), so releases do **not** push to `main`
+directly. A release is two steps:
 
-1. Go to **Actions → Release → Run workflow**.
-2. Pick the **package** (e.g. `node`) and enter the **version** (e.g. `0.2.0`).
-3. Run it. The workflow will:
-   - validate the version is semver and **refuse if the tag already exists**;
-   - for every package **except `go`**: run `node tools/bump-version.mjs <pkg> <version>`
-     to update the manifest (and lockfiles), then commit
-     `release(<pkg>): v<version>` to `main` as the release bot;
-   - create and push the tag `<pkg>/v<version>`.
-4. Pushing the tag triggers `publish-<pkg>.yml`, which verifies the tag matches the
-   manifest and publishes to the registry (NuGet / npm / PyPI / crates.io / Maven
-   Central / pkg.go.dev / RubyGems).
+**1. Bump the version in a PR.** For `dotnet/node/python/rust/java/ruby`, bump the manifest:
 
-### Go specifics
+```bash
+node tools/bump-version.mjs <package> <version>   # e.g. node 0.2.0  (updates manifest + lockfiles)
+```
 
-Go has no manifest — the module version is the tag itself. The Release workflow
-**skips the bump/commit** for `go` and just pushes `go/vX.Y.Z`. Consumers then get
-that version via `go get github.com/open-banking-io/clients/go@vX.Y.Z`.
+For `go`/`php`, update the cosmetic `Version`/`VERSION` const to match. Open the PR, let CI pass, merge.
+
+**2. Tag via the Release workflow.** Go to **Actions → Release → Run workflow**, pick the **package** and
+**version**. It will:
+- validate semver and **refuse if the tag already exists**;
+- for non-`go`/`php`: verify the manifest on `main` is **already** at that version (fails with a clear
+  message if you forgot step 1);
+- create and push the tag `<pkg>/v<version>` and a **GitHub Release** with auto-generated notes.
+
+Pushing the tag triggers `publish-<pkg>.yml`, which re-checks `tag == manifest` and publishes to the
+registry (NuGet / npm / PyPI / crates.io / Maven Central / pkg.go.dev / RubyGems / Packagist).
+
+> You can also just push the tag by hand (`git tag <pkg>/v<version> && git push origin <pkg>/v<version>`)
+> once the version is on `main` — tags aren't branch-protected. The Release workflow just adds the guards
+> and release notes.
 
 ### CLI specifics (`obank`)
 
@@ -78,25 +79,10 @@ must be set on this repo — the default `GITHUB_TOKEN` can't push to another re
 
 ## The version-consistency gate
 
-Don't hand-edit a manifest and tag separately unless you keep them identical — the
-`publish-<pkg>.yml` gate compares `tag == manifest` and **fails** on mismatch. The
-Release workflow keeps them in lockstep, so prefer it.
-
-## Manual bump (advanced / local)
-
-If you need to bump a manifest without releasing (e.g. in a PR), run the same
-script the workflow uses:
-
-```bash
-node tools/bump-version.mjs <package> <version>   # e.g. node 0.2.0
-```
-
-Runs on Node 20+, no dependencies. It validates semver, edits the correct
-manifest(s), and throws for `go` (which has no manifest).
+Each `publish-<pkg>.yml` compares `tag == manifest` and **fails** on mismatch (skipped for `go`/`php`,
+which are tag-only). So the manifest must be on `main` at the released version before you tag.
 
 ## What changed in a PR?
 
-Every PR gets a **Changed packages** comment listing which client directories
-changed and which package(s) to release after merge. A change under `fixtures/**`
-(shared test vectors) is reported as affecting **all** clients. If only shared
-infra changed, the comment says there's nothing to release.
+Every PR gets a **Changed packages** comment listing which client directories changed and which
+package(s) to release after merge. A change under `fixtures/**` (shared vectors) affects **all** clients.
