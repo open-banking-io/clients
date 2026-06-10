@@ -40,7 +40,7 @@
     "lint": "tsc --noEmit"
   },
   "devDependencies": {
-    "@types/node": "^20.19.42",
+    "@types/node": "^25.9.2",
     "tsup": "^8.3.5",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"
