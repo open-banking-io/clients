@@ -30,6 +30,10 @@ func (a *App) Run(args []string) error {
 	switch cmd {
 	case "accounts":
 		return a.accounts(rest)
+	case "transactions":
+		return a.transactions(rest)
+	case "connections":
+		return a.connections(rest)
 	case "help", "-h", "--help":
 		a.usage()
 		return nil
@@ -54,7 +58,9 @@ Usage:
   obank <command> [flags]
 
 Commands:
-  accounts    List your accounts with balances
-  help        Show this help
+  accounts                       List your accounts with balances
+  transactions <account-id>      Show an account's statement (--from --to --limit --offset)
+  connections                    List your bank connections
+  help                           Show this help
 `)
 }
