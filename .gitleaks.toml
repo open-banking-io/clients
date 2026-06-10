@@ -1,0 +1,10 @@
+title = "open-banking-io/clients gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "fixtures/ holds a generated test keypair + credentials bundle — deterministic test vectors, not real secrets."
+paths = [
+  '''fixtures/.*''',
+]
