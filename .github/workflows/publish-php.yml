@@ -55,3 +55,15 @@ jobs:
           user_name: open-banking-io-bot
           user_email: bot@open-banking.io
           branch: main
+
+      - name: Verify the mirror received the tag
+        # The split action logs push failures but still exits 0 — assert the tag really landed.
+        run: |
+          for i in $(seq 1 10); do
+            code=$(curl -sS -o /dev/null -w '%{http_code}' \
+              "https://api.github.com/repos/open-banking-io/client-php/git/refs/tags/${MIRROR_TAG}")
+            if [ "$code" = "200" ]; then echo "mirror tag ${MIRROR_TAG} present ✓"; exit 0; fi
+            echo "waiting for mirror tag ${MIRROR_TAG} (got $code)..."; sleep 3
+          done
+          echo "::error::mirror tag ${MIRROR_TAG} not found on open-banking-io/client-php — the subtree-split push failed (check MIRROR_PUSH_TOKEN)"
+          exit 1
