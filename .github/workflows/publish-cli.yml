@@ -1,0 +1,139 @@
+name: Publish CLI
+
+on:
+  push:
+    tags: ['cli/v*']
+  pull_request:
+    paths:
+      - 'cli/**'
+      - '.github/workflows/publish-cli.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # Build in module mode against the published SDK (clients/go), not the local go.work copy, so the
+  # binaries match what `go install ...@latest` produces.
+  GOWORK: "off"
+
+jobs:
+  # Cross-compiles all targets. On a cli/vX.Y.Z tag it also publishes the GitHub Release and updates
+  # the Homebrew tap. On PRs it just builds (snapshot) to validate the matrix without publishing.
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      # The brew step is skipped until the tap repo + token exist, so the first release can still
+      # ship binaries before the tap is set up.
+      HAS_TAP: ${{ secrets.HOMEBREW_TAP_TOKEN != '' }}
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version: '1.25'
+
+      - name: Determine version
+        id: ver
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/cli/v* ]]; then
+            echo "version=${GITHUB_REF#refs/tags/cli/v}" >> "$GITHUB_OUTPUT"
+            echo "is_tag=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=0.0.0-snapshot.${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+            echo "is_tag=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build all platforms
+        working-directory: cli
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          targets="linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64"
+          for t in $targets; do
+            os="${t%/*}"; arch="${t#*/}"
+            bin=obank; [ "$os" = windows ] && bin=obank.exe
+            CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" \
+              go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o "$bin" .
+            name="obank_${VERSION}_${os}_${arch}"
+            if [ "$os" = windows ]; then zip -j "dist/${name}.zip" "$bin"; else tar -czf "dist/${name}.tar.gz" "$bin"; fi
+            rm -f "$bin"
+          done
+          ( cd dist && sha256sum * > checksums.txt )
+          echo "Built:"; ls -1 dist
+
+      - name: Create GitHub Release
+        if: steps.ver.outputs.is_tag == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" cli/dist/* \
+            --title "obank ${VERSION}" \
+            --notes "Binaries for linux/macOS/windows (amd64 + arm64). Verify with checksums.txt. Install via Homebrew: \`brew install open-banking-io/tap/obank\`."
+
+      - name: Update Homebrew tap
+        if: steps.ver.outputs.is_tag == 'true' && env.HAS_TAP == 'true'
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          set -euo pipefail
+          cd cli/dist
+          sha() { grep "  obank_${VERSION}_$1\$" checksums.txt | awk '{print $1}'; }
+          dl="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}"
+          cat > obank.rb <<EOF
+          # typed: false
+          # frozen_string_literal: true
+          class Obank < Formula
+            desc "open-banking.io command line — read, sync and connect your bank data locally"
+            homepage "https://open-banking.io"
+            version "${VERSION}"
+            license "MIT"
+
+            on_macos do
+              on_arm do
+                url "${dl}/obank_${VERSION}_darwin_arm64.tar.gz"
+                sha256 "$(sha darwin_arm64.tar.gz)"
+              end
+              on_intel do
+                url "${dl}/obank_${VERSION}_darwin_amd64.tar.gz"
+                sha256 "$(sha darwin_amd64.tar.gz)"
+              end
+            end
+
+            on_linux do
+              on_arm do
+                url "${dl}/obank_${VERSION}_linux_arm64.tar.gz"
+                sha256 "$(sha linux_arm64.tar.gz)"
+              end
+              on_intel do
+                url "${dl}/obank_${VERSION}_linux_amd64.tar.gz"
+                sha256 "$(sha linux_amd64.tar.gz)"
+              end
+            end
+
+            def install
+              bin.install "obank"
+            end
+
+            test do
+              system "#{bin}/obank", "version"
+            end
+          end
+          EOF
+          git clone --depth 1 "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/open-banking-io/homebrew-tap.git" tap
+          mkdir -p tap/Formula
+          cp obank.rb tap/Formula/obank.rb
+          cd tap
+          git config user.name  "open-banking-io-bot"
+          git config user.email "bot@open-banking.io"
+          git add Formula/obank.rb
+          git commit -m "obank ${VERSION}"
+          git push
