@@ -43,18 +43,21 @@ jobs:
       - name: Compute mirror tag
         run: echo "MIRROR_TAG=${GITHUB_REF_NAME#php/}" >> "$GITHUB_ENV"
 
-      - name: Subtree-split php/ to the Packagist mirror
-        uses: symplify/monorepo-split-github-action@v2.3.0
+      - name: Subtree-split php/ and push to the Packagist mirror
         env:
-          GITHUB_TOKEN: ${{ secrets.MIRROR_PUSH_TOKEN }}
-        with:
-          tag: ${{ env.MIRROR_TAG }}
-          package_directory: php
-          repository_organization: open-banking-io
-          repository_name: client-php
-          user_name: open-banking-io-bot
-          user_email: bot@open-banking.io
-          branch: main
+          MIRROR_TOKEN: ${{ secrets.MIRROR_PUSH_TOKEN }}
+        run: |
+          set -euo pipefail
+          git config user.name  "open-banking-io-bot"
+          git config user.email "bot@open-banking.io"
+          # Split php/ into a single commit history containing only its contents.
+          SPLIT_SHA="$(git subtree split --prefix=php)"
+          echo "split sha: $SPLIT_SHA"
+          # x-access-token:<token>@ is the reliable HTTPS auth form (token as password).
+          REMOTE="https://x-access-token:${MIRROR_TOKEN}@github.com/open-banking-io/client-php.git"
+          git push --force "$REMOTE" "${SPLIT_SHA}:refs/heads/main"
+          git tag -f "${MIRROR_TAG}" "${SPLIT_SHA}"
+          git push --force "$REMOTE" "refs/tags/${MIRROR_TAG}"
 
       - name: Verify the mirror received the tag
         # The split action logs push failures but still exits 0 — assert the tag really landed.
