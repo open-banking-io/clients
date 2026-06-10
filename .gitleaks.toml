@@ -4,8 +4,12 @@ title = "open-banking-io/clients gitleaks config"
 useDefault = true
 
 [allowlist]
-description = "fixtures/ holds a generated test keypair + credentials bundle (deterministic test vectors), and the envelope crypto source files contain PEM-boundary string literals (-----BEGIN PUBLIC/PRIVATE KEY-----) used to wrap/parse keys — none are real secrets."
+description = "Deterministic TEST vectors only: the fixtures bundle + the generator that emits it, the test API key (obk_test_*), and PEM-boundary string literals in the envelope crypto source. None are real secrets."
 paths = [
   '''fixtures/.*''',
+  '''tools/.*''',
   '''.*[Ee]nvelope\.[a-z]+$''',
+]
+regexes = [
+  '''obk_test_[0-9a-f]+''',
 ]
