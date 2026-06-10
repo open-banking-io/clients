@@ -1,6 +1,9 @@
 # open-banking.io client SDKs
 
+[![CI](https://github.com/open-banking-io/clients/actions/workflows/ci.yml/badge.svg)](https://github.com/open-banking-io/clients/actions/workflows/ci.yml)
 [![Semgrep](https://github.com/open-banking-io/clients/actions/workflows/semgrep.yml/badge.svg)](https://github.com/open-banking-io/clients/actions/workflows/semgrep.yml)
+[![Gitleaks](https://github.com/open-banking-io/clients/actions/workflows/gitleaks.yml/badge.svg)](https://github.com/open-banking-io/clients/actions/workflows/gitleaks.yml)
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/open-banking-io/clients/badge)](https://securityscorecards.dev/viewer/?uri=github.com/open-banking-io/clients)
 
 Server-to-server clients for [open-banking.io](https://open-banking.io) in **.NET, Node, Python,
 Rust, Go, Java, Ruby, and PHP**.
