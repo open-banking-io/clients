@@ -40,7 +40,7 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
-          persist-credentials: true
+          persist-credentials: false
 
       - name: Validate version
         run: |
@@ -83,10 +83,12 @@ jobs:
           fi
 
       - name: Create and push tag
+        env:
+          RELEASE_TOKEN: ${{ secrets.MIRROR_PUSH_TOKEN }}
         run: |
           git tag -a "${TAG}" -m "release(${PACKAGE}): v${VERSION}"
-          git push origin "refs/tags/${TAG}"
-          echo "::notice::pushed ${TAG} — publish-${PACKAGE}.yml will pick it up"
+          git push "https://x-access-token:${RELEASE_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "refs/tags/${TAG}"
+          echo "::notice::pushed ${TAG} via PAT — publish-${PACKAGE}.yml will trigger"
 
       - name: Create GitHub Release
         # The cli package's publish-cli.yml owns its release (it attaches the built binaries), so
