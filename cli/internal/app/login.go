@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os/exec"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/open-banking-io/clients/cli/internal/config"
@@ -206,28 +207,42 @@ func callbackHandler(resultCh chan<- callbackResult, state, allowOrigin string) 
 			writeDoneHTML(w)
 			deliver(callbackResult{code: code})
 		case http.MethodPost:
-			var p relayPayload
-			if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&p); err != nil || p.Code == "" {
+			code, gotState, privKey, pubKey := parseRelayPost(r)
+			if code == "" {
 				http.Error(w, "bad request", http.StatusBadRequest)
 				return
 			}
-			if subtle.ConstantTimeCompare([]byte(p.State), []byte(state)) != 1 {
+			if subtle.ConstantTimeCompare([]byte(gotState), []byte(state)) != 1 {
 				http.Error(w, "state mismatch", http.StatusForbidden)
 				return
 			}
-			res := callbackResult{code: p.Code}
-			if p.EncryptionKey != nil {
-				res.privKeyB64 = p.EncryptionKey.PrivateKey
-				res.pubKeyB64 = p.EncryptionKey.PublicKey
-			}
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = io.WriteString(w, `{"ok":true}`)
-			deliver(res)
+			// The browser reaches us via a cross-origin form POST (no CORS preflight, not blocked by
+			// mixed-content rules) and navigates here, so reply with the closeable success page.
+			writeDoneHTML(w)
+			deliver(callbackResult{code: code, privKeyB64: privKey, pubKeyB64: pubKey})
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
 	})
 	return mux
+}
+
+// parseRelayPost reads the relayed credentials from either a browser form POST (the default — it needs
+// no CORS preflight and isn't blocked by mixed-content rules) or a JSON body.
+func parseRelayPost(r *http.Request) (code, state, privKey, pubKey string) {
+	if strings.HasPrefix(r.Header.Get("Content-Type"), "application/json") {
+		var p relayPayload
+		if json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&p) == nil {
+			code, state = p.Code, p.State
+			if p.EncryptionKey != nil {
+				privKey, pubKey = p.EncryptionKey.PrivateKey, p.EncryptionKey.PublicKey
+			}
+		}
+		return
+	}
+	_ = r.ParseForm()
+	return r.PostFormValue("code"), r.PostFormValue("state"),
+		r.PostFormValue("privateKey"), r.PostFormValue("publicKey")
 }
 
 func writeDoneHTML(w http.ResponseWriter) {
