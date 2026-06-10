@@ -48,6 +48,8 @@ func (a *App) Run(args []string) error {
 		return a.connections(rest)
 	case "key":
 		return a.key(rest)
+	case "sync":
+		return a.sync(rest)
 	case "help", "-h", "--help":
 		a.usage()
 		return nil
@@ -77,6 +79,7 @@ Commands:
   transactions <account-id>      Show an account's statement (--from --to --limit --offset)
   connections                    List your bank connections
   key import [<file>]            Import your encryption key (SPA bundle or PKCS#8; stdin if no file)
+  sync <account-id> | --all      Pull fresh transactions for one account or all
   help                           Show this help
 `)
 }

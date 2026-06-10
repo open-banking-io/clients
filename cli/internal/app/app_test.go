@@ -15,6 +15,7 @@ import (
 )
 
 var transactionsPath = regexp.MustCompile(`^/api/accounts/[^/]+/transactions$`)
+var accountSyncPath = regexp.MustCompile(`^/api/accounts/[^/]+/sync$`)
 
 // fixtureBundle reads the shared test credentials bundle.
 func fixtureBundle(t *testing.T) openbanking.CredentialsBundle {
@@ -54,6 +55,10 @@ func startAPIServer(t *testing.T, apiKey string) *httptest.Server {
 			_, _ = w.Write(fixture("transactions.json"))
 		case r.Method == http.MethodGet && r.URL.Path == "/api/connections":
 			_, _ = w.Write(fixture("connections.json"))
+		case r.Method == http.MethodPost && accountSyncPath.MatchString(r.URL.Path):
+			_, _ = w.Write(fixture("sync.json"))
+		case r.Method == http.MethodPost && r.URL.Path == "/api/sync":
+			_, _ = w.Write(fixture("sync-all.json"))
 		default:
 			http.NotFound(w, r)
 		}
