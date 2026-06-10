@@ -97,6 +97,24 @@ type SyncAllResult struct {
 	NewTransactions int64
 }
 
+// Bank is a bank (ASPSP) available for connection.
+type Bank struct {
+	Name     string
+	Country  string
+	Logo     string
+	Bic      string
+	Beta     bool
+	PsuTypes []string
+}
+
+// AuthorizationRequest starts a bank-authorization (consent) flow. PsuType is optional
+// (e.g. "personal" or "business").
+type AuthorizationRequest struct {
+	Country   string
+	AspspName string
+	PsuType   string
+}
+
 // CredentialsBundle is the bundle exported from open-banking.io (API key + encryption private key).
 type CredentialsBundle struct {
 	Service       string        `json:"service"`
@@ -164,6 +182,19 @@ type connectionWire struct {
 	AccountCount int64  `json:"accountCount"`
 	LastSyncedAt string `json:"lastSyncedAt"`
 	PsuType      string `json:"psuType"`
+}
+
+type bankWire struct {
+	Name     string   `json:"name"`
+	Country  string   `json:"country"`
+	Logo     string   `json:"logo"`
+	Bic      string   `json:"bic"`
+	Beta     bool     `json:"beta"`
+	PsuTypes []string `json:"psuTypes"`
+}
+
+type authorizationURLWire struct {
+	URL string `json:"url"`
 }
 
 type syncResultWire struct {

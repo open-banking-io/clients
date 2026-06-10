@@ -50,6 +50,10 @@ func (a *App) Run(args []string) error {
 		return a.key(rest)
 	case "sync":
 		return a.sync(rest)
+	case "banks":
+		return a.banks(rest)
+	case "connect":
+		return a.connect(rest)
 	case "help", "-h", "--help":
 		a.usage()
 		return nil
@@ -58,13 +62,26 @@ func (a *App) Run(args []string) error {
 	}
 }
 
-// client builds a decrypting SDK client from the saved credentials bundle.
+// client builds a decrypting SDK client from the saved credentials bundle (needs the encryption key).
 func (a *App) client() (*openbanking.Client, error) {
 	bundle, err := config.Load(a.ConfigPath)
 	if err != nil {
 		return nil, err
 	}
 	return openbanking.FromBundle(bundle, a.HTTPClient)
+}
+
+// publicClient builds a client for operations that don't decrypt data (banks, connect), so they
+// work right after `login`, before any encryption key has been imported.
+func (a *App) publicClient() (*openbanking.Client, error) {
+	bundle, err := config.Load(a.ConfigPath)
+	if err != nil {
+		return nil, err
+	}
+	if bundle.APIKey == "" {
+		return nil, fmt.Errorf("no API key — run `obank login` first")
+	}
+	return openbanking.NewPublic(bundle.APIBaseURL, bundle.APIKey, a.HTTPClient)
 }
 
 func (a *App) usage() {
@@ -80,6 +97,8 @@ Commands:
   connections                    List your bank connections
   key import [<file>]            Import your encryption key (SPA bundle or PKCS#8; stdin if no file)
   sync <account-id> | --all      Pull fresh transactions for one account or all
+  banks                          List banks available for connection (--country)
+  connect <bank-name>            Connect a bank via the browser consent flow
   help                           Show this help
 `)
 }

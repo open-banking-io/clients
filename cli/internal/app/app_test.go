@@ -55,6 +55,8 @@ func startAPIServer(t *testing.T, apiKey string) *httptest.Server {
 			_, _ = w.Write(fixture("transactions.json"))
 		case r.Method == http.MethodGet && r.URL.Path == "/api/connections":
 			_, _ = w.Write(fixture("connections.json"))
+		case r.Method == http.MethodGet && r.URL.Path == "/api/aspsps":
+			_, _ = w.Write([]byte(`[{"name":"Lunar","country":"` + r.URL.Query().Get("country") + `","bic":"LUNADK22","beta":false,"psuTypes":["business"]}]`))
 		case r.Method == http.MethodPost && accountSyncPath.MatchString(r.URL.Path):
 			_, _ = w.Write(fixture("sync.json"))
 		case r.Method == http.MethodPost && r.URL.Path == "/api/sync":
