@@ -48,6 +48,14 @@ updates:
       - dependency-name: '*'
         update-types: ['version-update:semver-major']
 
+  - package-ecosystem: gomod
+    directory: /cli
+    schedule:
+      interval: weekly
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
+
   - package-ecosystem: maven
     directory: /java
     schedule:
