@@ -1,0 +1,64 @@
+# EditorConfig for the OpenBankingIO.Client .NET SDK.
+# Scopes Roslyn analyzer + code-style severities for `dotnet build` / `dotnet format`.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+[*.{csproj,props,targets,runsettings}]
+indent_size = 2
+
+[*.{json,yml,yaml}]
+indent_size = 2
+
+[*.cs]
+# --- Language / formatting conventions ---------------------------------------------------------
+dotnet_sort_system_directives_first = true
+csharp_using_directive_placement = outside_namespace:warning
+csharp_style_namespace_declarations = file_scoped:warning
+csharp_prefer_braces = false:silent
+dotnet_style_qualification_for_field = false:warning
+dotnet_style_qualification_for_property = false:warning
+dotnet_style_qualification_for_method = false:warning
+csharp_style_var_for_built_in_types = true:silent
+csharp_style_var_when_type_is_apparent = true:silent
+csharp_style_var_elsewhere = true:silent
+dotnet_style_require_accessibility_modifiers = for_non_interface_members:warning
+
+# --- Treat code-style + analyzer findings as warnings; CI escalates via -warnaserror ----------
+dotnet_analyzer_diagnostic.severity = warning
+
+# Expression-bodied members are an intentional, pervasive style in this SDK (terse mappers,
+# guard helpers, Dispose). Don't require block bodies.
+csharp_style_expression_bodied_methods = true:silent
+csharp_style_expression_bodied_properties = true:silent
+csharp_style_expression_bodied_accessors = true:silent
+dotnet_diagnostic.IDE0022.severity = none   # 'use block body for method' — we prefer expression bodies
+
+# Collection style: `.ToList()` / `.Select(...).ToList()` is intentional for IReadOnlyList APIs;
+# collection-expression rewrites here add no value.
+dotnet_diagnostic.IDE0305.severity = none
+
+# Naming/style preferences that are stylistic, not correctness — keep informational.
+dotnet_diagnostic.IDE0008.severity = none   # 'use explicit type' (we prefer var)
+dotnet_diagnostic.IDE0058.severity = none   # expression value never used (fluent/builder calls)
+dotnet_diagnostic.IDE0046.severity = none   # 'convert to conditional expression' can hurt readability
+dotnet_diagnostic.IDE0045.severity = none   # 'convert to conditional expression' (assignment)
+
+# CA1812: internal classes flagged as "never instantiated" — they are, via JSON/DI/reflection.
+dotnet_diagnostic.CA1812.severity = none
+
+# CA1819: the public surface intentionally uses IReadOnlyList<T> for an immutable, ergonomic API.
+dotnet_diagnostic.CA1819.severity = none
+
+# --- Test project overrides --------------------------------------------------------------------
+[tests/**/*.cs]
+# xUnit convention: Method_Name underscores are the readable, idiomatic test naming.
+dotnet_diagnostic.CA1707.severity = none
+# MockServer._loop intentionally roots the accept-loop Task for the server's lifetime.
+dotnet_diagnostic.IDE0052.severity = none

@@ -53,7 +53,8 @@ func New(apiBaseURL, apiKey, privateKeyPKCS8B64 string, httpClient *http.Client)
 func FromCredentials(pathOrJSON string, httpClient *http.Client) (*Client, error) {
 	raw := pathOrJSON
 	if !strings.HasPrefix(strings.TrimSpace(pathOrJSON), "{") {
-		data, err := os.ReadFile(pathOrJSON)
+		// The caller deliberately supplies the path to their own credentials bundle.
+		data, err := os.ReadFile(pathOrJSON) // #nosec G304 -- caller-provided credentials path by design
 		if err != nil {
 			return nil, fmt.Errorf("could not read credentials file: %w", err)
 		}
@@ -137,16 +138,7 @@ func (c *Client) GetConnections() ([]Connection, error) {
 	}
 	conns := make([]Connection, 0, len(wires))
 	for _, w := range wires {
-		conns = append(conns, Connection{
-			SessionID:    w.SessionID,
-			AspspName:    w.AspspName,
-			AspspCountry: w.AspspCountry,
-			ValidUntil:   w.ValidUntil,
-			Status:       w.Status,
-			AccountCount: w.AccountCount,
-			LastSyncedAt: w.LastSyncedAt,
-			PsuType:      w.PsuType,
-		})
+		conns = append(conns, Connection(w))
 	}
 	return conns, nil
 }
@@ -181,7 +173,7 @@ func (c *Client) Sync(accountID string) (SyncResult, error) {
 		map[string]any{"uid": uid}, &result); err != nil {
 		return SyncResult{}, err
 	}
-	return SyncResult{NewTransactions: result.NewTransactions, TotalFetched: result.TotalFetched}, nil
+	return SyncResult(result), nil
 }
 
 // SyncAll triggers an online sync of every account that has an active session.
@@ -205,7 +197,7 @@ func (c *Client) SyncAll() (SyncAllResult, error) {
 	if err := c.postJSON("/api/sync", map[string]any{"items": items}, &result); err != nil {
 		return SyncAllResult{}, err
 	}
-	return SyncAllResult{Accounts: result.Accounts, NewTransactions: result.NewTransactions}, nil
+	return SyncAllResult(result), nil
 }
 
 // ---- internals ----
@@ -337,7 +329,7 @@ func (c *Client) do(req *http.Request, path string, out any) error {
 	if err != nil {
 		return fmt.Errorf("%s %s failed: %w", req.Method, path, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("%s %s failed: %d %s", req.Method, path, resp.StatusCode, resp.Status)
 	}

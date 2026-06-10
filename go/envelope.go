@@ -42,7 +42,9 @@ func loadPrivateKey(privateKeyPKCS8B64 string) (*ecdh.PrivateKey, error) {
 	if err != nil {
 		return nil, fmt.Errorf("invalid PKCS#8 key: %w", err)
 	}
-	ecdhKey, ok := key.(interface{ ECDH() (*ecdh.PrivateKey, error) })
+	ecdhKey, ok := key.(interface {
+		ECDH() (*ecdh.PrivateKey, error)
+	})
 	if !ok {
 		return nil, errors.New("private key is not an EC key")
 	}

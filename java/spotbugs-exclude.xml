@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FindBugsFilter>
+  <!-- Justified false positives only. Keep this list small. -->
+
+  <!--
+    loadPrivateKey is a security boundary: it deliberately catches every failure mode of
+    Base64/KeyFactory/cast parsing and rewraps it as a single OpenBankingException with a
+    safe message, so no key-parsing internals or stack details leak to callers. The broad
+    catch is intentional, not an oversight.
+  -->
+  <Match>
+    <Class name="io.openbanking.Envelope"/>
+    <Method name="loadPrivateKey"/>
+    <Bug pattern="REC_CATCH_EXCEPTION"/>
+  </Match>
+</FindBugsFilter>

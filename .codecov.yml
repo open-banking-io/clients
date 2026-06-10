@@ -1,0 +1,42 @@
+coverage:
+  status:
+    project:
+      default:
+        informational: true
+    patch:
+      default:
+        informational: true
+
+comment:
+  layout: "reach, flags, files"
+  require_changes: false
+
+flag_management:
+  default_rules:
+    statuses:
+      - type: project
+        informational: true
+
+flags:
+  dotnet:
+    paths: [dotnet/src]
+  node:
+    paths: [node/src]
+  python:
+    paths: [python/src]
+  rust:
+    paths: [rust/src]
+  go:
+    paths: [go]
+  java:
+    paths: [java/src/main]
+  ruby:
+    paths: [ruby/lib]
+  php:
+    paths: [php/src]
+
+ignore:
+  - "**/tests/**"
+  - "**/test/**"
+  - "**/spec/**"
+  - "**/*_test.go"

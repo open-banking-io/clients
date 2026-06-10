@@ -18,6 +18,8 @@ jobs:
           dotnet-version: |
             8.0.x
             10.0.x
+      - run: dotnet format dotnet/OpenBankingIO.slnx --verify-no-changes
+      - run: dotnet build dotnet/OpenBankingIO.slnx -c Release -warnaserror
       - run: dotnet test dotnet/ -c Release
 
   node:
@@ -34,6 +36,8 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
       - run: npm ci
+      - run: npm run lint
+      - run: npm run format:check
       - run: npm run typecheck
       - run: npm run build
       - run: npm test
@@ -52,6 +56,9 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - run: pip install -e .[dev]
+      - run: ruff check .
+      - run: ruff format --check .
+      - run: mypy src
       - run: pytest -q
 
   rust:
@@ -86,6 +93,10 @@ jobs:
         with:
           go-version: ${{ matrix.go-version }}
       - run: go vet ./...
+      - uses: golangci/golangci-lint-action@db582008a42febd596419635a5abc9d9815daa9c # v9.2.1
+        with:
+          version: v2.12.2
+          working-directory: go
       - run: go test ./...
 
   java:
@@ -120,6 +131,7 @@ jobs:
           ruby-version: ${{ matrix.ruby-version }}
           bundler-cache: true
           working-directory: ruby
+      - run: bundle exec standardrb
       - run: bundle exec rspec
 
   php:
@@ -136,5 +148,8 @@ jobs:
         with:
           php-version: ${{ matrix.php-version }}
           extensions: openssl, curl, json
+          coverage: pcov
       - run: composer install --no-interaction --no-progress
+      - run: vendor/bin/phpstan analyse --memory-limit=512M
+      - run: vendor/bin/php-cs-fixer fix --dry-run --diff
       - run: vendor/bin/phpunit

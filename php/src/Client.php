@@ -90,7 +90,7 @@ final class Client
     {
         return array_map(
             fn (array $w): Account => $this->mapAccount($w),
-            $this->getAccountWires()
+            $this->getAccountWires(),
         );
     }
 
@@ -118,7 +118,7 @@ final class Client
 
         $items = array_map(
             fn (array $t): Transaction => $this->mapTransaction($t),
-            $page['items'] ?? []
+            $page['items'] ?? [],
         );
 
         return new TransactionPage($items, (int) ($page['total'] ?? 0));
@@ -136,16 +136,16 @@ final class Client
 
         return array_map(
             fn (array $c): Connection => new Connection(
-                sessionId: (string) ($c['sessionId'] ?? ''),
-                aspspName: (string) ($c['aspspName'] ?? ''),
-                aspspCountry: (string) ($c['aspspCountry'] ?? ''),
+                sessionId: self::str($c['sessionId'] ?? null),
+                aspspName: self::str($c['aspspName'] ?? null),
+                aspspCountry: self::str($c['aspspCountry'] ?? null),
                 validUntil: self::nullableString($c['validUntil'] ?? null),
-                status: (string) ($c['status'] ?? ''),
-                accountCount: (int) ($c['accountCount'] ?? 0),
+                status: self::str($c['status'] ?? null),
+                accountCount: self::int($c['accountCount'] ?? null),
                 lastSyncedAt: self::nullableString($c['lastSyncedAt'] ?? null),
                 psuType: self::nullableString($c['psuType'] ?? null),
             ),
-            $rows
+            $rows,
         );
     }
 
@@ -171,7 +171,7 @@ final class Client
         $uid = $this->decryptUid($account);
         if ($uid === null) {
             throw new OpenBankingException(
-                'Account has no active session (reconnect required) -- cannot sync'
+                'Account has no active session (reconnect required) -- cannot sync',
             );
         }
 
@@ -239,22 +239,24 @@ final class Client
         $name = $this->decryptEnc($a['displayNameEnc'] ?? null);
 
         $balances = [];
-        foreach (($a['balances'] ?? []) as $b) {
+        $rawBalances = is_array($a['balances'] ?? null) ? $a['balances'] : [];
+        foreach ($rawBalances as $b) {
+            $b = is_array($b) ? $b : [];
             $dec = $this->decryptEnc($b['enc'] ?? null);
             $balances[] = new Balance(
-                type: (string) ($b['type'] ?? ''),
+                type: self::str($b['type'] ?? null),
                 name: self::nullableString($dec['name'] ?? null),
                 amount: self::decimalString($dec['amount'] ?? null),
-                currency: (string) ($b['currency'] ?? ''),
+                currency: self::str($b['currency'] ?? null),
                 referenceDate: self::nullableString($b['referenceDate'] ?? null),
             );
         }
 
         return new Account(
-            id: (string) ($a['id'] ?? ''),
-            aspspName: (string) ($a['aspspName'] ?? ''),
-            aspspCountry: (string) ($a['aspspCountry'] ?? ''),
-            currency: (string) ($a['currency'] ?? ''),
+            id: self::str($a['id'] ?? null),
+            aspspName: self::str($a['aspspName'] ?? null),
+            aspspCountry: self::str($a['aspspCountry'] ?? null),
+            currency: self::str($a['currency'] ?? null),
             accountType: self::nullableString($a['accountType'] ?? null),
             bic: self::nullableString($a['bic'] ?? null),
             needsReconnect: (bool) ($a['needsReconnect'] ?? false),
@@ -276,9 +278,9 @@ final class Client
         $d = $this->decryptEnc($t['enc'] ?? null);
 
         return new Transaction(
-            id: (string) ($t['id'] ?? ''),
-            currency: (string) ($t['currency'] ?? ''),
-            creditDebitIndicator: (string) ($t['creditDebitIndicator'] ?? ''),
+            id: self::str($t['id'] ?? null),
+            currency: self::str($t['currency'] ?? null),
+            creditDebitIndicator: self::str($t['creditDebitIndicator'] ?? null),
             status: self::nullableString($t['status'] ?? null),
             bookingDate: self::nullableString($t['bookingDate'] ?? null),
             valueDate: self::nullableString($t['valueDate'] ?? null),
@@ -333,6 +335,7 @@ final class Client
     }
 
     /**
+     * @param 'GET'|'POST' $method
      * @param array<string, mixed>|null $body
      * @return array<int|string, mixed>
      */
@@ -384,14 +387,38 @@ final class Client
     // -- Coercion helpers ------------------------------------------------------
 
     /**
+     * Coerces an arbitrary decoded-JSON value to a non-null string ('' default).
+     *
+     * @param mixed $value
+     */
+    private static function str($value): string
+    {
+        return self::nullableString($value) ?? '';
+    }
+
+    /**
+     * Coerces an arbitrary decoded-JSON value to an int (0 for non-numeric).
+     *
+     * @param mixed $value
+     */
+    private static function int($value): int
+    {
+        return is_numeric($value) ? (int) $value : 0;
+    }
+
+    /**
+     * Coerces an arbitrary decoded-JSON value to a string, or null for
+     * non-scalar / null / empty values. Never throws on arrays or objects.
+     *
      * @param mixed $value
      */
     private static function nullableString($value): ?string
     {
-        if ($value === null || $value === '') {
+        if (!is_scalar($value)) {
             return null;
         }
-        return (string) $value;
+        $str = is_bool($value) ? ($value ? '1' : '0') : (string) $value;
+        return $str === '' ? null : $str;
     }
 
     /**
@@ -401,10 +428,7 @@ final class Client
      */
     private static function decimalString($value): string
     {
-        if ($value === null || $value === '') {
-            return '0';
-        }
-        return (string) $value;
+        return self::nullableString($value) ?? '0';
     }
 
     /**
@@ -412,9 +436,6 @@ final class Client
      */
     private static function nullableDecimalString($value): ?string
     {
-        if ($value === null || $value === '') {
-            return null;
-        }
-        return (string) $value;
+        return self::nullableString($value);
     }
 }
