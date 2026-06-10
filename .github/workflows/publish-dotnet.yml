@@ -5,7 +5,7 @@ name: Publish .NET
 
 on:
   push:
-    tags: ['v*']
+    tags: ['dotnet/v*']
   workflow_dispatch:
 
 jobs:
@@ -17,6 +17,15 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
+
+      - name: Verify tag matches manifest version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#dotnet/v}"
+          MANIFEST_VERSION="$(grep -oE '<Version>[^<]+</Version>' dotnet/src/OpenBankingIO.Client/OpenBankingIO.Client.csproj | head -n1 | sed -E 's/<\/?Version>//g')"
+          echo "tag=$TAG_VERSION manifest=$MANIFEST_VERSION"
+          [ "$TAG_VERSION" = "$MANIFEST_VERSION" ] || { echo "::error::tag $TAG_VERSION != manifest $MANIFEST_VERSION"; exit 1; }
+
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x

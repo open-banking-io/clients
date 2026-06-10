@@ -1,7 +1,7 @@
 # open-banking.io client SDKs
 
 Server-to-server clients for [open-banking.io](https://open-banking.io) in **.NET, Node, Python,
-Rust, Go, and Java**.
+Rust, Go, Java, Ruby, and PHP**.
 
 open-banking.io is **zero-knowledge**: the service stores and returns only ciphertext it cannot read.
 These SDKs do the two things an integrator needs — **authenticate** with your API key and **decrypt**
@@ -15,6 +15,8 @@ the data locally with your exported private key — and hand you clean, typed mo
 | Rust | `open-banking-io` (crates.io) | [`rust/`](rust/) |
 | Go | `github.com/open-banking-io/clients/go` | [`go/`](go/) |
 | Java | `io.open-banking:open-banking-io-client` (Maven Central) | [`java/`](java/) |
+| Ruby | `open-banking-io` (RubyGems) | [`ruby/`](ruby/) |
+| PHP | `open-banking-io/client` (Packagist) | [`php/`](php/) |
 
 ## How it works
 
@@ -66,8 +68,25 @@ for (Account a : client.getAccounts())
     a.balances().stream().filter(b -> b.type().equals("ITBD")).findFirst()
         .ifPresent(b -> System.out.println(a.iban() + " " + b.amount() + " " + a.currency()));
 ```
+```ruby
+# Ruby
+client = OpenBankingIO::Client.from_credentials("credentials.json")
+client.get_accounts.each do |a|
+  booked = a.balances.find { |b| b.type == "ITBD" }
+  puts "#{a.iban} #{booked&.amount} #{a.currency}"
+end
+```
+```php
+// PHP
+$client = OpenBankingIO\Client::fromCredentials("credentials.json");
+foreach ($client->getAccounts() as $a) {
+    foreach ($a->balances as $b) {
+        if ($b->type === "ITBD") echo "{$a->iban} {$b->amount} {$a->currency}\n";
+    }
+}
+```
 
-All six expose the same surface: `getAccounts`, `getTransactions(accountId, …)`, `getConnections`,
+All eight expose the same surface: `getAccounts`, `getTransactions(accountId, …)`, `getConnections`,
 `sync(accountId)`, `syncAll()`. Sync decrypts the account's session uid locally and posts it, so the
 service can refresh from the bank without ever holding it in plaintext.
 
@@ -75,7 +94,7 @@ service can refresh from the bank without ever holding it in plaintext.
 
 Each sensitive value is an **envelope**: `version(1) | ephemeralPublicKey(65) | nonce(12) | tag(16) |
 ciphertext`, produced with **ephemeral ECDH on P-256 → HKDF-SHA256 (salt = 32 zero bytes, info =
-`bank.core.ci/zk/v1`) → AES-256-GCM**. Only your private key can open it. All six SDKs are verified
+`bank.core.ci/zk/v1`) → AES-256-GCM**. Only your private key can open it. All eight SDKs are verified
 against the **same fixtures** (`fixtures/`) so they decrypt identically and interoperate with the live
 service's wire format.
 
@@ -92,10 +111,14 @@ cd python && pip install -e .[dev] && pytest -q
 cd rust   && cargo test
 cd go     && go test ./...
 cd java   && mvn -B verify
+cd ruby   && bundle install && bundle exec rspec
+cd php    && composer install && vendor/bin/phpunit
 ```
 
-CI (`.github/workflows/ci.yml`) builds and tests all six on every push. The `publish-*.yml` workflows
-publish to NuGet / npm / PyPI / crates.io / Maven Central on a `v*` tag (the Go module publishes via a
-prefixed `go/v*` tag) — add the registry secrets to enable them.
+CI (`.github/workflows/ci.yml`) builds and tests all eight on every push. **Releases are per-package**:
+each package publishes from its own `<dir>/vX.Y.Z` tag (e.g. `node/v0.2.0`), so tagging one package never
+republishes the others. Cut a release from **Actions → Release** (pick a package + version) — see
+[`RELEASING.md`](RELEASING.md). Targets: NuGet, npm, PyPI, crates.io, Maven Central, RubyGems, Packagist,
+and the Go module proxy.
 
 MIT licensed.

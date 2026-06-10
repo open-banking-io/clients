@@ -1,0 +1,53 @@
+name: Publish PHP
+
+# PHP packages are distributed via Packagist, which auto-syncs from GitHub on new tags once the
+# package is registered. Because composer.json lives in php/ (a monorepo subdir), Packagist must
+# point at a subtree mirror or a path-aware VCS config — see php/README.md. This workflow validates
+# the package and runs the tests, then optionally pings the Packagist update API (skipped when the
+# PACKAGIST_USERNAME / PACKAGIST_API_TOKEN secrets are absent).
+
+on:
+  push:
+    tags: ['php/v*']
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: Production
+    defaults:
+      run:
+        working-directory: php
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: openssl, curl, json
+          tools: composer:v2
+
+      - name: Validate composer.json
+        run: composer validate --strict --no-check-version
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Run tests
+        run: vendor/bin/phpunit
+
+      - name: Notify Packagist
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          PACKAGIST_USERNAME: ${{ secrets.PACKAGIST_USERNAME }}
+          PACKAGIST_API_TOKEN: ${{ secrets.PACKAGIST_API_TOKEN }}
+        run: |
+          if [ -z "$PACKAGIST_USERNAME" ] || [ -z "$PACKAGIST_API_TOKEN" ]; then
+            echo "::notice::PACKAGIST_USERNAME/PACKAGIST_API_TOKEN not set — skipping Packagist update ping."
+            echo "Packagist auto-syncs from GitHub tags once the package (or its subtree mirror) is registered."
+            exit 0
+          fi
+          curl -sfS -XPOST -H 'content-type:application/json' \
+            "https://packagist.org/api/update-package?username=${PACKAGIST_USERNAME}&apiToken=${PACKAGIST_API_TOKEN}" \
+            -d '{"repository":{"url":"https://packagist.org/packages/open-banking-io/client"}}'

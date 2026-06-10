@@ -1,0 +1,102 @@
+name: Release
+
+# Version-bump + tag helper. Pick a package and a version; this bumps the
+# manifest (commit to main) and pushes the package-prefixed tag <package>/vX.Y.Z,
+# which triggers the matching publish-<package>.yml. Go has no manifest — its
+# version IS the tag — so for go we skip the bump and only tag.
+#
+# Actions → Release → Run workflow → choose package + version.
+
+on:
+  workflow_dispatch:
+    inputs:
+      package:
+        description: Package to release
+        required: true
+        type: choice
+        options:
+          - dotnet
+          - node
+          - python
+          - rust
+          - java
+          - go
+          - ruby
+          - php
+      version:
+        description: New version, e.g. 0.2.0 (no leading "v")
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  # Don't let two releases of the same package race on the same tag/commit.
+  group: release-${{ github.event.inputs.package }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      PACKAGE: ${{ github.event.inputs.package }}
+      VERSION: ${{ github.event.inputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          # Need full history + a token that can push commits and tags to main.
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Validate version
+        run: |
+          if ! printf '%s' "$VERSION" | grep -Eq '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$'; then
+            echo "::error::'$VERSION' is not a valid semver version (e.g. 0.2.0)"
+            exit 1
+          fi
+          echo "TAG=${PACKAGE}/v${VERSION}" >> "$GITHUB_ENV"
+
+      - name: Guard — tag must not already exist
+        run: |
+          git fetch --tags --quiet
+          if git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
+            echo "::error::tag ${TAG} already exists — bump the version"
+            exit 1
+          fi
+          if git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null 2>&1; then
+            echo "::error::tag ${TAG} already exists on origin — bump the version"
+            exit 1
+          fi
+
+      - name: Configure git bot identity
+        run: |
+          git config user.name  "open-banking-io-bot"
+          git config user.email "bot@open-banking.io"
+
+      - uses: actions/setup-node@v4
+        if: ${{ env.PACKAGE != 'go' && env.PACKAGE != 'php' }}
+        with:
+          node-version: 20
+
+      - name: Bump manifest version (all packages except go)
+        if: ${{ env.PACKAGE != 'go' && env.PACKAGE != 'php' }}
+        run: node tools/bump-version.mjs "$PACKAGE" "$VERSION"
+
+      - name: Commit manifest bump to main
+        if: ${{ env.PACKAGE != 'go' && env.PACKAGE != 'php' }}
+        run: |
+          if git diff --quiet; then
+            echo "::error::bump-version made no changes for ${PACKAGE} ${VERSION}"
+            exit 1
+          fi
+          git commit -am "release(${PACKAGE}): v${VERSION}"
+          git push origin HEAD:main
+
+      - name: Create and push tag
+        run: |
+          # Tag the current HEAD (the bump commit for non-go; plain main for go).
+          git tag -a "${TAG}" -m "release(${PACKAGE}): v${VERSION}"
+          git push origin "refs/tags/${TAG}"
+          echo "::notice::pushed ${TAG} — publish-${PACKAGE}.yml will pick it up"

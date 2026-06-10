@@ -27,5 +27,11 @@ rust/Cargo.lock
 # Java / Maven
 target/
 
+# Ruby
+ruby/.bundle/
+ruby/vendor/
+ruby/Gemfile.lock
+ruby/*.gem
+
 # misc
 .DS_Store

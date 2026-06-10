@@ -1,0 +1,42 @@
+name: Publish Ruby
+
+# Publishes the open-banking-io gem to RubyGems via OIDC trusted publishing (no token) on a `ruby/v*` tag.
+# Requires a RubyGems trusted publisher for the gem (this repo, workflow publish-ruby.yml, "Production").
+
+on:
+  push:
+    tags: ['ruby/v*']
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: Production
+    permissions:
+      id-token: write
+      contents: read
+    defaults:
+      run:
+        working-directory: ruby
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.4'
+          bundler-cache: true
+
+      - run: bundle exec rspec
+
+      - name: Verify the gem version matches the tag
+        if: startsWith(github.ref, 'refs/tags/ruby/v')
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#ruby/v}"
+          GEM_VERSION="$(ruby -Ilib -r open_banking_io/version -e 'print OpenBankingIO::VERSION')"
+          echo "tag=$TAG_VERSION gem=$GEM_VERSION"
+          [ "$TAG_VERSION" = "$GEM_VERSION" ] || { echo "::error::tag $TAG_VERSION != gem $GEM_VERSION"; exit 1; }
+
+      - name: Configure RubyGems credentials (OIDC trusted publishing)
+        uses: rubygems/configure-rubygems-credentials@main
+
+      - run: gem build open-banking-io.gemspec
+      - run: gem push open-banking-io-*.gem
