@@ -1,12 +1,9 @@
 name: Publish Rust
 
-# Publishes open-banking-io to crates.io on a v* tag via crates.io Trusted Publishing (OIDC).
-#
-# A Trusted Publisher can only be configured for a crate that already exists, so the FIRST publish
-# uses the CARGO_REGISTRY_TOKEN secret (a crates.io API token). After it succeeds:
-#   1. on crates.io → the crate's Settings → Trusted Publishing, add GitHub repo
-#      `open-banking-io/clients`, workflow `publish-rust.yml`, environment `Production`;
-#   2. delete (revoke) the CARGO_REGISTRY_TOKEN — subsequent publishes authenticate via OIDC.
+# Publishes open-banking-io to crates.io on a rust/v* tag via crates.io Trusted Publishing (OIDC).
+# Token-less: rust-lang/crates-io-auth-action mints a short-lived token from the GitHub OIDC
+# identity. Requires a Trusted Publisher on the crate (repo open-banking-io/clients, workflow
+# publish-rust.yml, environment Production).
 
 on:
   push:
@@ -37,14 +34,11 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo test
 
-      # Mint a short-lived token via OIDC. No-ops until a Trusted Publisher is configured, so the
-      # step is allowed to fail and we fall back to CARGO_REGISTRY_TOKEN for the first publish.
       - name: Authenticate to crates.io (trusted publishing)
         id: auth
         uses: rust-lang/crates-io-auth-action@v1
-        continue-on-error: true
 
       - name: Publish
-        run: cargo publish --token "$CARGO_REGISTRY_TOKEN"
+        run: cargo publish
         env:
-          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token || secrets.CARGO_REGISTRY_TOKEN }}
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
