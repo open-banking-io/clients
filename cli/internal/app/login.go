@@ -108,7 +108,7 @@ func (a *App) login(args []string) error {
 
 	fmt.Fprintf(a.Stdout, "Logged in as %s. Credentials saved to %s\n", token.User, a.ConfigPath)
 	if bundle.EncryptionKey.PrivateKey == "" {
-		fmt.Fprintln(a.Stdout, "Next: run `obank key import` to add your encryption key so accounts can be decrypted.")
+		fmt.Fprintln(a.Stdout, "Next: run `openbanking key import` to add your encryption key so accounts can be decrypted.")
 	}
 	return nil
 }
@@ -156,7 +156,7 @@ func callbackHandler(codeCh chan<- string) http.Handler {
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, _ = io.WriteString(w, `<!doctype html><meta charset=utf-8>
-<title>obank</title><body style="font-family:system-ui;padding:3rem">
+<title>open-banking.io CLI</title><body style="font-family:system-ui;padding:3rem">
 <h2>Login complete</h2><p>You can close this tab and return to your terminal.</p></body>`)
 		select {
 		case codeCh <- code:

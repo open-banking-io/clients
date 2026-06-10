@@ -15,7 +15,7 @@ var connectPollInterval = 2 * time.Second
 
 func (a *App) connect(args []string) error {
 	if len(args) == 0 || strings.HasPrefix(args[0], "-") {
-		return fmt.Errorf("usage: obank connect <bank-name> [--country DK] [--psu-type personal|business]")
+		return fmt.Errorf("usage: openbanking connect <bank-name> [--country DK] [--psu-type personal|business]")
 	}
 	bankName := args[0]
 

@@ -32,7 +32,7 @@ func (a *App) sync(args []string) error {
 	}
 
 	if fs.NArg() == 0 {
-		return fmt.Errorf("usage: obank sync <account-id>   (or: obank sync --all)")
+		return fmt.Errorf("usage: openbanking sync <account-id>   (or: openbanking sync --all)")
 	}
 	result, err := client.Sync(fs.Arg(0))
 	if err != nil {
