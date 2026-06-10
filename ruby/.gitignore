@@ -1,0 +1,6 @@
+# Generated coverage reports (SimpleCov HTML + Cobertura XML).
+/coverage/
+
+# Bundler
+/.bundle/
+/vendor/bundle/

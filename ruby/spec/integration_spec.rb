@@ -5,8 +5,7 @@ require "support/mock_server"
 
 # Integration test: serve the shared API fixtures over HTTP and exercise the client.
 RSpec.describe OpenBankingIO::Client do
-  ACCOUNT_ID = "11111111-1111-4111-8111-111111111111"
-
+  let(:account_id) { "11111111-1111-4111-8111-111111111111" }
   let(:credentials) { load_fixture("credentials.json") }
   let(:private_key) { credentials["encryptionKey"]["privateKey"] }
 
@@ -42,7 +41,7 @@ RSpec.describe OpenBankingIO::Client do
   end
 
   it "decrypts a page of transactions" do
-    page = build_client.get_transactions(ACCOUNT_ID, limit: 50)
+    page = build_client.get_transactions(account_id, limit: 50)
     expect(page.total).to eq(1)
 
     txn = page.items.first
@@ -65,7 +64,7 @@ RSpec.describe OpenBankingIO::Client do
   end
 
   it "posts the decrypted uid when syncing one account" do
-    result = build_client.sync(ACCOUNT_ID)
+    result = build_client.sync(account_id)
     expect(result.total_fetched).to eq(1)
     expect(@server.captured[:sync_body]).to eq("uid" => "c5d93aa7-5e23-4da0-ba88-42b9a584492c")
   end
@@ -76,7 +75,7 @@ RSpec.describe OpenBankingIO::Client do
 
     item = @server.captured[:sync_all_body]["items"].first
     expect(item["uid"]).to eq("c5d93aa7-5e23-4da0-ba88-42b9a584492c")
-    expect(item["accountId"]).to eq(ACCOUNT_ID)
+    expect(item["accountId"]).to eq(account_id)
   end
 
   it "raises on a wrong API key" do

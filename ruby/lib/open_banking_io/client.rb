@@ -32,10 +32,10 @@ module OpenBankingIO
     # Builds a client from a credentials-bundle JSON string or a path to a bundle file.
     def self.from_credentials(path_or_json)
       raw = if File.file?(path_or_json.to_s)
-              File.read(path_or_json)
-            else
-              path_or_json
-            end
+        File.read(path_or_json)
+      else
+        path_or_json
+      end
 
       bundle = JSON.parse(raw)
       api_base_url = bundle["apiBaseUrl"].to_s
@@ -108,7 +108,7 @@ module OpenBankingIO
         raise ArgumentError, "Account has no active session (reconnect required) -- cannot sync"
       end
 
-      result = post_json("api/accounts/#{account_id}/sync", { "uid" => uid })
+      result = post_json("api/accounts/#{account_id}/sync", {"uid" => uid})
       SyncResult.new(
         new_transactions: result["newTransactions"] || 0,
         total_fetched: result["totalFetched"] || 0
@@ -120,10 +120,10 @@ module OpenBankingIO
       items = []
       account_wires.each do |a|
         uid = decrypt_uid(a)
-        items << { "accountId" => a["id"], "uid" => uid } unless uid.nil?
+        items << {"accountId" => a["id"], "uid" => uid} unless uid.nil?
       end
 
-      result = post_json("api/sync", { "items" => items })
+      result = post_json("api/sync", {"items" => items})
       SyncAllResult.new(
         accounts: result["accounts"] || 0,
         new_transactions: result["newTransactions"] || 0
