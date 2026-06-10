@@ -37,8 +37,8 @@
     <jackson.version>2.22.0</jackson.version>
     <junit.version>6.1.0</junit.version>
     <jacoco.version>0.8.15</jacoco.version>
-    <spotless.version>3.6.0</spotless.version>
-    <google-java-format.version>1.35.0</google-java-format.version>
+    <spotless.version>2.44.0</spotless.version>
+    <google-java-format.version>1.27.0</google-java-format.version>
     <spotbugs.version>4.10.2.0</spotbugs.version>
   </properties>
 
