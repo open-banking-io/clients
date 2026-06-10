@@ -14,58 +14,18 @@ use PHPUnit\Framework\TestCase;
  */
 final class IntegrationTest extends TestCase
 {
-    private const ACCOUNT_ID = '11111111-1111-4111-8111-111111111111';
+    use MockServerTrait;
 
-    /** @var resource|null */
-    private $serverProcess;
-    private string $baseUrl = '';
-    private string $captureFile = '';
-    /** @var array{apiKey: string, encryptionKey: array{privateKey: string}} */
-    private array $credentials;
+    private const ACCOUNT_ID = '11111111-1111-4111-8111-111111111111';
 
     protected function setUp(): void
     {
-        /** @var array{apiKey: string, encryptionKey: array{privateKey: string}} $credentials */
-        $credentials = Fixtures::load('credentials.json');
-        $this->credentials = $credentials;
-
-        $port = $this->findFreePort();
-        $this->baseUrl = "http://127.0.0.1:{$port}";
-        $this->captureFile = tempnam(sys_get_temp_dir(), 'obk-capture-') ?: '';
-
-        $router = __DIR__ . '/mock-server/router.php';
-        $env = [
-            'OBK_FIXTURES' => Fixtures::dir(),
-            'OBK_API_KEY' => $this->credentials['apiKey'],
-            'OBK_CAPTURE_FILE' => $this->captureFile,
-            'PATH' => getenv('PATH') ?: '',
-        ];
-
-        $descriptors = [
-            0 => ['pipe', 'r'],
-            1 => ['pipe', 'w'],
-            2 => ['pipe', 'w'],
-        ];
-
-        $cmd = [PHP_BINARY, '-S', "127.0.0.1:{$port}", $router];
-        $process = proc_open($cmd, $descriptors, $pipes, null, $env);
-        if (!is_resource($process)) {
-            self::fail('Could not start the PHP mock server');
-        }
-        $this->serverProcess = $process;
-
-        $this->waitForServer();
+        $this->startMockServer();
     }
 
     protected function tearDown(): void
     {
-        if (is_resource($this->serverProcess)) {
-            proc_terminate($this->serverProcess);
-            proc_close($this->serverProcess);
-        }
-        if ($this->captureFile !== '' && is_file($this->captureFile)) {
-            @unlink($this->captureFile);
-        }
+        $this->stopMockServer();
     }
 
     private function client(?string $apiKey = null): Client
@@ -192,30 +152,5 @@ final class IntegrationTest extends TestCase
         self::assertIsArray($body);
         /** @var array<string, mixed> $body */
         return $body;
-    }
-
-    private function findFreePort(): int
-    {
-        $sock = stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
-        if ($sock === false) {
-            self::fail("Could not allocate a port: {$errstr}");
-        }
-        $name = stream_socket_get_name($sock, false);
-        fclose($sock);
-        $port = (int) substr((string) $name, (int) strrpos((string) $name, ':') + 1);
-        return $port;
-    }
-
-    private function waitForServer(): void
-    {
-        for ($i = 0; $i < 100; $i++) {
-            $conn = @fsockopen('127.0.0.1', (int) parse_url($this->baseUrl, PHP_URL_PORT), $errno, $errstr, 0.2);
-            if ($conn !== false) {
-                fclose($conn);
-                return;
-            }
-            usleep(50_000);
-        }
-        self::fail('Mock server did not start in time');
     }
 }

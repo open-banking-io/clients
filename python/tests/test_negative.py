@@ -69,6 +69,26 @@ def test_invalid_pkcs8_key_not_base64():
         envelope.load_private_key("@@@ this is not base64 @@@")
 
 
+def test_load_private_key_rejects_non_ec_key():
+    # A structurally valid PKCS#8 key that is not an EC key must be rejected.
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import ed25519
+
+    key = ed25519.Ed25519PrivateKey.generate()
+    der = key.private_bytes(
+        encoding=serialization.Encoding.DER,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption(),
+    )
+    with pytest.raises(ValueError, match="not an EC key"):
+        envelope.load_private_key(base64.b64encode(der).decode())
+
+
+def test_decrypt_to_json_none_returns_none(keypair):
+    priv = _priv(keypair)
+    assert envelope.decrypt_to_json(priv, None) is None
+
+
 def test_client_rejects_bad_private_key():
     with pytest.raises(Exception):
         OpenBankingClient(

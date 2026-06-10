@@ -9,11 +9,17 @@ declare(strict_types=1);
  * and records POST request bodies to OBK_CAPTURE_FILE so the test can assert on them.
  *
  * Env: OBK_FIXTURES (path to repo fixtures/), OBK_API_KEY, OBK_CAPTURE_FILE.
+ *
+ * OBK_ACCOUNTS_MODE switches payloads for negative-path tests:
+ *   'sessionless'  -> the /api/accounts account drops its uidEnc (no active session),
+ *   'error-status' -> GET /api/connections returns 503 with a JSON error body,
+ *   'bad-json'     -> GET /api/connections returns 200 with an unparseable body.
  */
 
 $fixtures = getenv('OBK_FIXTURES') ?: '';
 $apiKey = getenv('OBK_API_KEY') ?: '';
 $captureFile = getenv('OBK_CAPTURE_FILE') ?: '';
+$accountsMode = getenv('OBK_ACCOUNTS_MODE') ?: '';
 
 $accountId = '11111111-1111-4111-8111-111111111111';
 
@@ -66,6 +72,19 @@ if ($method === 'GET' && $path === '/api/accounts') {
             : '';
         file_put_contents($captureFile, json_encode($existing));
     }
+    if ($accountsMode === 'sessionless') {
+        $raw = file_get_contents($fixtures . '/api/accounts.json');
+        $decoded = $raw === false ? [] : json_decode($raw, true);
+        $accounts = is_array($decoded) ? $decoded : [];
+        foreach ($accounts as &$acct) {
+            if (is_array($acct)) {
+                unset($acct['uidEnc']);
+            }
+        }
+        unset($acct);
+        echo json_encode($accounts);
+        return true;
+    }
     $serve('accounts.json');
     return true;
 }
@@ -76,6 +95,15 @@ if ($method === 'GET' && $path === "/api/accounts/{$accountId}/transactions") {
 }
 
 if ($method === 'GET' && $path === '/api/connections') {
+    if ($accountsMode === 'error-status') {
+        http_response_code(503);
+        echo json_encode(['error' => 'service unavailable']);
+        return true;
+    }
+    if ($accountsMode === 'bad-json') {
+        echo 'this is not json {';
+        return true;
+    }
     $serve('connections.json');
     return true;
 }

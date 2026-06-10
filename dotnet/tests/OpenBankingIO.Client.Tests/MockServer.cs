@@ -20,6 +20,15 @@ internal sealed class MockServer : IDisposable
     /// <summary>The <c>User-Agent</c> header seen on the most recent request, if any.</summary>
     public string? LastUserAgent { get; private set; }
 
+    /// <summary>The raw query string (without the leading '?') of the most recent request, if any.</summary>
+    public string? LastQuery { get; private set; }
+
+    /// <summary>Overrides the JSON body returned for <c>GET api/accounts</c> (otherwise the fixture is served).</summary>
+    public string? AccountsJson { get; set; }
+
+    /// <summary>Overrides the JSON body returned for a transactions GET (otherwise the fixture is served).</summary>
+    public string? TransactionsJson { get; set; }
+
     public MockServer(string apiKey)
     {
         _apiKey = apiKey;
@@ -48,6 +57,7 @@ internal sealed class MockServer : IDisposable
         try
         {
             LastUserAgent = req.Headers["User-Agent"];
+            LastQuery = req.Url!.Query.TrimStart('?');
 
             if (req.Headers["X-Api-Key"] != _apiKey)
             {
@@ -67,24 +77,47 @@ internal sealed class MockServer : IDisposable
                 return;
             }
 
-            var fixture = (method, path) switch
+            // Sentinel for the unparseable-body test: any path containing "__badjson__" → 200 with junk.
+            if (path.Contains("__badjson__", StringComparison.Ordinal))
             {
-                ("GET", "api/accounts") => "api/accounts.json",
-                ("GET", "api/connections") => "api/connections.json",
-                ("GET", _) when path.StartsWith("api/accounts/", StringComparison.Ordinal) && path.EndsWith("/transactions", StringComparison.Ordinal) => "api/transactions.json",
-                ("POST", "api/sync") => RecordAndReturn(req, path, "api/sync-all.json"),
-                ("POST", _) when path.StartsWith("api/accounts/", StringComparison.Ordinal) && path.EndsWith("/sync", StringComparison.Ordinal) => RecordAndReturn(req, path, "api/sync.json"),
+                await WriteBodyAsync(res, "{ this is not valid json");
+                return;
+            }
+
+            // body is either a literal JSON string (override) or a "fixture:<path>" marker resolved below.
+            var body = (method, path) switch
+            {
+                ("GET", "api/accounts") => AccountsJson ?? "fixture:api/accounts.json",
+                ("GET", "api/connections") => "fixture:api/connections.json",
+                ("GET", _) when path.StartsWith("api/accounts/", StringComparison.Ordinal) && path.EndsWith("/transactions", StringComparison.Ordinal) => TransactionsJson ?? "fixture:api/transactions.json",
+                ("POST", "api/sync") => RecordAndReturn(req, path, "fixture:api/sync-all.json"),
+                ("POST", _) when path.StartsWith("api/accounts/", StringComparison.Ordinal) && path.EndsWith("/sync", StringComparison.Ordinal) => RecordAndReturn(req, path, "fixture:api/sync.json"),
                 _ => null,
             };
 
-            if (fixture is null)
+            if (body is null)
             {
                 res.StatusCode = 404;
                 res.Close();
                 return;
             }
 
-            var bytes = Encoding.UTF8.GetBytes(Fixtures.Read(fixture));
+            if (body.StartsWith("fixture:", StringComparison.Ordinal))
+                body = Fixtures.Read(body["fixture:".Length..]);
+
+            await WriteBodyAsync(res, body);
+        }
+        catch
+        {
+            try { res.StatusCode = 500; res.Close(); } catch { /* ignore */ }
+        }
+    }
+
+    private static async Task WriteBodyAsync(HttpListenerResponse res, string body)
+    {
+        try
+        {
+            var bytes = Encoding.UTF8.GetBytes(body);
             res.ContentType = "application/json";
             res.ContentLength64 = bytes.Length;
             await res.OutputStream.WriteAsync(bytes);
