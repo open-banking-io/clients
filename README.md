@@ -1,6 +1,7 @@
 # open-banking.io client SDKs
 
-Server-to-server clients for [open-banking.io](https://open-banking.io) in **.NET, Node, and Python**.
+Server-to-server clients for [open-banking.io](https://open-banking.io) in **.NET, Node, Python,
+Rust, Go, and Java**.
 
 open-banking.io is **zero-knowledge**: the service stores and returns only ciphertext it cannot read.
 These SDKs do the two things an integrator needs — **authenticate** with your API key and **decrypt**
@@ -11,6 +12,9 @@ the data locally with your exported private key — and hand you clean, typed mo
 | .NET | `OpenBankingIO.Client` (NuGet) | [`dotnet/`](dotnet/) |
 | Node / TypeScript | `@open-banking-io/client` (npm) | [`node/`](node/) |
 | Python | `open-banking-io` (PyPI) | [`python/`](python/) |
+| Rust | `open-banking-io` (crates.io) | [`rust/`](rust/) |
+| Go | `github.com/open-banking-io/clients/go` | [`go/`](go/) |
+| Java | `io.openbanking:open-banking-io-client` (Maven Central) | [`java/`](java/) |
 
 ## How it works
 
@@ -37,8 +41,33 @@ for a in client.get_accounts():
     booked = next(b for b in a.balances if b.type == "ITBD")
     print(a.iban, booked.amount, a.currency)
 ```
+```rust
+// Rust
+let client = OpenBankingClient::from_credentials("credentials.json")?;
+for a in client.get_accounts()? {
+    let booked = a.balances.iter().find(|b| b.type_ == "ITBD");
+    println!("{:?} {:?} {}", a.iban, booked.map(|b| &b.amount), a.currency);
+}
+```
+```go
+// Go
+client, _ := openbanking.FromCredentials("credentials.json", nil)
+accounts, _ := client.GetAccounts()
+for _, a := range accounts {
+    for _, b := range a.Balances {
+        if b.Type == "ITBD" { fmt.Println(a.Iban, b.Amount, a.Currency) }
+    }
+}
+```
+```java
+// Java
+var client = OpenBankingClient.fromCredentials("credentials.json");
+for (Account a : client.getAccounts())
+    a.balances().stream().filter(b -> b.type().equals("ITBD")).findFirst()
+        .ifPresent(b -> System.out.println(a.iban() + " " + b.amount() + " " + a.currency()));
+```
 
-All three expose the same surface: `getAccounts`, `getTransactions(accountId, …)`, `getConnections`,
+All six expose the same surface: `getAccounts`, `getTransactions(accountId, …)`, `getConnections`,
 `sync(accountId)`, `syncAll()`. Sync decrypts the account's session uid locally and posts it, so the
 service can refresh from the bank without ever holding it in plaintext.
 
@@ -46,7 +75,7 @@ service can refresh from the bank without ever holding it in plaintext.
 
 Each sensitive value is an **envelope**: `version(1) | ephemeralPublicKey(65) | nonce(12) | tag(16) |
 ciphertext`, produced with **ephemeral ECDH on P-256 → HKDF-SHA256 (salt = 32 zero bytes, info =
-`bank.core.ci/zk/v1`) → AES-256-GCM**. Only your private key can open it. The three SDKs are verified
+`bank.core.ci/zk/v1`) → AES-256-GCM**. Only your private key can open it. All six SDKs are verified
 against the **same fixtures** (`fixtures/`) so they decrypt identically and interoperate with the live
 service's wire format.
 
@@ -60,10 +89,13 @@ node tools/generate-fixtures.mjs
 dotnet test dotnet/
 cd node   && npm install && npm test
 cd python && pip install -e .[dev] && pytest -q
+cd rust   && cargo test
+cd go     && go test ./...
+cd java   && mvn -B verify
 ```
 
-CI (`.github/workflows/ci.yml`) builds and tests all three on every push. The `publish-*.yml` workflows
-publish to NuGet / npm / PyPI on a `v*` tag — add the registry secrets (`NUGET_API_KEY`, `NPM_TOKEN`,
-`PYPI_API_TOKEN`) to enable them.
+CI (`.github/workflows/ci.yml`) builds and tests all six on every push. The `publish-*.yml` workflows
+publish to NuGet / npm / PyPI / crates.io / Maven Central on a `v*` tag (the Go module publishes via a
+prefixed `go/v*` tag) — add the registry secrets to enable them.
 
 MIT licensed.

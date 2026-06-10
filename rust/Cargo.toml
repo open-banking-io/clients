@@ -1,0 +1,29 @@
+[package]
+name = "open-banking-io"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.74"
+description = "Server-to-server client for open-banking.io with local zero-knowledge envelope decryption."
+license = "MIT"
+repository = "https://github.com/open-banking-io/clients"
+homepage = "https://open-banking.io"
+keywords = ["open-banking", "psd2", "zero-knowledge", "ecdh", "fintech"]
+categories = ["api-bindings", "cryptography"]
+readme = "README.md"
+
+[lib]
+name = "open_banking_io"
+
+[dependencies]
+p256 = { version = "0.13", features = ["ecdh", "pkcs8"] }
+hkdf = "0.12"
+sha2 = "0.10"
+aes-gcm = "0.10"
+base64 = "0.22"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+ureq = { version = "2", features = ["json"] }
+thiserror = "1"
+
+[dev-dependencies]
+tiny_http = "0.12"

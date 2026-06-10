@@ -1,0 +1,27 @@
+name: Publish Go
+
+# Go modules are "published" by pushing a version tag — the module proxy fetches from this repo.
+# Because the module lives in the go/ subdirectory, its tags MUST be prefixed, e.g. `go/v0.1.0`.
+# This job verifies the tag and asks the public proxy to index the new version (no secrets needed).
+
+on:
+  push:
+    tags: ['go/v*']
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: go
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+      - run: go test ./...
+      - name: Warm the module proxy
+        run: |
+          VERSION="${GITHUB_REF_NAME#go/}"
+          curl -fsSL "https://proxy.golang.org/github.com/open-banking-io/clients/go/@v/${VERSION}.info" || true

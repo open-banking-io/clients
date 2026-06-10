@@ -26,7 +26,6 @@ jobs:
           registry-url: https://registry.npmjs.org
       - run: npm ci
       - run: npm run build
-      # Uses NPM_TOKEN when set (first publish); falls back to OIDC trusted publishing otherwise.
+      - run: npm install -g npm@latest   # OIDC trusted publishing needs npm >= 11.5
+      # Token-less: uses OIDC trusted publishing (configured on npmjs.com) + provenance.
       - run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
