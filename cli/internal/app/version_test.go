@@ -12,8 +12,8 @@ func TestVersionCommand(t *testing.T) {
 	if err := app.Run([]string{"version"}); err != nil {
 		t.Fatalf("version: %v", err)
 	}
-	if !strings.Contains(out.String(), "obank 1.2.3") {
-		t.Errorf("version output = %q, want to contain 'obank 1.2.3'", out.String())
+	if !strings.Contains(out.String(), "openbanking 1.2.3") {
+		t.Errorf("version output = %q, want to contain 'openbanking 1.2.3'", out.String())
 	}
 }
 
@@ -23,7 +23,7 @@ func TestVersionDefaultsToDev(t *testing.T) {
 	if err := app.Run([]string{"--version"}); err != nil {
 		t.Fatalf("--version: %v", err)
 	}
-	if !strings.Contains(out.String(), "obank dev") {
-		t.Errorf("version output = %q, want 'obank dev'", out.String())
+	if !strings.Contains(out.String(), "openbanking dev") {
+		t.Errorf("version output = %q, want 'openbanking dev'", out.String())
 	}
 }

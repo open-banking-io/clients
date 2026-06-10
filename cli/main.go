@@ -1,4 +1,4 @@
-// Command obank is the open-banking.io command line: authenticate once, then read and sync your
+// Command openbanking is the open-banking.io command line: authenticate once, then read and sync your
 // accounts and transactions locally, decrypting the zero-knowledge data with your own key.
 package main
 
@@ -16,7 +16,7 @@ var version = "dev"
 func main() {
 	path, err := config.DefaultPath()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "obank:", err)
+		fmt.Fprintln(os.Stderr, "openbanking:", err)
 		os.Exit(1)
 	}
 	a := &app.App{
@@ -27,7 +27,7 @@ func main() {
 		Version:    version,
 	}
 	if err := a.Run(os.Args[1:]); err != nil {
-		fmt.Fprintln(os.Stderr, "obank:", err)
+		fmt.Fprintln(os.Stderr, "openbanking:", err)
 		os.Exit(1)
 	}
 }

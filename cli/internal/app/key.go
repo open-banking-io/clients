@@ -17,13 +17,13 @@ import (
 
 func (a *App) key(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: obank key import [<file>]")
+		return fmt.Errorf("usage: openbanking key import [<file>]")
 	}
 	switch args[0] {
 	case "import":
 		return a.keyImport(args[1:])
 	default:
-		return fmt.Errorf("unknown key subcommand %q (try `obank key import`)", args[0])
+		return fmt.Errorf("unknown key subcommand %q (try `openbanking key import`)", args[0])
 	}
 }
 
@@ -53,7 +53,7 @@ func (a *App) keyImport(args []string) error {
 		return fmt.Errorf("not a valid P-256 encryption key: %w", err)
 	}
 
-	// Preserve any API credential a prior `obank login` already wrote.
+	// Preserve any API credential a prior `openbanking login` already wrote.
 	bundle, err := config.Load(a.ConfigPath)
 	if err != nil {
 		bundle = config.Bundle{}
@@ -68,7 +68,7 @@ func (a *App) keyImport(args []string) error {
 
 	fmt.Fprintf(a.Stdout, "Encryption key imported to %s\n", a.ConfigPath)
 	if bundle.APIKey == "" {
-		fmt.Fprintln(a.Stdout, "Next: run `obank login` to add your API key.")
+		fmt.Fprintln(a.Stdout, "Next: run `openbanking login` to add your API key.")
 	}
 	return nil
 }

@@ -1,4 +1,4 @@
-# obank
+# open-banking.io CLI (`openbanking`)
 
 The **open-banking.io** command line. Authenticate once, then read, sync, and
 connect your bank data locally — the zero-knowledge envelopes are decrypted
@@ -9,14 +9,14 @@ in-process with your own key, never on a server.
 ### Homebrew (macOS / Linux)
 
 ```sh
-brew install open-banking-io/tap/obank
+brew install open-banking-io/tap/openbanking
 ```
 
 ### Binaries (Windows / macOS / Linux)
 
 Download the archive for your platform from the
-[latest release](https://github.com/open-banking-io/clients/releases?q=obank),
-unpack it, and put `obank` on your `PATH`. Windows ships a `.zip`; macOS/Linux a
+[latest release](https://github.com/open-banking-io/clients/releases?q=openbanking),
+unpack it, and put `openbanking` on your `PATH`. Windows ships a `.zip`; macOS/Linux a
 `.tar.gz`. Checksums are published alongside as `checksums.txt`.
 
 ### From source
@@ -28,14 +28,14 @@ go install github.com/open-banking-io/clients/cli@latest
 ## Usage
 
 ```sh
-obank login                       # sign in via the browser, saves an API key
-obank key import ./credentials.json   # import your encryption key (exported from the app)
-obank accounts                    # list accounts with balances
-obank transactions <account-id>   # an account's statement (--from --to --limit)
-obank sync --all                  # pull fresh transactions
-obank banks                       # banks available to connect
-obank connect <bank-name>         # connect a bank via the consent flow
-obank version
+openbanking login                       # sign in via the browser, saves an API key
+openbanking key import ./credentials.json   # import your encryption key (exported from the app)
+openbanking accounts                    # list accounts with balances
+openbanking transactions <account-id>   # an account's statement (--from --to --limit)
+openbanking sync --all                  # pull fresh transactions
+openbanking banks                       # banks available to connect
+openbanking connect <bank-name>         # connect a bank via the consent flow
+openbanking version
 ```
 
 Credentials live in `$OPENBANKING_CONFIG` or

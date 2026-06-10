@@ -37,7 +37,7 @@ func Load(path string) (Bundle, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return Bundle{}, fmt.Errorf("no credentials at %s — run `obank login` first: %w", path, err)
+			return Bundle{}, fmt.Errorf("no credentials at %s — run `openbanking login` first: %w", path, err)
 		}
 		return Bundle{}, fmt.Errorf("could not read credentials at %s: %w", path, err)
 	}

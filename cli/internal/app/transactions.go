@@ -12,7 +12,7 @@ import (
 
 func (a *App) transactions(args []string) error {
 	if len(args) == 0 || strings.HasPrefix(args[0], "-") {
-		return fmt.Errorf("usage: obank transactions <account-id> [--from YYYY-MM-DD] [--to YYYY-MM-DD] [--limit N] [--offset N]")
+		return fmt.Errorf("usage: openbanking transactions <account-id> [--from YYYY-MM-DD] [--to YYYY-MM-DD] [--limit N] [--offset N]")
 	}
 	accountID := args[0]
 

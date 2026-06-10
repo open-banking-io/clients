@@ -1,4 +1,4 @@
-// Package app implements the obank CLI command dispatch. Commands are methods on App so tests can
+// Package app implements the openbanking CLI command dispatch. Commands are methods on App so tests can
 // drive them with injected writers, an explicit config path, and a custom HTTP client.
 package app
 
@@ -56,13 +56,13 @@ func (a *App) Run(args []string) error {
 	case "connect":
 		return a.connect(rest)
 	case "version", "--version", "-v":
-		fmt.Fprintf(a.Stdout, "obank %s\n", a.versionString())
+		fmt.Fprintf(a.Stdout, "openbanking %s\n", a.versionString())
 		return nil
 	case "help", "-h", "--help":
 		a.usage()
 		return nil
 	default:
-		return fmt.Errorf("unknown command %q (run `obank help`)", cmd)
+		return fmt.Errorf("unknown command %q (run `openbanking help`)", cmd)
 	}
 }
 
@@ -83,7 +83,7 @@ func (a *App) publicClient() (*openbanking.Client, error) {
 		return nil, err
 	}
 	if bundle.APIKey == "" {
-		return nil, fmt.Errorf("no API key — run `obank login` first")
+		return nil, fmt.Errorf("no API key — run `openbanking login` first")
 	}
 	return openbanking.NewPublic(bundle.APIBaseURL, bundle.APIKey, a.HTTPClient)
 }
@@ -96,10 +96,10 @@ func (a *App) versionString() string {
 }
 
 func (a *App) usage() {
-	fmt.Fprint(a.Stderr, `obank — open-banking.io command line
+	fmt.Fprint(a.Stderr, `openbanking — open-banking.io command line
 
 Usage:
-  obank <command> [flags]
+  openbanking <command> [flags]
 
 Commands:
   login                          Sign in via the browser and save an API key (--api --timeout)
@@ -110,7 +110,7 @@ Commands:
   sync <account-id> | --all      Pull fresh transactions for one account or all
   banks                          List banks available for connection (--country)
   connect <bank-name>            Connect a bank via the browser consent flow
-  version                        Print the obank version
+  version                        Print the openbanking version
   help                           Show this help
 `)
 }
