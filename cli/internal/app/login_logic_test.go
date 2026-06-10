@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 )
@@ -77,6 +78,27 @@ func TestCallbackHandlerRelaysEncryptionKey(t *testing.T) {
 	res := <-ch
 	if res.code != "c1" || res.privKeyB64 != "PK" || res.pubKeyB64 != "PUB" {
 		t.Errorf("relayed result = %+v, want code c1 + key PK/PUB", res)
+	}
+}
+
+func TestCallbackHandlerAcceptsFormPost(t *testing.T) {
+	ch := make(chan callbackResult, 1)
+	srv := httptest.NewServer(callbackHandler(ch, "st8", "https://app.example"))
+	defer srv.Close()
+
+	// A browser form POST (application/x-www-form-urlencoded) — the path that avoids CORS entirely.
+	form := url.Values{"code": {"c9"}, "state": {"st8"}, "privateKey": {"PK"}, "publicKey": {"PUB"}}
+	resp, err := srv.Client().PostForm(srv.URL+"/callback", form)
+	if err != nil {
+		t.Fatalf("form POST: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	res := <-ch
+	if res.code != "c9" || res.privKeyB64 != "PK" || res.pubKeyB64 != "PUB" {
+		t.Errorf("form relay result = %+v, want code c9 + PK/PUB", res)
 	}
 }
 
