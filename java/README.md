@@ -32,6 +32,10 @@ holding it in plaintext.
 Monetary amounts are returned as `BigDecimal`; other optional fields are `null` when absent. The
 public models are Java `record`s.
 
+The default client uses a 10s connect timeout and a 30s per-request timeout, and sends a
+`User-Agent: open-banking-io/java/<version>` header on every request; an injected `HttpClient` is
+used as-is.
+
 ## Encryption scheme
 
 Each sensitive value is an envelope: `version(1) | ephemeralPublicKey(65) | nonce(12) | tag(16) |

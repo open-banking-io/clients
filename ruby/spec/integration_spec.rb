@@ -78,6 +78,11 @@ RSpec.describe OpenBankingIO::Client do
     expect(item["accountId"]).to eq(account_id)
   end
 
+  it "sends a User-Agent identifying the ruby client" do
+    build_client.get_accounts
+    expect(@server.captured[:last_headers]["user-agent"]).to start_with("open-banking-io/ruby/")
+  end
+
   it "raises on a wrong API key" do
     client = build_client(api_key: "wrong-key")
     expect { client.get_accounts }.to raise_error(OpenBankingIO::HTTPError)

@@ -96,6 +96,19 @@ final class IntegrationTest extends TestCase
         self::assertSame('633.90', $byType['ITAV']->amount);
     }
 
+    public function testSendsUserAgentHeader(): void
+    {
+        $this->client()->getAccounts();
+
+        $raw = file_get_contents($this->captureFile);
+        self::assertNotFalse($raw);
+        /** @var array<string, mixed> $all */
+        $all = json_decode($raw, true, 512, JSON_THROW_ON_ERROR);
+        $userAgent = $all['userAgent'] ?? null;
+        self::assertIsString($userAgent);
+        self::assertStringStartsWith('open-banking-io/php/', $userAgent);
+    }
+
     public function testGetTransactionsDecrypts(): void
     {
         $page = $this->client()->getTransactions(self::ACCOUNT_ID, ['limit' => 50]);

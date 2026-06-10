@@ -34,6 +34,7 @@ def server(httpserver, fixtures_dir):
         def handler(request):
             if request.headers.get("X-Api-Key") != API_KEY:
                 return _unauthorized()
+            captured["user_agent"] = request.headers.get("User-Agent")
             return _json_response(data)
 
         return handler
@@ -109,6 +110,15 @@ def test_get_transactions_decrypts(server, credentials):
     assert txn.merchant_category_code == "4816"
     assert txn.balance_after_transaction == Decimal("633.90")
     assert txn.credit_debit_indicator == "DBIT"
+
+
+def test_sends_user_agent_header(server, credentials):
+    with _client(server, credentials) as client:
+        client.get_accounts()
+
+    user_agent = server._captured["user_agent"]
+    assert user_agent is not None
+    assert user_agent.startswith("open-banking-io/python/")
 
 
 def test_get_connections(server, credentials):

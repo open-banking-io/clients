@@ -106,6 +106,19 @@ public class ClientIntegrationTests
     }
 
     [Fact]
+    public async Task Requests_Carry_The_UserAgent()
+    {
+        var (server, client) = Make();
+        using var _ = server;
+        using var __ = client;
+
+        await client.GetAccountsAsync();
+
+        Assert.NotNull(server.LastUserAgent);
+        Assert.StartsWith("open-banking-io/dotnet/", server.LastUserAgent);
+    }
+
+    [Fact]
     public async Task FromCredentials_Bundle_Works()
     {
         var creds = Fixtures.Read("credentials.json");

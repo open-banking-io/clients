@@ -14,6 +14,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.interfaces.ECPrivateKey;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -25,6 +26,15 @@ import java.util.Map;
  * service only ever returns ciphertext it cannot read.
  */
 public final class OpenBankingClient {
+
+  /** Connect timeout for the default HTTP client. */
+  private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(10);
+
+  /** Per-request timeout applied to every request this client sends. */
+  private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(30);
+
+  /** User-Agent sent on every request; {@code <version>} comes from the JAR manifest. */
+  private static final String USER_AGENT = "open-banking-io/java/" + version();
 
   private final String baseUrl;
   private final String apiKey;
@@ -53,7 +63,19 @@ public final class OpenBankingClient {
     this.baseUrl = apiBaseUrl.replaceAll("/+$", "");
     this.apiKey = apiKey;
     this.privateKey = Envelope.loadPrivateKey(privateKeyPkcs8Base64);
-    this.http = httpClient != null ? httpClient : HttpClient.newHttpClient();
+    this.http =
+        httpClient != null
+            ? httpClient
+            : HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build();
+  }
+
+  /**
+   * The implementation version baked into the JAR manifest by Maven, or {@code "dev"} when running
+   * from a build tree without a manifest (e.g. tests).
+   */
+  private static String version() {
+    String v = OpenBankingClient.class.getPackage().getImplementationVersion();
+    return (v == null || v.isBlank()) ? "dev" : v;
   }
 
   /** Builds a client from a credentials-bundle JSON string or a path to a bundle file. */
@@ -278,6 +300,8 @@ public final class OpenBankingClient {
     HttpRequest req =
         HttpRequest.newBuilder(URI.create(baseUrl + path))
             .header("X-Api-Key", apiKey)
+            .header("User-Agent", USER_AGENT)
+            .timeout(REQUEST_TIMEOUT)
             .GET()
             .build();
     return send(req, "GET", path);
@@ -294,6 +318,8 @@ public final class OpenBankingClient {
         HttpRequest.newBuilder(URI.create(baseUrl + path))
             .header("X-Api-Key", apiKey)
             .header("Content-Type", "application/json")
+            .header("User-Agent", USER_AGENT)
+            .timeout(REQUEST_TIMEOUT)
             .POST(HttpRequest.BodyPublishers.ofString(payload, StandardCharsets.UTF_8))
             .build();
     byte[] data = send(req, "POST", path);

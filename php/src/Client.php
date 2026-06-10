@@ -21,6 +21,18 @@ use OpenBankingIO\Model\TransactionPage;
  */
 final class Client
 {
+    /**
+     * Client version, sent as the User-Agent. Tracks the published release tag
+     * (PHP has no build manifest -- Packagist is tag-based), so bump this when tagging.
+     */
+    public const VERSION = '0.2.0';
+
+    /** Total request timeout, in seconds. */
+    private const TIMEOUT_SECONDS = 30;
+
+    /** Connection-establishment timeout, in seconds. */
+    private const CONNECT_TIMEOUT_SECONDS = 10;
+
     private readonly string $apiBaseUrl;
     private readonly string $apiKey;
     private readonly Envelope $envelope;
@@ -349,6 +361,9 @@ final class Client
         curl_setopt($ch, CURLOPT_URL, $url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
+        curl_setopt($ch, CURLOPT_USERAGENT, 'open-banking-io/php/' . self::VERSION);
+        curl_setopt($ch, CURLOPT_TIMEOUT, self::TIMEOUT_SECONDS);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, self::CONNECT_TIMEOUT_SECONDS);
 
         if ($body !== null) {
             $payload = json_encode($body, JSON_THROW_ON_ERROR);

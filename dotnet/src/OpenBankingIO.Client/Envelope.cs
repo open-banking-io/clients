@@ -30,15 +30,22 @@ internal static class Envelope
         var ciphertext = envelope[o..];
 
         using var ephemeral = ECDiffieHellman.Create();
-        ephemeral.ImportParameters(new ECParameters
+        try
         {
-            Curve = ECCurve.NamedCurves.nistP256,
-            Q = new ECPoint
+            ephemeral.ImportParameters(new ECParameters
             {
-                X = ephPub.Slice(1, CoordLen).ToArray(),
-                Y = ephPub.Slice(1 + CoordLen, CoordLen).ToArray(),
-            },
-        });
+                Curve = ECCurve.NamedCurves.nistP256,
+                Q = new ECPoint
+                {
+                    X = ephPub.Slice(1, CoordLen).ToArray(),
+                    Y = ephPub.Slice(1 + CoordLen, CoordLen).ToArray(),
+                },
+            });
+        }
+        catch (CryptographicException e)
+        {
+            throw new FormatException("Invalid ephemeral public key", e);
+        }
 
         var shared = privateKey.DeriveRawSecretAgreement(ephemeral.PublicKey);
         // salt: null == 32 zero bytes (RFC 5869), matching the browser's `new Uint8Array(32)`.

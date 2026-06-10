@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { decryptTo, importPrivateKey, type CryptoKey } from "./envelope.js";
+import { USER_AGENT } from "./version.js";
 import type {
   Account,
   AccountEnc,
@@ -29,18 +30,23 @@ import type {
  * only ever returns ciphertext it cannot read.
  */
 export class OpenBankingClient {
+  /** Default per-request timeout (30s) when {@link OpenBankingClientOptions.timeoutMs} is unset. */
+  static readonly DEFAULT_TIMEOUT_MS = 30_000;
+
   private readonly baseUrl: string;
   private readonly apiKey: string;
+  private readonly timeoutMs: number;
   private readonly privateKey: Promise<CryptoKey>;
 
   constructor(options: OpenBankingClientOptions) {
-    const { apiBaseUrl, apiKey, privateKeyPkcs8 } = options;
+    const { apiBaseUrl, apiKey, privateKeyPkcs8, timeoutMs } = options;
     if (!apiBaseUrl?.trim()) throw new Error("apiBaseUrl is required");
     if (!apiKey?.trim()) throw new Error("apiKey is required");
     if (!privateKeyPkcs8?.trim()) throw new Error("privateKeyPkcs8 is required");
 
     this.baseUrl = apiBaseUrl.replace(/\/+$/, "");
     this.apiKey = apiKey;
+    this.timeoutMs = timeoutMs ?? OpenBankingClient.DEFAULT_TIMEOUT_MS;
     this.privateKey = importPrivateKey(privateKeyPkcs8);
   }
 
@@ -213,7 +219,10 @@ export class OpenBankingClient {
   }
 
   private async getJson<T>(path: string): Promise<T> {
-    const res = await fetch(this.baseUrl + path, { headers: { "X-Api-Key": this.apiKey } });
+    const res = await fetch(this.baseUrl + path, {
+      headers: { "X-Api-Key": this.apiKey, "User-Agent": USER_AGENT },
+      signal: AbortSignal.timeout(this.timeoutMs),
+    });
     if (!res.ok) {
       throw new Error(`GET ${path} failed: ${res.status} ${res.statusText}`);
     }
@@ -223,8 +232,13 @@ export class OpenBankingClient {
   private async postJson<T>(path: string, body: unknown): Promise<T> {
     const res = await fetch(this.baseUrl + path, {
       method: "POST",
-      headers: { "X-Api-Key": this.apiKey, "Content-Type": "application/json" },
+      headers: {
+        "X-Api-Key": this.apiKey,
+        "Content-Type": "application/json",
+        "User-Agent": USER_AGENT,
+      },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(this.timeoutMs),
     });
     if (!res.ok) {
       throw new Error(`POST ${path} failed: ${res.status} ${res.statusText}`);

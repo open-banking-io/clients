@@ -74,6 +74,20 @@
         <version>3.5.6</version>
       </plugin>
 
+      <!-- Bake Implementation-Version into the manifest so the User-Agent reports the version. -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <version>3.5.0</version>
+        <configuration>
+          <archive>
+            <manifest>
+              <addDefaultImplementationEntries>true</addDefaultImplementationEntries>
+            </manifest>
+          </archive>
+        </configuration>
+      </plugin>
+
       <!-- Code coverage: agent during test, XML/HTML report bound to verify. -->
       <plugin>
         <groupId>org.jacoco</groupId>

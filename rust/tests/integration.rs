@@ -26,6 +26,7 @@ struct MockApi {
     api_key: String,
     private_key: String,
     last_sync_body: Arc<Mutex<Option<Value>>>,
+    last_user_agent: Arc<Mutex<Option<String>>>,
 }
 
 fn start_mock() -> MockApi {
@@ -39,16 +40,26 @@ fn start_mock() -> MockApi {
         .to_string();
 
     let last_sync_body = Arc::new(Mutex::new(None));
+    let last_user_agent = Arc::new(Mutex::new(None));
     let server = Server::http("127.0.0.1:0").unwrap();
     let port = server.server_addr().to_ip().unwrap().port();
     let base_url = format!("http://127.0.0.1:{port}");
 
     let expected_key = api_key.clone();
     let sync_body = Arc::clone(&last_sync_body);
+    let user_agent = Arc::clone(&last_user_agent);
     let (ready_tx, ready_rx) = mpsc::channel();
     thread::spawn(move || {
         ready_tx.send(()).ok();
         for mut request in server.incoming_requests() {
+            if let Some(ua) = request
+                .headers()
+                .iter()
+                .find(|h| h.field.as_str().as_str().eq_ignore_ascii_case("User-Agent"))
+            {
+                *user_agent.lock().unwrap() = Some(ua.value.as_str().to_string());
+            }
+
             let authorized = request.headers().iter().any(|h| {
                 h.field.as_str().as_str().eq_ignore_ascii_case("X-Api-Key")
                     && h.value.as_str() == expected_key
@@ -96,6 +107,7 @@ fn start_mock() -> MockApi {
         api_key,
         private_key,
         last_sync_body,
+        last_user_agent,
     }
 }
 
@@ -184,6 +196,17 @@ fn sync_all_posts_items_with_the_decrypted_uid() {
                 "uid": "c5d93aa7-5e23-4da0-ba88-42b9a584492c"
             }]
         })
+    );
+}
+
+#[test]
+fn requests_send_the_open_banking_io_user_agent() {
+    let api = start_mock();
+    api.client().get_accounts().unwrap();
+    let ua = api.last_user_agent.lock().unwrap().clone().unwrap();
+    assert!(
+        ua.starts_with("open-banking-io/rust/"),
+        "unexpected User-Agent: {ua}"
     );
 }
 
