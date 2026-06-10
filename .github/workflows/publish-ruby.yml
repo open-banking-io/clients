@@ -24,6 +24,7 @@ jobs:
         with:
           ruby-version: '3.4'
           bundler-cache: true
+          working-directory: ruby   # the action ignores defaults.run.working-directory
 
       - run: bundle exec rspec
 
