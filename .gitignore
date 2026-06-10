@@ -35,3 +35,4 @@ ruby/*.gem
 
 # misc
 .DS_Store
+.claude/
