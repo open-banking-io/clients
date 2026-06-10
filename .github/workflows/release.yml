@@ -1,12 +1,5 @@
 name: Release
 
-# Version-bump + tag helper. Pick a package and a version; this bumps the
-# manifest (commit to main) and pushes the package-prefixed tag <package>/vX.Y.Z,
-# which triggers the matching publish-<package>.yml. Go has no manifest — its
-# version IS the tag — so for go we skip the bump and only tag.
-#
-# Actions → Release → Run workflow → choose package + version.
-
 on:
   workflow_dispatch:
     inputs:
@@ -32,7 +25,6 @@ permissions:
   contents: write
 
 concurrency:
-  # Don't let two releases of the same package race on the same tag/commit.
   group: release-${{ github.event.inputs.package }}
   cancel-in-progress: false
 
@@ -46,7 +38,6 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: main
-          # Need full history + a token that can push commits and tags to main.
           fetch-depth: 0
           persist-credentials: true
 
@@ -96,7 +87,6 @@ jobs:
 
       - name: Create and push tag
         run: |
-          # Tag the current HEAD (the bump commit for non-go; plain main for go).
           git tag -a "${TAG}" -m "release(${PACKAGE}): v${VERSION}"
           git push origin "refs/tags/${TAG}"
           echo "::notice::pushed ${TAG} — publish-${PACKAGE}.yml will pick it up"

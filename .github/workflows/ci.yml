@@ -112,7 +112,7 @@ jobs:
         with:
           ruby-version: ${{ matrix.ruby-version }}
           bundler-cache: true
-          working-directory: ruby   # the action ignores defaults.run.working-directory
+          working-directory: ruby
       - run: bundle exec rspec
 
   php:

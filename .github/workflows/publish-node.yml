@@ -1,8 +1,5 @@
 name: Publish Node
 
-# Publishes @open-banking-io/client to npm via OIDC trusted publishing (+ provenance) — no token.
-# Requires a trusted publisher configured for the package on npmjs.com (this repo, this workflow).
-
 on:
   push:
     tags: ['node/v*']
@@ -35,6 +32,5 @@ jobs:
           registry-url: https://registry.npmjs.org
       - run: npm ci
       - run: npm run build
-      - run: npm install -g npm@latest   # OIDC trusted publishing needs npm >= 11.5
-      # Token-less: uses OIDC trusted publishing (configured on npmjs.com) + provenance.
+      - run: npm install -g npm@latest
       - run: npm publish --provenance --access public

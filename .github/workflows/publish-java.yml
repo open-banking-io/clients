@@ -1,10 +1,5 @@
 name: Publish Java
 
-# Publishes io.openbanking:open-banking-io-client to Maven Central (Sonatype Central Portal) on a v* tag.
-# Add these secrets to enable it:
-#   MAVEN_CENTRAL_USERNAME / MAVEN_CENTRAL_PASSWORD  — a Central Portal user token
-#   MAVEN_GPG_PRIVATE_KEY / MAVEN_GPG_PASSPHRASE     — an ASCII-armored signing key + its passphrase
-
 on:
   push:
     tags: ['java/v*']

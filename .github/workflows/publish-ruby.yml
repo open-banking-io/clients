@@ -1,8 +1,5 @@
 name: Publish Ruby
 
-# Publishes the open-banking-io gem to RubyGems via OIDC trusted publishing (no token) on a `ruby/v*` tag.
-# Requires a RubyGems trusted publisher for the gem (this repo, workflow publish-ruby.yml, "Production").
-
 on:
   push:
     tags: ['ruby/v*']
@@ -24,7 +21,7 @@ jobs:
         with:
           ruby-version: '3.4'
           bundler-cache: true
-          working-directory: ruby   # the action ignores defaults.run.working-directory
+          working-directory: ruby
 
       - run: bundle exec rspec
 

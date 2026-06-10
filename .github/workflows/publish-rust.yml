@@ -1,10 +1,5 @@
 name: Publish Rust
 
-# Publishes open-banking-io to crates.io on a rust/v* tag via crates.io Trusted Publishing (OIDC).
-# Token-less: rust-lang/crates-io-auth-action mints a short-lived token from the GitHub OIDC
-# identity. Requires a Trusted Publisher on the crate (repo open-banking-io/clients, workflow
-# publish-rust.yml, environment Production).
-
 on:
   push:
     tags: ['rust/v*']

@@ -1,8 +1,5 @@
 name: Publish Python
 
-# Publishes open-banking-io to PyPI via a Trusted Publisher (OIDC) — no token.
-# Requires a PyPI trusted publisher for the project (this repo, this workflow, "Production" environment).
-
 on:
   push:
     tags: ['python/v*']

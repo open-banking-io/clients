@@ -1,8 +1,5 @@
 name: Publish .NET
 
-# Publishes OpenBankingIO.Client to NuGet via Trusted Publishing (OIDC) — no API key secret.
-# Requires a NuGet Trusted Publishing policy for this package, repo, and the "Production" environment.
-
 on:
   push:
     tags: ['dotnet/v*']
