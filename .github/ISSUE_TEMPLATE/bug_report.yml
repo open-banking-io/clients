@@ -1,0 +1,34 @@
+name: Bug report
+description: Report a bug in one of the SDKs
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report! For **security vulnerabilities**, do not file a public issue — see SECURITY.md.
+  - type: dropdown
+    id: sdk
+    attributes:
+      label: SDK
+      options: [.NET, Node, Python, Rust, Go, Java, Ruby, PHP]
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: SDK version
+      placeholder: e.g. 0.2.0
+    validations:
+      required: true
+  - type: input
+    id: runtime
+    attributes:
+      label: Language/runtime version & OS
+      placeholder: e.g. Node 22.3 on macOS 15
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what actually happened. Include a minimal code snippet and the error (redact any secrets).
+    validations:
+      required: true

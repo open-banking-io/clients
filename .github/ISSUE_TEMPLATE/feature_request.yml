@@ -1,0 +1,30 @@
+name: Feature request
+description: Suggest an improvement to the SDKs
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / use case
+      description: What are you trying to do, and what's missing or awkward today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What would you like to see? A sketch of the API is welcome.
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Which SDK(s)?
+      options:
+        - label: All / cross-language
+        - label: .NET
+        - label: Node
+        - label: Python
+        - label: Rust
+        - label: Go
+        - label: Java
+        - label: Ruby
+        - label: PHP
