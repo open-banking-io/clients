@@ -35,7 +35,7 @@ func TestKeyImportFromBundleFilePreservesApiKey(t *testing.T) {
 
 	// A login already saved an API key into the local config.
 	cfg := filepath.Join(t.TempDir(), "credentials.json")
-	existing := config.Bundle{APIKey: "ebk_from_login", APIBaseURL: "https://bank.core.ci"}
+	existing := config.Bundle{APIKey: "ebk_from_login", APIBaseURL: "https://open-banking.io"}
 	if err := config.Save(cfg, existing); err != nil {
 		t.Fatal(err)
 	}

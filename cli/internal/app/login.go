@@ -17,7 +17,7 @@ import (
 	"github.com/open-banking-io/clients/cli/internal/config"
 )
 
-const defaultAPIBaseURL = "https://bank.core.ci"
+const defaultAPIBaseURL = "https://open-banking.io"
 
 // cliTokenResponse is the credential returned by POST /auth/cli/token.
 type cliTokenResponse struct {
