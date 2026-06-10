@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"regexp"
+	"strings"
 	"testing"
 )
 
@@ -13,10 +14,11 @@ var transactionsPath = regexp.MustCompile(`^/api/accounts/[^/]+/transactions$`)
 var accountSyncPath = regexp.MustCompile(`^/api/accounts/[^/]+/sync$`)
 
 type mockAPI struct {
-	server       *httptest.Server
-	apiKey       string
-	privateKey   string
-	lastSyncBody map[string]any
+	server        *httptest.Server
+	apiKey        string
+	privateKey    string
+	lastSyncBody  map[string]any
+	lastUserAgent string
 }
 
 func startMock(t *testing.T) *mockAPI {
@@ -33,6 +35,7 @@ func startMock(t *testing.T) *mockAPI {
 	}
 
 	m.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		m.lastUserAgent = r.Header.Get("User-Agent")
 		if r.Header.Get("X-Api-Key") != m.apiKey {
 			send(w, http.StatusUnauthorized, []byte(`{"error":"unauthorized"}`))
 			return
@@ -245,6 +248,16 @@ func TestPublicClientAllowsBanksButNotDecryption(t *testing.T) {
 	}
 	if _, err := c.SyncAll(); err == nil {
 		t.Error("expected SyncAll to error on a key-less client")
+	}
+}
+
+func TestSendsUserAgentHeader(t *testing.T) {
+	m := startMock(t)
+	if _, err := m.client(t).GetAccounts(); err != nil {
+		t.Fatalf("GetAccounts: %v", err)
+	}
+	if !strings.HasPrefix(m.lastUserAgent, "open-banking-io/go/") {
+		t.Errorf("User-Agent = %q, want prefix %q", m.lastUserAgent, "open-banking-io/go/")
 	}
 }
 

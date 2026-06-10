@@ -11,7 +11,11 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
+
+// Version is the released version of this client. It should track the release tag.
+const Version = "0.2.0"
 
 // Client is a decrypting client for the open-banking.io API. Authenticates with an API key
 // (X-Api-Key) and decrypts the zero-knowledge data envelopes locally with the exported private key.
@@ -23,7 +27,7 @@ type Client struct {
 }
 
 // New builds a client from an API base url, API key, and base64 PKCS#8 encryption private key.
-// A nil httpClient uses http.DefaultClient.
+// A nil httpClient builds an *http.Client with a 30s timeout.
 func New(apiBaseURL, apiKey, privateKeyPKCS8B64 string, httpClient *http.Client) (*Client, error) {
 	if strings.TrimSpace(apiBaseURL) == "" {
 		return nil, fmt.Errorf("apiBaseUrl is required")
@@ -39,7 +43,7 @@ func New(apiBaseURL, apiKey, privateKeyPKCS8B64 string, httpClient *http.Client)
 		return nil, err
 	}
 	if httpClient == nil {
-		httpClient = http.DefaultClient
+		httpClient = &http.Client{Timeout: 30 * time.Second}
 	}
 	return &Client{
 		baseURL:    strings.TrimRight(apiBaseURL, "/"),
@@ -74,7 +78,8 @@ func NewPublic(apiBaseURL, apiKey string, httpClient *http.Client) (*Client, err
 func FromCredentials(pathOrJSON string, httpClient *http.Client) (*Client, error) {
 	raw := pathOrJSON
 	if !strings.HasPrefix(strings.TrimSpace(pathOrJSON), "{") {
-		data, err := os.ReadFile(pathOrJSON)
+		// The caller deliberately supplies the path to their own credentials bundle.
+		data, err := os.ReadFile(pathOrJSON) // #nosec G304 -- caller-provided credentials path by design
 		if err != nil {
 			return nil, fmt.Errorf("could not read credentials file: %w", err)
 		}
@@ -173,16 +178,7 @@ func (c *Client) GetConnections() ([]Connection, error) {
 	}
 	conns := make([]Connection, 0, len(wires))
 	for _, w := range wires {
-		conns = append(conns, Connection{
-			SessionID:    w.SessionID,
-			AspspName:    w.AspspName,
-			AspspCountry: w.AspspCountry,
-			ValidUntil:   w.ValidUntil,
-			Status:       w.Status,
-			AccountCount: w.AccountCount,
-			LastSyncedAt: w.LastSyncedAt,
-			PsuType:      w.PsuType,
-		})
+		conns = append(conns, Connection(w))
 	}
 	return conns, nil
 }
@@ -258,7 +254,7 @@ func (c *Client) Sync(accountID string) (SyncResult, error) {
 		map[string]any{"uid": uid}, &result); err != nil {
 		return SyncResult{}, err
 	}
-	return SyncResult{NewTransactions: result.NewTransactions, TotalFetched: result.TotalFetched}, nil
+	return SyncResult(result), nil
 }
 
 // SyncAll triggers an online sync of every account that has an active session.
@@ -285,7 +281,7 @@ func (c *Client) SyncAll() (SyncAllResult, error) {
 	if err := c.postJSON("/api/sync", map[string]any{"items": items}, &result); err != nil {
 		return SyncAllResult{}, err
 	}
-	return SyncAllResult{Accounts: result.Accounts, NewTransactions: result.NewTransactions}, nil
+	return SyncAllResult(result), nil
 }
 
 // ---- internals ----
@@ -413,11 +409,12 @@ func (c *Client) postJSON(path string, body, out any) error {
 
 func (c *Client) do(req *http.Request, path string, out any) error {
 	req.Header.Set("X-Api-Key", c.apiKey)
+	req.Header.Set("User-Agent", "open-banking-io/go/"+Version)
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("%s %s failed: %w", req.Method, path, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("%s %s failed: %d %s", req.Method, path, resp.StatusCode, resp.Status)
 	}

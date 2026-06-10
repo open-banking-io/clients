@@ -15,7 +15,7 @@ module OpenBankingIO
     POINT_LEN = 65
     NONCE_LEN = 12
     TAG_LEN = 16
-    HKDF_SALT = ("\x00".b * 32).freeze
+    HKDF_SALT = ("\x00".b * 32)
     HKDF_INFO = "bank.core.ci/zk/v1".b.freeze
     GROUP = OpenSSL::PKey::EC::Group.new("prime256v1")
 
@@ -43,7 +43,7 @@ module OpenBankingIO
       tag = envelope_bytes.byteslice(1 + POINT_LEN + NONCE_LEN, TAG_LEN)
       ciphertext = envelope_bytes.byteslice((1 + POINT_LEN + NONCE_LEN + TAG_LEN)..) || "".b
 
-      pub = OpenSSL::PKey::EC::Point.new(GROUP, OpenSSL::BN.new(eph_pub_bytes, 2))
+      pub = decode_public_point(eph_pub_bytes)
       shared = private_key.dh_compute_key(pub)
 
       key = OpenSSL::KDF.hkdf(
@@ -61,6 +61,17 @@ module OpenBankingIO
       cipher.auth_tag = tag
       cipher.auth_data = ""
       cipher.update(ciphertext) + cipher.final
+    end
+
+    # Parses the 65-byte raw ephemeral public key into a P-256 point.
+    #
+    # A malformed or off-curve point makes +EC::Point.new+ raise an OpenSSL-internal
+    # error; we wrap it in a clean +ArgumentError+ so callers see a consistent envelope
+    # error rather than a leaking implementation detail.
+    def decode_public_point(eph_pub_bytes)
+      OpenSSL::PKey::EC::Point.new(GROUP, OpenSSL::BN.new(eph_pub_bytes, 2))
+    rescue OpenSSL::PKey::EC::Point::Error, OpenSSL::BNError => e
+      raise ArgumentError, "Invalid ephemeral public key in envelope: #{e.message}"
     end
 
     # Decrypts a base64 envelope and parses its JSON payload. +nil+ in -> +nil+ out.

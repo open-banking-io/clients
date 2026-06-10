@@ -122,6 +122,11 @@ export interface OpenBankingClientOptions {
   apiKey: string;
   /** The base64 PKCS#8 encryption private key from your bundle. */
   privateKeyPkcs8: string;
+  /**
+   * Per-request timeout in milliseconds, so a hung connection can't block forever.
+   * Defaults to {@link DEFAULT_TIMEOUT_MS} (30s).
+   */
+  timeoutMs?: number;
 }
 
 // ---- Wire DTOs (what the API returns; sensitive fields are ciphertext) ---------------------------

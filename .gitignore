@@ -20,7 +20,6 @@ build/
 
 # Rust
 /rust/target/
-rust/Cargo.lock
 
 # Go (build artifacts only; go.sum is committed when present)
 
@@ -33,5 +32,9 @@ ruby/vendor/
 ruby/*.gem
 # Gemfile.lock is committed for deterministic CI (setup-ruby bundler-cache).
 
+# .NET
+**/TestResults/
+
 # misc
 .DS_Store
+.claude/

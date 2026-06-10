@@ -4,6 +4,7 @@
 
 use std::fs;
 use std::path::Path;
+use std::time::Duration;
 
 use p256::SecretKey;
 use serde::de::DeserializeOwned;
@@ -12,6 +13,9 @@ use serde::Serialize;
 use crate::envelope;
 use crate::error::{Error, Result};
 use crate::models::*;
+
+/// `User-Agent` sent on every request, e.g. `open-banking-io/rust/0.1.0`.
+const USER_AGENT: &str = concat!("open-banking-io/rust/", env!("CARGO_PKG_VERSION"));
 
 /// Decrypting client for the open-banking.io API.
 pub struct OpenBankingClient {
@@ -38,13 +42,22 @@ impl OpenBankingClient {
             base_url: api_base_url.trim_end_matches('/').to_string(),
             api_key: api_key.to_string(),
             private_key: envelope::load_private_key(private_key_pkcs8_b64)?,
-            agent: ureq::Agent::new(),
+            agent: ureq::AgentBuilder::new()
+                .timeout_connect(Duration::from_secs(10))
+                .timeout(Duration::from_secs(30))
+                .user_agent(USER_AGENT)
+                .build(),
         })
     }
 
     /// Builds a client from a credentials-bundle JSON string or a path to a bundle file.
     pub fn from_credentials(path_or_json: &str) -> Result<Self> {
+        // `path_or_json` is a credentials source chosen by the trusted application integrator
+        // (a file path *or* an inline JSON bundle), not untrusted end-user input. Accepting an
+        // arbitrary local path here is the documented behaviour of this accessor.
+        // nosemgrep: rust.actix.path-traversal.tainted-path.tainted-path
         let raw = if Path::new(path_or_json).exists() {
+            // nosemgrep: rust.actix.path-traversal.tainted-path.tainted-path
             fs::read_to_string(path_or_json)
                 .map_err(|e| Error::Config(format!("could not read credentials file: {e}")))?
         } else {

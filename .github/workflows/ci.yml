@@ -5,16 +5,21 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   dotnet:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/setup-dotnet@9a946fdbd5fb07b82b2f5a4466058b876ab72bb2 # v5.3.0
         with:
           dotnet-version: |
             8.0.x
             10.0.x
+      - run: dotnet format dotnet/OpenBankingIO.slnx --verify-no-changes
+      - run: dotnet build dotnet/OpenBankingIO.slnx -c Release -warnaserror
       - run: dotnet test dotnet/ -c Release
 
   node:
@@ -26,11 +31,13 @@ jobs:
       run:
         working-directory: node
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: ${{ matrix.node-version }}
       - run: npm ci
+      - run: npm run lint
+      - run: npm run format:check
       - run: npm run typecheck
       - run: npm run build
       - run: npm test
@@ -44,11 +51,14 @@ jobs:
       run:
         working-directory: python
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: ${{ matrix.python-version }}
       - run: pip install -e .[dev]
+      - run: ruff check .
+      - run: ruff format --check .
+      - run: mypy src
       - run: pytest -q
 
   rust:
@@ -57,13 +67,17 @@ jobs:
       run:
         working-directory: rust
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
         with:
           components: clippy, rustfmt
       - run: cargo fmt --check
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo test
+      - uses: EmbarkStudios/cargo-deny-action@bb137d7af7e4fb67e5f82a49c4fce4fad40782fe # v2
+        with:
+          manifest-path: rust/Cargo.toml
+          command: check advisories bans sources
 
   go:
     runs-on: ubuntu-latest
@@ -74,11 +88,15 @@ jobs:
       run:
         working-directory: go
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
         with:
           go-version: ${{ matrix.go-version }}
       - run: go vet ./...
+      - uses: golangci/golangci-lint-action@db582008a42febd596419635a5abc9d9815daa9c # v9.2.1
+        with:
+          version: v2.12.2
+          working-directory: go
       - run: go test ./...
 
   java:
@@ -90,8 +108,8 @@ jobs:
       run:
         working-directory: java
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
         with:
           distribution: temurin
           java-version: ${{ matrix.java-version }}
@@ -107,12 +125,13 @@ jobs:
       run:
         working-directory: ruby
     steps:
-      - uses: actions/checkout@v4
-      - uses: ruby/setup-ruby@v1
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: ruby/setup-ruby@12fd324f1d0b43274fdc8130f6980590a667c455 # v1
         with:
           ruby-version: ${{ matrix.ruby-version }}
           bundler-cache: true
           working-directory: ruby
+      - run: bundle exec standardrb
       - run: bundle exec rspec
 
   php:
@@ -124,10 +143,13 @@ jobs:
       run:
         working-directory: php
     steps:
-      - uses: actions/checkout@v4
-      - uses: shivammathur/setup-php@v2
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
         with:
           php-version: ${{ matrix.php-version }}
           extensions: openssl, curl, json
+          coverage: pcov
       - run: composer install --no-interaction --no-progress
+      - run: vendor/bin/phpstan analyse --memory-limit=512M
+      - run: vendor/bin/php-cs-fixer fix --dry-run --diff
       - run: vendor/bin/phpunit

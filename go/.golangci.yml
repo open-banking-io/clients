@@ -1,0 +1,38 @@
+# golangci-lint v2 configuration for the Go open-banking client.
+# Pragmatic default set: correctness + security + a light style pass.
+version: "2"
+
+linters:
+  enable:
+    - errcheck      # unchecked errors
+    - govet         # suspicious constructs
+    - ineffassign   # ineffectual assignments
+    - staticcheck   # static analysis (includes gosimple/stylecheck in v2)
+    - unused        # unused code
+    - gosec         # security issues
+    - revive        # broad style/lint rules
+    - bodyclose     # http response bodies must be closed
+    - errorlint     # correct error wrapping/comparison
+    - misspell      # common misspellings
+    - unconvert     # redundant type conversions
+    - copyloopvar   # loop-variable capture footguns
+
+  settings:
+    revive:
+      rules:
+        - name: exported
+          disabled: true # public API is already doc-commented; avoid noise
+
+  exclusions:
+    generated: lax
+    rules:
+      # Tests may ignore errors on best-effort helpers and use weak randomness.
+      - path: _test\.go
+        linters:
+          - errcheck
+          - gosec
+
+formatters:
+  enable:
+    - gofmt
+    - goimports

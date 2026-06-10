@@ -34,6 +34,7 @@ final class CryptoTest extends TestCase
     {
         $acc = $this->envelope->decryptToArray($this->envelopes['account']);
         self::assertSame($this->expected['account'], $acc);
+        self::assertNotNull($acc);
         self::assertSame('DK6466952001724927', $acc['iban']);
     }
 
@@ -41,28 +42,37 @@ final class CryptoTest extends TestCase
     {
         $name = $this->envelope->decryptToArray($this->envelopes['displayName']);
         self::assertSame($this->expected['displayName'], $name);
+        self::assertNotNull($name);
         self::assertSame('Drift', $name['displayName']);
     }
 
     public function testUidEnvelope(): void
     {
         $uid = $this->envelope->decryptToArray($this->envelopes['uid']);
+        self::assertNotNull($uid);
         self::assertSame('c5d93aa7-5e23-4da0-ba88-42b9a584492c', $uid['uid']);
-        self::assertSame($this->expected['uid']['uid'], $uid['uid']);
+        /** @var array{uid: string} $expectedUid */
+        $expectedUid = $this->expected['uid'];
+        self::assertSame($expectedUid['uid'], $uid['uid']);
     }
 
     public function testBalanceEnvelope(): void
     {
         // The shared balance envelope is the booked (ITBD) balance.
         $bal = $this->envelope->decryptToArray($this->envelopes['balance']);
+        self::assertNotNull($bal);
         self::assertSame('828.13', $bal['amount']);
-        self::assertSame($this->expected['balances']['ITBD']['amount'], $bal['amount']);
+        /** @var array{ITBD: array{amount: string}} $expectedBalances */
+        $expectedBalances = $this->expected['balances'];
+        self::assertSame($expectedBalances['ITBD']['amount'], $bal['amount']);
         self::assertSame('Tatic', $bal['name']);
     }
 
     public function testTransactionEnvelope(): void
     {
         $txn = $this->envelope->decryptToArray($this->envelopes['transaction']);
+        self::assertNotNull($txn);
+        /** @var array{amount: string} $exp */
         $exp = $this->expected['transaction'];
         self::assertSame('194.23', $txn['amount']);
         self::assertSame($exp['amount'], $txn['amount']);
@@ -85,7 +95,9 @@ final class CryptoTest extends TestCase
             'curve_name' => 'prime256v1',
         ]);
         self::assertNotFalse($other);
+        $pem = '';
         openssl_pkey_export($other, $pem);
+        self::assertIsString($pem);
         // Strip the PEM armor back to base64 DER for fromPkcs8Base64.
         $b64 = preg_replace('/-----[^-]+-----|\s+/', '', $pem) ?? '';
 

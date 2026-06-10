@@ -46,6 +46,9 @@ service emits — parse them into your decimal type of choice to avoid any float
 The client has **no third-party dependencies** — it uses only the standard library (`crypto/ecdh`,
 `crypto/hkdf`, `crypto/aes`), which requires **Go 1.24+**.
 
+When you pass a `nil` httpClient the client builds one with a 30s timeout; every request sends
+`User-Agent: open-banking-io/go/<version>` (see the exported `Version` const).
+
 ## Encryption scheme
 
 Each sensitive value is an envelope: `version(1) | ephemeralPublicKey(65) | nonce(12) | tag(16) |

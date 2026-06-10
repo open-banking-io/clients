@@ -17,6 +17,9 @@ internal sealed class MockServer : IDisposable
     public string BaseUrl { get; }
     public List<(string Path, string Body)> Posts { get; } = [];
 
+    /// <summary>The <c>User-Agent</c> header seen on the most recent request, if any.</summary>
+    public string? LastUserAgent { get; private set; }
+
     public MockServer(string apiKey)
     {
         _apiKey = apiKey;
@@ -44,6 +47,8 @@ internal sealed class MockServer : IDisposable
         var res = ctx.Response;
         try
         {
+            LastUserAgent = req.Headers["User-Agent"];
+
             if (req.Headers["X-Api-Key"] != _apiKey)
             {
                 res.StatusCode = 401;
@@ -53,13 +58,22 @@ internal sealed class MockServer : IDisposable
 
             var path = req.Url!.AbsolutePath.TrimStart('/');
             var method = req.HttpMethod;
-            string? fixture = (method, path) switch
+
+            // Sentinel for the non-2xx negative test: the "__error__" account id → 500.
+            if (path.Contains("__error__", StringComparison.Ordinal))
+            {
+                res.StatusCode = 500;
+                res.Close();
+                return;
+            }
+
+            var fixture = (method, path) switch
             {
                 ("GET", "api/accounts") => "api/accounts.json",
                 ("GET", "api/connections") => "api/connections.json",
-                ("GET", _) when path.StartsWith("api/accounts/") && path.EndsWith("/transactions") => "api/transactions.json",
+                ("GET", _) when path.StartsWith("api/accounts/", StringComparison.Ordinal) && path.EndsWith("/transactions", StringComparison.Ordinal) => "api/transactions.json",
                 ("POST", "api/sync") => RecordAndReturn(req, path, "api/sync-all.json"),
-                ("POST", _) when path.StartsWith("api/accounts/") && path.EndsWith("/sync") => RecordAndReturn(req, path, "api/sync.json"),
+                ("POST", _) when path.StartsWith("api/accounts/", StringComparison.Ordinal) && path.EndsWith("/sync", StringComparison.Ordinal) => RecordAndReturn(req, path, "api/sync.json"),
                 _ => null,
             };
 

@@ -18,7 +18,9 @@ const client = OpenBankingClient.fromCredentials("credentials.json");
 
 for (const account of await client.getAccounts()) {
   const booked = account.balances.find((b) => b.type === "ITBD");
-  console.log(`${account.displayName ?? account.ownerName} ${account.iban}: ${booked?.amount} ${account.currency}`);
+  console.log(
+    `${account.displayName ?? account.ownerName} ${account.iban}: ${booked?.amount} ${account.currency}`,
+  );
 
   const page = await client.getTransactions(account.id, { limit: 50 });
   for (const t of page.items) {
@@ -35,6 +37,9 @@ Or construct it explicitly:
 ```ts
 const client = new OpenBankingClient({ apiBaseUrl, apiKey, privateKeyPkcs8 });
 ```
+
+Every request carries a `User-Agent: open-banking-io/node/<version>` header and a default 30s timeout
+(override via the `timeoutMs` option) so a hung connection can't block forever.
 
 ## Money
 

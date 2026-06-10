@@ -6,14 +6,16 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { OpenBankingClient } from "../src/index.js";
 
 const fixtures = fileURLToPath(new URL("../../fixtures/", import.meta.url));
-const readJson = (name: string) => JSON.parse(readFileSync(fixtures + name, "utf8"));
+const readJson = <T = unknown>(name: string): T =>
+  JSON.parse(readFileSync(fixtures + name, "utf8")) as T;
 
-const API_KEY = readJson("credentials.json").apiKey as string;
-const PRIVATE_KEY = readJson("keypair.json").privateKeyPkcs8B64 as string;
+const API_KEY = readJson<{ apiKey: string }>("credentials.json").apiKey;
+const PRIVATE_KEY = readJson<{ privateKeyPkcs8B64: string }>("keypair.json").privateKeyPkcs8B64;
 
 let server: Server;
 let baseUrl: string;
 let lastSyncBody: unknown = null;
+let lastHeaders: import("node:http").IncomingHttpHeaders = {};
 
 function send(res: import("node:http").ServerResponse, status: number, body: unknown): void {
   res.writeHead(status, { "Content-Type": "application/json" });
@@ -22,6 +24,7 @@ function send(res: import("node:http").ServerResponse, status: number, body: unk
 
 beforeAll(async () => {
   server = createServer((req, res) => {
+    lastHeaders = req.headers;
     // Enforce the API key — 401 otherwise.
     if (req.headers["x-api-key"] !== API_KEY) {
       send(res, 401, { error: "unauthorized" });
@@ -131,6 +134,12 @@ describe("integration against a mock API", () => {
         },
       ],
     });
+  });
+
+  it("sends a User-Agent of open-banking-io/node/<version>", async () => {
+    lastHeaders = {};
+    await client().getAccounts();
+    expect(lastHeaders["user-agent"]).toMatch(/^open-banking-io\/node\//);
   });
 
   it("a wrong API key throws", async () => {

@@ -11,11 +11,11 @@ jobs:
   report:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
       - name: Detect changed package dirs
         id: filter
-        uses: dorny/paths-filter@v3
+        uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
         with:
           filters: |
             dotnet:
@@ -38,7 +38,7 @@ jobs:
               - 'fixtures/**'
 
       - name: Build and post sticky comment
-        uses: actions/github-script@v7
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           DOTNET: ${{ steps.filter.outputs.dotnet }}
           NODE: ${{ steps.filter.outputs.node }}

@@ -7,6 +7,7 @@ require "bigdecimal"
 
 require_relative "envelope"
 require_relative "models"
+require_relative "version"
 
 module OpenBankingIO
   # Raised when the API returns a non-success HTTP status.
@@ -28,14 +29,15 @@ module OpenBankingIO
   class Client
     DEFAULT_OPEN_TIMEOUT = 15
     DEFAULT_READ_TIMEOUT = 60
+    USER_AGENT = "open-banking-io/ruby/#{VERSION}".freeze
 
     # Builds a client from a credentials-bundle JSON string or a path to a bundle file.
     def self.from_credentials(path_or_json)
       raw = if File.file?(path_or_json.to_s)
-              File.read(path_or_json)
-            else
-              path_or_json
-            end
+        File.read(path_or_json)
+      else
+        path_or_json
+      end
 
       bundle = JSON.parse(raw)
       api_base_url = bundle["apiBaseUrl"].to_s
@@ -108,7 +110,7 @@ module OpenBankingIO
         raise ArgumentError, "Account has no active session (reconnect required) -- cannot sync"
       end
 
-      result = post_json("api/accounts/#{account_id}/sync", { "uid" => uid })
+      result = post_json("api/accounts/#{account_id}/sync", {"uid" => uid})
       SyncResult.new(
         new_transactions: result["newTransactions"] || 0,
         total_fetched: result["totalFetched"] || 0
@@ -120,10 +122,10 @@ module OpenBankingIO
       items = []
       account_wires.each do |a|
         uid = decrypt_uid(a)
-        items << { "accountId" => a["id"], "uid" => uid } unless uid.nil?
+        items << {"accountId" => a["id"], "uid" => uid} unless uid.nil?
       end
 
-      result = post_json("api/sync", { "items" => items })
+      result = post_json("api/sync", {"items" => items})
       SyncAllResult.new(
         accounts: result["accounts"] || 0,
         new_transactions: result["newTransactions"] || 0
@@ -228,6 +230,10 @@ module OpenBankingIO
         uri.query = URI.encode_www_form(params)
       end
 
+      # `path` is an internal, library-controlled API route resolved against the configured
+      # base URI (see #resolve), not user-supplied file/URL input. This is an HTTP API client;
+      # issuing the request is its purpose.
+      # nosemgrep: ruby.rails.security.audit.avoid-tainted-http-request.avoid-tainted-http-request
       request = Net::HTTP::Get.new(uri)
       send_request(uri, request)
     end
@@ -247,6 +253,7 @@ module OpenBankingIO
     def send_request(uri, request)
       request["X-Api-Key"] = @api_key
       request["Accept"] = "application/json"
+      request["User-Agent"] = USER_AGENT
 
       http = Net::HTTP.new(uri.host, uri.port)
       http.use_ssl = (uri.scheme == "https")

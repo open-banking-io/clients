@@ -8,7 +8,7 @@ FIXTURES = Path(__file__).resolve().parents[2] / "fixtures"
 
 
 def load_fixture(*parts: str) -> dict | list:
-    with open(FIXTURES.joinpath(*parts), "r", encoding="utf-8") as fh:
+    with open(FIXTURES.joinpath(*parts), encoding="utf-8") as fh:
         return json.load(fh)
 
 

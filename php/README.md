@@ -10,6 +10,8 @@ composer require open-banking-io/client
 
 Requires PHP **8.1+** with `ext-openssl`, `ext-curl` and `ext-json` (no runtime Composer dependencies).
 
+Every request carries a `User-Agent: open-banking-io/php/<version>` header (`Client::VERSION`) and uses a 30s total / 10s connect timeout.
+
 ```php
 use OpenBankingIO\Client;
 
@@ -71,6 +73,29 @@ vendor/bin/phpunit
 
 The tests read the shared fixtures at the repo-root `fixtures/` directory. The integration test
 spins up a local mock API using PHP's built-in server (`php -S`) as a subprocess.
+
+### Static analysis & formatting
+
+```bash
+vendor/bin/phpstan analyse                       # PHPStan level max (src/ + tests/)
+vendor/bin/php-cs-fixer fix --dry-run --diff     # PSR-12 check (drop --dry-run to apply)
+```
+
+### Coverage
+
+Coverage needs a driver. CI runs with **pcov**; locally you can also use Xdebug via
+`XDEBUG_MODE=coverage`. The `<coverage>` config emits Cobertura plus a text summary:
+
+```bash
+# CI / pcov:
+php -d pcov.enabled=1 vendor/bin/phpunit --coverage-cobertura=coverage/cobertura.xml
+# or with Xdebug:
+XDEBUG_MODE=coverage vendor/bin/phpunit --coverage-cobertura=coverage/cobertura.xml
+```
+
+The report is written to `coverage/cobertura.xml` (gitignored). Because `phpunit.xml` enables a
+`<coverage>` report and `failOnWarning`, run the suite **with a coverage driver present**
+(pcov or `XDEBUG_MODE=coverage`); otherwise PHPUnit emits a "no coverage driver" warning.
 
 ## Publishing (monorepo caveat)
 

@@ -4,11 +4,23 @@ import { describe, expect, it } from "vitest";
 import { decryptTo, importPrivateKey } from "../src/index.js";
 
 const fixtures = fileURLToPath(new URL("../../fixtures/", import.meta.url));
-const read = (name: string) => JSON.parse(readFileSync(fixtures + name, "utf8"));
+const read = <T>(name: string): T => JSON.parse(readFileSync(fixtures + name, "utf8")) as T;
 
-const keypair = read("keypair.json");
-const envelopes = read("envelopes.json");
-const expected = read("expected.json");
+const keypair = read<{ privateKeyPkcs8B64: string }>("keypair.json");
+const envelopes = read<{
+  account: string;
+  displayName: string;
+  uid: string;
+  balance: string;
+  transaction: string;
+}>("envelopes.json");
+const expected = read<{
+  account: { iban: string; ownerName: string; bban: string };
+  displayName: { displayName: string };
+  uid: { uid: string };
+  balances: { ITBD: { amount: string; name: string } };
+  transaction: { amount: string; creditorName: string };
+}>("expected.json");
 
 const privKey = importPrivateKey(keypair.privateKeyPkcs8B64);
 

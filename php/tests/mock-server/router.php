@@ -17,8 +17,9 @@ $captureFile = getenv('OBK_CAPTURE_FILE') ?: '';
 
 $accountId = '11111111-1111-4111-8111-111111111111';
 
-$path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
-$method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+$requestUri = is_string($_SERVER['REQUEST_URI'] ?? null) ? $_SERVER['REQUEST_URI'] : '/';
+$path = parse_url($requestUri, PHP_URL_PATH) ?: '/';
+$method = is_string($_SERVER['REQUEST_METHOD'] ?? null) ? $_SERVER['REQUEST_METHOD'] : 'GET';
 
 header('Content-Type: application/json');
 
@@ -46,13 +47,25 @@ $capture = static function (string $label) use ($captureFile): void {
     $raw = file_get_contents('php://input') ?: '';
     $existing = [];
     if (is_file($captureFile)) {
-        $existing = json_decode((string) file_get_contents($captureFile), true) ?: [];
+        $decoded = json_decode((string) file_get_contents($captureFile), true);
+        $existing = is_array($decoded) ? $decoded : [];
     }
     $existing[$label] = json_decode($raw, true);
     file_put_contents($captureFile, json_encode($existing));
 };
 
 if ($method === 'GET' && $path === '/api/accounts') {
+    if ($captureFile !== '') {
+        $existing = [];
+        if (is_file($captureFile)) {
+            $decoded = json_decode((string) file_get_contents($captureFile), true);
+            $existing = is_array($decoded) ? $decoded : [];
+        }
+        $existing['userAgent'] = is_string($_SERVER['HTTP_USER_AGENT'] ?? null)
+            ? $_SERVER['HTTP_USER_AGENT']
+            : '';
+        file_put_contents($captureFile, json_encode($existing));
+    }
     $serve('accounts.json');
     return true;
 }

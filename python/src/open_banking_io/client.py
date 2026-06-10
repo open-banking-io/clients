@@ -11,6 +11,7 @@ import json
 import os
 from datetime import date, datetime
 from decimal import Decimal
+from importlib.metadata import PackageNotFoundError, version
 from typing import Any
 
 import httpx
@@ -25,6 +26,14 @@ from .models import (
     Transaction,
     TransactionPage,
 )
+
+
+def _user_agent() -> str:
+    try:
+        ver = version("open-banking-io")
+    except PackageNotFoundError:
+        ver = "unknown"
+    return f"open-banking-io/python/{ver}"
 
 
 def _parse_date(value: str | None) -> date | None:
@@ -73,19 +82,20 @@ class OpenBankingClient:
 
         self._private_key = envelope.load_private_key(private_key_pkcs8)
         self._owns_http = http_client is None
-        self._http = http_client or httpx.Client()
+        self._http = http_client or httpx.Client(timeout=httpx.Timeout(30.0))
         self._http.base_url = httpx.URL(api_base_url.rstrip("/") + "/")
         self._http.headers["X-Api-Key"] = api_key
+        self._http.headers["User-Agent"] = _user_agent()
 
     # -- Construction ----------------------------------------------------------
 
     @classmethod
     def from_credentials(
         cls, path_or_json: str, http_client: httpx.Client | None = None
-    ) -> "OpenBankingClient":
+    ) -> OpenBankingClient:
         """Builds a client from a credentials-bundle JSON string or a path to a bundle file."""
         if os.path.exists(path_or_json):
-            with open(path_or_json, "r", encoding="utf-8") as fh:
+            with open(path_or_json, encoding="utf-8") as fh:
                 raw = fh.read()
         else:
             raw = path_or_json
@@ -167,9 +177,7 @@ class OpenBankingClient:
             raise ValueError(f"Account {account_id} not found")
         uid = self._decrypt_uid(account)
         if uid is None:
-            raise ValueError(
-                "Account has no active session (reconnect required) -- cannot sync"
-            )
+            raise ValueError("Account has no active session (reconnect required) -- cannot sync")
 
         resp = self._http.post(f"api/accounts/{account_id}/sync", json={"uid": uid})
         resp.raise_for_status()
@@ -201,7 +209,8 @@ class OpenBankingClient:
     def _get_account_wires(self) -> list[dict[str, Any]]:
         resp = self._http.get("api/accounts")
         resp.raise_for_status()
-        return resp.json()
+        wires: list[dict[str, Any]] = resp.json()
+        return wires
 
     def _decrypt_uid(self, account: dict[str, Any]) -> str | None:
         payload = envelope.decrypt_to_json(self._private_key, account.get("uidEnc"))
@@ -276,7 +285,7 @@ class OpenBankingClient:
         if self._owns_http:
             self._http.close()
 
-    def __enter__(self) -> "OpenBankingClient":
+    def __enter__(self) -> OpenBankingClient:
         return self
 
     def __exit__(self, *exc: object) -> None:

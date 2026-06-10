@@ -49,6 +49,8 @@ client = OpenBankingIO::Client.new(
 
 Amounts are exposed as `BigDecimal`. Models are immutable keyword-initialised `Struct`s.
 
+Every request sets connect/read timeouts (15s/60s) and a `User-Agent: open-banking-io/ruby/<version>` header.
+
 ## Encryption
 
 Envelopes use **ECDH P-256 → HKDF-SHA256 → AES-256-GCM**, implemented entirely with Ruby's OpenSSL

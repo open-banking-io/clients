@@ -20,6 +20,9 @@ dependencies = [
 dev = [
     "pytest>=8.0",
     "pytest-httpserver>=1.0",
+    "pytest-cov>=5.0",
+    "ruff>=0.6",
+    "mypy>=1.11",
 ]
 
 [project.urls]
@@ -28,3 +31,43 @@ Repository = "https://github.com/open-banking-io/clients"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/open_banking_io"]
+
+[tool.coverage.run]
+branch = true
+source = ["open_banking_io"]
+
+[tool.coverage.report]
+show_missing = true
+
+[tool.coverage.xml]
+output = "coverage.xml"
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+target-version = "py310"
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "B",    # flake8-bugbear
+    "UP",   # pyupgrade
+    "C4",   # flake8-comprehensions
+    "SIM",  # flake8-simplify
+    "RUF",  # ruff-specific
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B017"]  # allow `pytest.raises(Exception)` in negative tests
+
+[tool.mypy]
+python_version = "3.10"
+files = ["src"]
+strict = true
+warn_unreachable = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+disallow_untyped_defs = true

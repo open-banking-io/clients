@@ -3,3 +3,5 @@
 /.phpunit.cache/
 /.phpunit.result.cache
 /composer-setup.php
+/coverage/
+/.php-cs-fixer.cache

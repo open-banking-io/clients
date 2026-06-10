@@ -40,14 +40,10 @@ def decrypt(private_key: ec.EllipticCurvePrivateKey, envelope: bytes) -> bytes:
 
     eph_pub_bytes = envelope[1 : 1 + _POINT_LEN]
     nonce = envelope[1 + _POINT_LEN : 1 + _POINT_LEN + _NONCE_LEN]
-    tag = envelope[
-        1 + _POINT_LEN + _NONCE_LEN : 1 + _POINT_LEN + _NONCE_LEN + _TAG_LEN
-    ]
+    tag = envelope[1 + _POINT_LEN + _NONCE_LEN : 1 + _POINT_LEN + _NONCE_LEN + _TAG_LEN]
     ciphertext = envelope[1 + _POINT_LEN + _NONCE_LEN + _TAG_LEN :]
 
-    eph_pub = ec.EllipticCurvePublicKey.from_encoded_point(
-        ec.SECP256R1(), eph_pub_bytes
-    )
+    eph_pub = ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256R1(), eph_pub_bytes)
     shared = private_key.exchange(ec.ECDH(), eph_pub)
 
     key = HKDF(
@@ -67,4 +63,5 @@ def decrypt_to_json(
     if envelope_b64 is None:
         return None
     plaintext = decrypt(private_key, base64.b64decode(envelope_b64))
-    return json.loads(plaintext)
+    payload: dict[str, Any] = json.loads(plaintext)
+    return payload

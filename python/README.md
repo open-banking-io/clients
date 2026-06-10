@@ -42,6 +42,8 @@ client = OpenBankingClient(api_base_url, api_key, private_key_pkcs8)
 
 Amounts are exposed as `decimal.Decimal`. Models are plain `@dataclass`es.
 
+When the client constructs its own `httpx.Client` it applies a default 30s timeout and sends a `User-Agent: open-banking-io/python/<version>` header on every request (a caller-supplied client is left untouched).
+
 ## Encryption
 
 Envelopes use **ECDH P-256 → HKDF-SHA256 → AES-256-GCM**. Decryption requires the private key from
