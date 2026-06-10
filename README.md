@@ -4,6 +4,8 @@
 [![Semgrep](https://github.com/open-banking-io/clients/actions/workflows/semgrep.yml/badge.svg)](https://github.com/open-banking-io/clients/actions/workflows/semgrep.yml)
 [![Gitleaks](https://github.com/open-banking-io/clients/actions/workflows/gitleaks.yml/badge.svg)](https://github.com/open-banking-io/clients/actions/workflows/gitleaks.yml)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/open-banking-io/clients/badge)](https://securityscorecards.dev/viewer/?uri=github.com/open-banking-io/clients)
+[![codecov](https://codecov.io/gh/open-banking-io/clients/branch/main/graph/badge.svg)](https://codecov.io/gh/open-banking-io/clients)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 Server-to-server clients for [open-banking.io](https://open-banking.io) in **.NET, Node, Python,
 Rust, Go, Java, Ruby, and PHP**.
@@ -125,5 +127,12 @@ each package publishes from its own `<dir>/vX.Y.Z` tag (e.g. `node/v0.2.0`), so 
 republishes the others. Cut a release from **Actions → Release** (pick a package + version) — see
 [`RELEASING.md`](RELEASING.md). Targets: NuGet, npm, PyPI, crates.io, Maven Central, RubyGems, Packagist,
 and the Go module proxy.
+
+## Security & contributing
+
+Zero-knowledge security model and trust boundaries: [`THREAT_MODEL.md`](THREAT_MODEL.md). Report
+vulnerabilities privately per [`SECURITY.md`](SECURITY.md). Contributions welcome — see
+[`CONTRIBUTING.md`](CONTRIBUTING.md), [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md), and
+[`SUPPORT.md`](SUPPORT.md).
 
 MIT licensed.
