@@ -90,6 +90,6 @@ export async function importPrivateKey(pkcs8Base64: string): Promise<CryptoKey> 
   );
 }
 
-function base64ToBytes(b64: string): Uint8Array {
+function base64ToBytes(b64: string): Uint8Array<ArrayBuffer> {
   return new Uint8Array(Buffer.from(b64, "base64"));
 }

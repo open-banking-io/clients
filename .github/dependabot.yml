@@ -17,6 +17,9 @@ updates:
     directory: /node
     schedule:
       interval: weekly
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
 
   - package-ecosystem: pip
     directory: /python
@@ -27,6 +30,9 @@ updates:
     directory: /rust
     schedule:
       interval: weekly
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
 
   - package-ecosystem: gomod
     directory: /go

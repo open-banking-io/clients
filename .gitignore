@@ -20,7 +20,6 @@ build/
 
 # Rust
 /rust/target/
-rust/Cargo.lock
 
 # Go (build artifacts only; go.sum is committed when present)
 
