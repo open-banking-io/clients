@@ -17,7 +17,7 @@ name = "open_banking_io"
 [dependencies]
 p256 = { version = "0.13", features = ["ecdh", "pkcs8"] }
 hkdf = "0.12"
-sha2 = "0.10"
+sha2 = "0.11"
 aes-gcm = "0.10"
 base64 = "0.22"
 serde = { version = "1", features = ["derive"] }
