@@ -30,8 +30,8 @@ target/
 # Ruby
 ruby/.bundle/
 ruby/vendor/
-ruby/Gemfile.lock
 ruby/*.gem
+# Gemfile.lock is committed for deterministic CI (setup-ruby bundler-cache).
 
 # misc
 .DS_Store
