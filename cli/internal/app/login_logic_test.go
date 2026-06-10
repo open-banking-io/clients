@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -24,8 +25,8 @@ func TestTrimTrailingSlash(t *testing.T) {
 }
 
 func TestCallbackHandlerRejectsMissingCode(t *testing.T) {
-	codeCh := make(chan string, 1)
-	srv := httptest.NewServer(callbackHandler(codeCh))
+	ch := make(chan callbackResult, 1)
+	srv := httptest.NewServer(callbackHandler(ch, "st", "https://app.example"))
 	defer srv.Close()
 
 	resp, err := srv.Client().Get(srv.URL + "/callback") // no ?code
@@ -39,8 +40,8 @@ func TestCallbackHandlerRejectsMissingCode(t *testing.T) {
 }
 
 func TestCallbackHandlerCapturesCode(t *testing.T) {
-	codeCh := make(chan string, 1)
-	srv := httptest.NewServer(callbackHandler(codeCh))
+	ch := make(chan callbackResult, 1)
+	srv := httptest.NewServer(callbackHandler(ch, "st", "https://app.example"))
 	defer srv.Close()
 
 	resp, err := srv.Client().Get(srv.URL + "/callback?code=abc123")
@@ -51,8 +52,66 @@ func TestCallbackHandlerCapturesCode(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("status = %d, want 200", resp.StatusCode)
 	}
-	if got := <-codeCh; got != "abc123" {
-		t.Errorf("captured code = %q, want abc123", got)
+	if got := <-ch; got.code != "abc123" || got.privKeyB64 != "" {
+		t.Errorf("captured = %+v, want code abc123 and no key", got)
+	}
+}
+
+func TestCallbackHandlerRelaysEncryptionKey(t *testing.T) {
+	ch := make(chan callbackResult, 1)
+	srv := httptest.NewServer(callbackHandler(ch, "secret-state", "https://app.example"))
+	defer srv.Close()
+
+	body := `{"code":"c1","state":"secret-state","encryptionKey":{"privateKey":"PK","publicKey":"PUB"}}`
+	resp, err := srv.Client().Post(srv.URL+"/callback", "application/json", strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("POST /callback: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	if got := resp.Header.Get("Access-Control-Allow-Origin"); got != "https://app.example" {
+		t.Errorf("CORS origin = %q, want the app origin", got)
+	}
+	res := <-ch
+	if res.code != "c1" || res.privKeyB64 != "PK" || res.pubKeyB64 != "PUB" {
+		t.Errorf("relayed result = %+v, want code c1 + key PK/PUB", res)
+	}
+}
+
+func TestCallbackHandlerRejectsWrongState(t *testing.T) {
+	ch := make(chan callbackResult, 1)
+	srv := httptest.NewServer(callbackHandler(ch, "right-state", "https://app.example"))
+	defer srv.Close()
+
+	body := `{"code":"c1","state":"WRONG","encryptionKey":{"privateKey":"PK"}}`
+	resp, err := srv.Client().Post(srv.URL+"/callback", "application/json", strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("POST /callback: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusForbidden {
+		t.Errorf("status = %d, want 403 for a state mismatch", resp.StatusCode)
+	}
+}
+
+func TestCallbackHandlerCORSPreflight(t *testing.T) {
+	ch := make(chan callbackResult, 1)
+	srv := httptest.NewServer(callbackHandler(ch, "st", "https://app.example"))
+	defer srv.Close()
+
+	req, _ := http.NewRequest(http.MethodOptions, srv.URL+"/callback", nil)
+	resp, err := srv.Client().Do(req)
+	if err != nil {
+		t.Fatalf("OPTIONS /callback: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		t.Errorf("preflight status = %d, want 204", resp.StatusCode)
+	}
+	if resp.Header.Get("Access-Control-Allow-Methods") == "" {
+		t.Error("preflight is missing Access-Control-Allow-Methods")
 	}
 }
 

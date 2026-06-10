@@ -3,6 +3,7 @@ package app
 import (
 	"bytes"
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -25,6 +26,25 @@ type cliTokenResponse struct {
 	APIBaseURL string `json:"apiBaseUrl"`
 	User       string `json:"user"`
 	Prefix     string `json:"prefix"`
+}
+
+// relayPayload is what the browser POSTs to the loopback after the user unlocks their key in the UI.
+// The encryption private key travels browser -> localhost only; it never touches the server.
+type relayPayload struct {
+	Code          string `json:"code"`
+	State         string `json:"state"`
+	EncryptionKey *struct {
+		PrivateKey string `json:"privateKey"`
+		PublicKey  string `json:"publicKey"`
+	} `json:"encryptionKey"`
+}
+
+// callbackResult is delivered from the loopback to login(): the one-time code, and (when the browser
+// relayed it) the unlocked encryption key material.
+type callbackResult struct {
+	code       string
+	privKeyB64 string // empty if the browser didn't relay a key (key-less fallback)
+	pubKeyB64  string
 }
 
 // openBrowser is a package var so tests can stub it. It best-effort opens a URL in the user's browser.
@@ -53,8 +73,10 @@ func (a *App) login(args []string) error {
 	// (the challenge) goes to the server, and only the verifier can later redeem the code.
 	verifier := pkceVerifier()
 	challenge := pkceChallenge(verifier)
+	// state binds the browser's relay POST to this exact CLI session.
+	state := pkceVerifier()
 
-	// A loopback listener the server will redirect the browser back to with the one-time code.
+	// A loopback listener the browser (or the server redirect) reaches with the code + relayed key.
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		return fmt.Errorf("could not start local login listener: %w", err)
@@ -62,13 +84,13 @@ func (a *App) login(args []string) error {
 	defer listener.Close()
 	port := listener.Addr().(*net.TCPAddr).Port
 
-	codeCh := make(chan string, 1)
-	server := &http.Server{Handler: callbackHandler(codeCh)}
+	resultCh := make(chan callbackResult, 1)
+	server := &http.Server{Handler: callbackHandler(resultCh, state, base)}
 	go server.Serve(listener)
 	defer server.Close()
 
-	startURL := fmt.Sprintf("%s/auth/cli/start?port=%d&code_challenge=%s",
-		base, port, url.QueryEscape(challenge))
+	startURL := fmt.Sprintf("%s/auth/cli/start?port=%d&code_challenge=%s&state=%s",
+		base, port, url.QueryEscape(challenge), url.QueryEscape(state))
 	fmt.Fprintf(a.Stderr, "Opening your browser to sign in...\nIf it doesn't open, visit:\n  %s\n\n", startURL)
 	if err := openBrowser(startURL); err != nil {
 		fmt.Fprintf(a.Stderr, "(could not open a browser automatically: %v)\n", err)
@@ -77,19 +99,19 @@ func (a *App) login(args []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), *timeout)
 	defer cancel()
 
-	var code string
+	var result callbackResult
 	select {
-	case code = <-codeCh:
+	case result = <-resultCh:
 	case <-ctx.Done():
 		return fmt.Errorf("timed out waiting for the browser login after %s", *timeout)
 	}
 
-	token, err := a.exchangeToken(ctx, base, code, verifier)
+	token, err := a.exchangeToken(ctx, base, result.code, verifier)
 	if err != nil {
 		return err
 	}
 
-	// Preserve any encryption key already imported; login only owns the API credential.
+	// Preserve any encryption key already imported; we overwrite it only if the browser relayed one.
 	bundle, err := config.Load(a.ConfigPath)
 	if err != nil {
 		bundle = config.Bundle{} // first login: start fresh
@@ -102,12 +124,23 @@ func (a *App) login(args []string) error {
 	}
 	bundle.User = token.User
 	bundle.APIKey = token.APIKey
+
+	if result.privKeyB64 != "" {
+		if err := validateP256Pkcs8(result.privKeyB64); err != nil {
+			return fmt.Errorf("the browser relayed an invalid encryption key: %w", err)
+		}
+		bundle.EncryptionKey = encryptionKeyFor(result.privKeyB64)
+		bundle.EncryptionKey.PublicKey = result.pubKeyB64
+	}
+
 	if err := config.Save(a.ConfigPath, bundle); err != nil {
 		return err
 	}
 
-	fmt.Fprintf(a.Stdout, "Logged in as %s. Credentials saved to %s\n", token.User, a.ConfigPath)
-	if bundle.EncryptionKey.PrivateKey == "" {
+	if bundle.EncryptionKey.PrivateKey != "" {
+		fmt.Fprintf(a.Stdout, "Logged in as %s — encryption key set up. You're ready to go.\nCredentials saved to %s\n", token.User, a.ConfigPath)
+	} else {
+		fmt.Fprintf(a.Stdout, "Logged in as %s. Credentials saved to %s\n", token.User, a.ConfigPath)
 		fmt.Fprintln(a.Stdout, "Next: run `openbanking key import` to add your encryption key so accounts can be decrypted.")
 	}
 	return nil
@@ -145,25 +178,63 @@ func (a *App) exchangeToken(ctx context.Context, apiBaseURL, code, verifier stri
 	return token, nil
 }
 
-// callbackHandler serves the loopback /callback the server redirects to, capturing the one-time code.
-func callbackHandler(codeCh chan<- string) http.Handler {
+// callbackHandler serves the loopback /callback. The browser authorize page POSTs {code,state,
+// encryptionKey} after unlocking the key (CORS-scoped to the app origin); the legacy GET ?code= path
+// remains as a key-less fallback.
+func callbackHandler(resultCh chan<- callbackResult, state, allowOrigin string) http.Handler {
+	deliver := func(res callbackResult) {
+		select {
+		case resultCh <- res:
+		default:
+		}
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/callback", func(w http.ResponseWriter, r *http.Request) {
-		code := r.URL.Query().Get("code")
-		if code == "" {
-			http.Error(w, "missing code", http.StatusBadRequest)
-			return
-		}
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_, _ = io.WriteString(w, `<!doctype html><meta charset=utf-8>
-<title>open-banking.io CLI</title><body style="font-family:system-ui;padding:3rem">
-<h2>Login complete</h2><p>You can close this tab and return to your terminal.</p></body>`)
-		select {
-		case codeCh <- code:
+		w.Header().Set("Access-Control-Allow-Origin", allowOrigin)
+		w.Header().Set("Vary", "Origin")
+		switch r.Method {
+		case http.MethodOptions:
+			w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "content-type")
+			w.WriteHeader(http.StatusNoContent)
+		case http.MethodGet:
+			code := r.URL.Query().Get("code")
+			if code == "" {
+				http.Error(w, "missing code", http.StatusBadRequest)
+				return
+			}
+			writeDoneHTML(w)
+			deliver(callbackResult{code: code})
+		case http.MethodPost:
+			var p relayPayload
+			if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&p); err != nil || p.Code == "" {
+				http.Error(w, "bad request", http.StatusBadRequest)
+				return
+			}
+			if subtle.ConstantTimeCompare([]byte(p.State), []byte(state)) != 1 {
+				http.Error(w, "state mismatch", http.StatusForbidden)
+				return
+			}
+			res := callbackResult{code: p.Code}
+			if p.EncryptionKey != nil {
+				res.privKeyB64 = p.EncryptionKey.PrivateKey
+				res.pubKeyB64 = p.EncryptionKey.PublicKey
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = io.WriteString(w, `{"ok":true}`)
+			deliver(res)
 		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
 	})
 	return mux
+}
+
+func writeDoneHTML(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_, _ = io.WriteString(w, `<!doctype html><meta charset=utf-8>
+<title>open-banking.io CLI</title><body style="font-family:system-ui;padding:3rem">
+<h2>Login complete</h2><p>You can close this tab and return to your terminal.</p></body>`)
 }
 
 func trimTrailingSlash(s string) string {
