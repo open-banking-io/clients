@@ -17,6 +17,7 @@ func main() {
 		os.Exit(1)
 	}
 	a := &app.App{
+		Stdin:      os.Stdin,
 		Stdout:     os.Stdout,
 		Stderr:     os.Stderr,
 		ConfigPath: path,

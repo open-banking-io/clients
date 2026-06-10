@@ -6,18 +6,28 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
-	openbanking "github.com/open-banking-io/clients/go"
 	"github.com/open-banking-io/clients/cli/internal/config"
+	openbanking "github.com/open-banking-io/clients/go"
 )
 
 // App carries the I/O and configuration a command needs. The zero value is not usable; main wires
 // real os streams and the default config path, while tests inject buffers and a temp path.
 type App struct {
+	Stdin      io.Reader
 	Stdout     io.Writer
 	Stderr     io.Writer
 	ConfigPath string
 	HTTPClient *http.Client // nil uses the SDK default
+}
+
+// stdin returns the configured input, defaulting to an empty reader when unset.
+func (a *App) stdin() io.Reader {
+	if a.Stdin == nil {
+		return strings.NewReader("")
+	}
+	return a.Stdin
 }
 
 // Run dispatches a single command invocation. args is everything after the program name.
@@ -36,6 +46,8 @@ func (a *App) Run(args []string) error {
 		return a.transactions(rest)
 	case "connections":
 		return a.connections(rest)
+	case "key":
+		return a.key(rest)
 	case "help", "-h", "--help":
 		a.usage()
 		return nil
@@ -64,6 +76,7 @@ Commands:
   accounts                       List your accounts with balances
   transactions <account-id>      Show an account's statement (--from --to --limit --offset)
   connections                    List your bank connections
+  key import [<file>]            Import your encryption key (SPA bundle or PKCS#8; stdin if no file)
   help                           Show this help
 `)
 }
