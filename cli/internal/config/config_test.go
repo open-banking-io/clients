@@ -14,7 +14,7 @@ func TestSaveLoadRoundTrip(t *testing.T) {
 
 	want := openbanking.CredentialsBundle{
 		Service:    "open-banking.io",
-		APIBaseURL: "https://bank.core.ci",
+		APIBaseURL: "https://open-banking.io",
 		User:       "demo@open-banking.io",
 		APIKey:     "ebk_secret",
 		EncryptionKey: openbanking.EncryptionKey{
