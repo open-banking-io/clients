@@ -26,6 +26,9 @@ surface as the other SDKs: `get_accounts`, `get_transactions`, `get_connections`
 `sync_all`. `sync` decrypts the account's session uid locally and posts it, so the service can
 refresh from the bank without ever holding it in plaintext.
 
+Requests carry sensible HTTP timeouts (10s connect / 30s overall) and a
+`User-Agent: open-banking-io/rust/<version>`.
+
 Monetary amounts are returned as `String` exactly as the service emits them — parse them into your
 decimal type of choice to avoid any float round-trip.
 

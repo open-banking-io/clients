@@ -3,6 +3,7 @@ package io.openbanking;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpExchange;
@@ -30,6 +31,7 @@ class IntegrationTest {
   private String apiKey;
   private String privateKey;
   private Map<String, Object> lastSyncBody;
+  private String lastUserAgent;
 
   private static byte[] fixture(String name) throws IOException {
     return Files.readAllBytes(FIXTURES.resolve(name));
@@ -62,6 +64,7 @@ class IntegrationTest {
         respond(ex, 401, "{\"error\":\"unauthorized\"}".getBytes(StandardCharsets.UTF_8));
         return;
       }
+      lastUserAgent = ex.getRequestHeaders().getFirst("User-Agent");
       String method = ex.getRequestMethod();
       String path = ex.getRequestURI().getPath();
 
@@ -158,6 +161,15 @@ class IntegrationTest {
     assertEquals(1, items.size());
     assertEquals("11111111-1111-4111-8111-111111111111", items.get(0).get("accountId"));
     assertEquals("c5d93aa7-5e23-4da0-ba88-42b9a584492c", items.get(0).get("uid"));
+  }
+
+  @Test
+  void sendsUserAgentHeader() {
+    client().getAccounts();
+    assertNotNull(lastUserAgent);
+    assertTrue(
+        lastUserAgent.startsWith("open-banking-io/java/"),
+        "unexpected User-Agent: " + lastUserAgent);
   }
 
   @Test

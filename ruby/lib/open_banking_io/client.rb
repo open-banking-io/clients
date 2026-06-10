@@ -7,6 +7,7 @@ require "bigdecimal"
 
 require_relative "envelope"
 require_relative "models"
+require_relative "version"
 
 module OpenBankingIO
   # Raised when the API returns a non-success HTTP status.
@@ -28,6 +29,7 @@ module OpenBankingIO
   class Client
     DEFAULT_OPEN_TIMEOUT = 15
     DEFAULT_READ_TIMEOUT = 60
+    USER_AGENT = "open-banking-io/ruby/#{VERSION}".freeze
 
     # Builds a client from a credentials-bundle JSON string or a path to a bundle file.
     def self.from_credentials(path_or_json)
@@ -251,6 +253,7 @@ module OpenBankingIO
     def send_request(uri, request)
       request["X-Api-Key"] = @api_key
       request["Accept"] = "application/json"
+      request["User-Agent"] = USER_AGENT
 
       http = Net::HTTP.new(uri.host, uri.port)
       http.use_ssl = (uri.scheme == "https")

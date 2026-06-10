@@ -28,6 +28,8 @@ foreach (var account in await client.GetAccountsAsync())
 await client.SyncAsync(accountId);
 ```
 
+When the client creates its own `HttpClient` it applies a 30s request timeout and sends `User-Agent: open-banking-io/dotnet/<version>`; a caller-supplied `HttpClient` is left untouched.
+
 Or construct it explicitly:
 
 ```csharp

@@ -15,6 +15,7 @@ const PRIVATE_KEY = readJson<{ privateKeyPkcs8B64: string }>("keypair.json").pri
 let server: Server;
 let baseUrl: string;
 let lastSyncBody: unknown = null;
+let lastHeaders: import("node:http").IncomingHttpHeaders = {};
 
 function send(res: import("node:http").ServerResponse, status: number, body: unknown): void {
   res.writeHead(status, { "Content-Type": "application/json" });
@@ -23,6 +24,7 @@ function send(res: import("node:http").ServerResponse, status: number, body: unk
 
 beforeAll(async () => {
   server = createServer((req, res) => {
+    lastHeaders = req.headers;
     // Enforce the API key — 401 otherwise.
     if (req.headers["x-api-key"] !== API_KEY) {
       send(res, 401, { error: "unauthorized" });
@@ -132,6 +134,12 @@ describe("integration against a mock API", () => {
         },
       ],
     });
+  });
+
+  it("sends a User-Agent of open-banking-io/node/<version>", async () => {
+    lastHeaders = {};
+    await client().getAccounts();
+    expect(lastHeaders["user-agent"]).toMatch(/^open-banking-io\/node\//);
   });
 
   it("a wrong API key throws", async () => {

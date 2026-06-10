@@ -38,6 +38,9 @@ Or construct it explicitly:
 const client = new OpenBankingClient({ apiBaseUrl, apiKey, privateKeyPkcs8 });
 ```
 
+Every request carries a `User-Agent: open-banking-io/node/<version>` header and a default 30s timeout
+(override via the `timeoutMs` option) so a hung connection can't block forever.
+
 ## Money
 
 Amounts (`balance.amount`, `transaction.amount`, `transaction.balanceAfterTransaction`) are exposed

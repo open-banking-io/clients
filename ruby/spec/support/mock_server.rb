@@ -76,6 +76,8 @@ class MockServer
 
     path = URI.parse(target).path
 
+    @captured[:last_headers] = headers
+
     unless headers["x-api-key"] == API_KEY
       respond(client, 401, JSON.generate({"error" => "unauthorized"}))
       return

@@ -17,6 +17,9 @@ internal sealed class MockServer : IDisposable
     public string BaseUrl { get; }
     public List<(string Path, string Body)> Posts { get; } = [];
 
+    /// <summary>The <c>User-Agent</c> header seen on the most recent request, if any.</summary>
+    public string? LastUserAgent { get; private set; }
+
     public MockServer(string apiKey)
     {
         _apiKey = apiKey;
@@ -44,6 +47,8 @@ internal sealed class MockServer : IDisposable
         var res = ctx.Response;
         try
         {
+            LastUserAgent = req.Headers["User-Agent"];
+
             if (req.Headers["X-Api-Key"] != _apiKey)
             {
                 res.StatusCode = 401;

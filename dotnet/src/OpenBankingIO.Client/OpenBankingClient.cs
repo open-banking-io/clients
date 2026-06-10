@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Net.Http.Json;
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Text.Json;
 
@@ -12,6 +13,9 @@ namespace OpenBankingIO.Client;
 /// </summary>
 public sealed class OpenBankingClient : IDisposable
 {
+    private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(30);
+    private static readonly string UserAgent = BuildUserAgent();
+
     private readonly HttpClient _http;
     private readonly ECDiffieHellman _privateKey;
     private readonly bool _ownsHttp;
@@ -30,10 +34,28 @@ public sealed class OpenBankingClient : IDisposable
         _privateKey.ImportPkcs8PrivateKey(Convert.FromBase64String(privateKeyPkcs8Base64), out _);
 
         _ownsHttp = httpClient is null;
-        _http = httpClient ?? new HttpClient();
+        _http = httpClient ?? new HttpClient { Timeout = DefaultTimeout };
         _http.BaseAddress = new Uri(apiBaseUrl.TrimEnd('/') + "/");
         _http.DefaultRequestHeaders.Remove("X-Api-Key");
         _http.DefaultRequestHeaders.Add("X-Api-Key", apiKey);
+        _http.DefaultRequestHeaders.Remove("User-Agent");
+        _http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", UserAgent);
+    }
+
+    private static string BuildUserAgent()
+    {
+        var asm = typeof(OpenBankingClient).Assembly;
+        var version =
+            asm.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+            ?? asm.GetName().Version?.ToString();
+
+        // Strip build metadata (e.g. the "+<git-sha>" SourceLink appends) so the value is a valid
+        // User-Agent product-version token; fall back to a safe string if unavailable.
+        version = version?.Split('+', 2)[0];
+        if (string.IsNullOrWhiteSpace(version))
+            version = "unknown";
+
+        return $"open-banking-io/dotnet/{version}";
     }
 
     /// <summary>Builds a client from a credentials-bundle JSON string or a path to a bundle file.</summary>

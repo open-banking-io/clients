@@ -55,6 +55,17 @@ $capture = static function (string $label) use ($captureFile): void {
 };
 
 if ($method === 'GET' && $path === '/api/accounts') {
+    if ($captureFile !== '') {
+        $existing = [];
+        if (is_file($captureFile)) {
+            $decoded = json_decode((string) file_get_contents($captureFile), true);
+            $existing = is_array($decoded) ? $decoded : [];
+        }
+        $existing['userAgent'] = is_string($_SERVER['HTTP_USER_AGENT'] ?? null)
+            ? $_SERVER['HTTP_USER_AGENT']
+            : '';
+        file_put_contents($captureFile, json_encode($existing));
+    }
     $serve('accounts.json');
     return true;
 }

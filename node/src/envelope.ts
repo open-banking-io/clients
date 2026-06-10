@@ -33,6 +33,9 @@ export async function decryptEnvelope(
   const tag = bytes.subarray(1 + POINT_LEN + NONCE_LEN, 1 + POINT_LEN + NONCE_LEN + TAG_LEN);
   const ciphertext = bytes.subarray(1 + POINT_LEN + NONCE_LEN + TAG_LEN);
 
+  // Guard against invalid-curve attacks: WebCrypto's P-256 `importKey` validates that the raw point
+  // lies on the curve and is not the point at infinity, so a forged/off-curve ephemeral public key
+  // throws here rather than yielding a derivable (and exploitable) shared secret below.
   const ephKey = await subtle.importKey(
     "raw",
     ephPub,

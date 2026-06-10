@@ -10,6 +10,7 @@ use hkdf::Hkdf;
 use p256::{ecdh::diffie_hellman, pkcs8::DecodePrivateKey, PublicKey, SecretKey};
 use serde::de::DeserializeOwned;
 use sha2::Sha256;
+use zeroize::Zeroizing;
 
 use crate::error::{Error, Result};
 
@@ -43,10 +44,13 @@ pub fn decrypt(private_key: &SecretKey, envelope: &[u8]) -> Result<Vec<u8>> {
     let eph_pub = PublicKey::from_sec1_bytes(eph_pub_bytes)
         .map_err(|e| Error::Crypto(format!("invalid ephemeral public key: {e}")))?;
     let shared = diffie_hellman(private_key.to_nonzero_scalar(), eph_pub.as_affine());
+    // Copy the ECDH secret into a buffer that is wiped on drop. (`SharedSecret` itself zeroizes,
+    // but we keep the derived material under our own `Zeroizing` guards too.)
+    let shared_secret = Zeroizing::new(shared.raw_secret_bytes().to_vec());
 
-    let hk = Hkdf::<Sha256>::new(Some(&HKDF_SALT), shared.raw_secret_bytes());
-    let mut key = [0u8; 32];
-    hk.expand(HKDF_INFO, &mut key)
+    let hk = Hkdf::<Sha256>::new(Some(&HKDF_SALT), &shared_secret);
+    let mut key = Zeroizing::new([0u8; 32]);
+    hk.expand(HKDF_INFO, key.as_mut())
         .map_err(|e| Error::Crypto(format!("hkdf expand failed: {e}")))?;
 
     // aes-gcm expects ciphertext||tag.
@@ -57,7 +61,7 @@ pub fn decrypt(private_key: &SecretKey, envelope: &[u8]) -> Result<Vec<u8>> {
     let nonce: [u8; NONCE_LEN] = nonce
         .try_into()
         .map_err(|_| Error::Crypto("invalid nonce length".into()))?;
-    let cipher = Aes256Gcm::new_from_slice(&key)
+    let cipher = Aes256Gcm::new_from_slice(key.as_ref())
         .map_err(|e| Error::Crypto(format!("invalid aes key: {e}")))?;
     cipher
         .decrypt(&Nonce::from(nonce), ct_with_tag.as_ref())

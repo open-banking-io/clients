@@ -513,6 +513,7 @@ dependencies = [
  "thiserror",
  "tiny_http",
  "ureq",
+ "zeroize",
 ]
 
 [[package]]

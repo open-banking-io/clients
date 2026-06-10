@@ -11,6 +11,7 @@ import json
 import os
 from datetime import date, datetime
 from decimal import Decimal
+from importlib.metadata import PackageNotFoundError, version
 from typing import Any
 
 import httpx
@@ -25,6 +26,14 @@ from .models import (
     Transaction,
     TransactionPage,
 )
+
+
+def _user_agent() -> str:
+    try:
+        ver = version("open-banking-io")
+    except PackageNotFoundError:
+        ver = "unknown"
+    return f"open-banking-io/python/{ver}"
 
 
 def _parse_date(value: str | None) -> date | None:
@@ -73,9 +82,10 @@ class OpenBankingClient:
 
         self._private_key = envelope.load_private_key(private_key_pkcs8)
         self._owns_http = http_client is None
-        self._http = http_client or httpx.Client()
+        self._http = http_client or httpx.Client(timeout=httpx.Timeout(30.0))
         self._http.base_url = httpx.URL(api_base_url.rstrip("/") + "/")
         self._http.headers["X-Api-Key"] = api_key
+        self._http.headers["User-Agent"] = _user_agent()
 
     # -- Construction ----------------------------------------------------------
 

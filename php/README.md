@@ -10,6 +10,8 @@ composer require open-banking-io/client
 
 Requires PHP **8.1+** with `ext-openssl`, `ext-curl` and `ext-json` (no runtime Composer dependencies).
 
+Every request carries a `User-Agent: open-banking-io/php/<version>` header (`Client::VERSION`) and uses a 30s total / 10s connect timeout.
+
 ```php
 use OpenBankingIO\Client;
 

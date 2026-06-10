@@ -39,7 +39,8 @@ RSpec.describe OpenBankingIO::Envelope do
       tampered = valid_bytes.dup
       # Clobber the 65-byte EC point (offset 1) so it is no longer a valid P-256 point.
       (1...(1 + OpenBankingIO::Envelope::POINT_LEN)).each { |i| tampered.setbyte(i, 0xFF) }
-      expect { described_class.decrypt(priv, tampered) }.to raise_error(OpenSSL::PKey::EC::Point::Error)
+      expect { described_class.decrypt(priv, tampered) }
+        .to raise_error(ArgumentError, /Invalid ephemeral public key/)
     end
 
     it "raises when the GCM auth tag fails (flipped ciphertext bit)" do

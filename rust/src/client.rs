@@ -4,6 +4,7 @@
 
 use std::fs;
 use std::path::Path;
+use std::time::Duration;
 
 use p256::SecretKey;
 use serde::de::DeserializeOwned;
@@ -12,6 +13,9 @@ use serde::Serialize;
 use crate::envelope;
 use crate::error::{Error, Result};
 use crate::models::*;
+
+/// `User-Agent` sent on every request, e.g. `open-banking-io/rust/0.1.0`.
+const USER_AGENT: &str = concat!("open-banking-io/rust/", env!("CARGO_PKG_VERSION"));
 
 /// Decrypting client for the open-banking.io API.
 pub struct OpenBankingClient {
@@ -38,7 +42,11 @@ impl OpenBankingClient {
             base_url: api_base_url.trim_end_matches('/').to_string(),
             api_key: api_key.to_string(),
             private_key: envelope::load_private_key(private_key_pkcs8_b64)?,
-            agent: ureq::Agent::new(),
+            agent: ureq::AgentBuilder::new()
+                .timeout_connect(Duration::from_secs(10))
+                .timeout(Duration::from_secs(30))
+                .user_agent(USER_AGENT)
+                .build(),
         })
     }
 
