@@ -123,7 +123,7 @@ public sealed class OpenBankingClient : IDisposable
         var items = wires
             .Select(a => (a.Id, Uid: DecryptUid(a)))
             .Where(x => x.Uid is not null)
-            .Select(x => new { accountId = x.Id, uid = x.Uid! })
+            .Select(x => new { accountId = x.Id, uid = x.Uid })
             .ToList();
 
         var response = await _http.PostAsJsonAsync("api/sync", new { items }, Json.Options, ct).ConfigureAwait(false);
