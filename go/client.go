@@ -195,14 +195,7 @@ func (c *Client) ListBanks(country string) ([]Bank, error) {
 	}
 	banks := make([]Bank, 0, len(wires))
 	for _, w := range wires {
-		banks = append(banks, Bank{
-			Name:     w.Name,
-			Country:  w.Country,
-			Logo:     w.Logo,
-			Bic:      w.Bic,
-			Beta:     w.Beta,
-			PsuTypes: w.PsuTypes,
-		})
+		banks = append(banks, Bank(w))
 	}
 	return banks, nil
 }
