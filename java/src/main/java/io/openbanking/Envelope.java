@@ -76,6 +76,9 @@ final class Envelope {
             System.arraycopy(tag, 0, ctWithTag, ciphertext.length, tag.length);
 
             Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+            // `key` is derived at runtime via HKDF-SHA256 over the ECDH shared secret (above);
+            // it is not a hard-coded credential.
+            // nosemgrep: java.lang.security.crypto.hardcoded-secret-key-spec.hardcoded-secret-key-spec
             cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(key, "AES"),
                     new GCMParameterSpec(TAG_LEN * 8, nonce));
             return cipher.doFinal(ctWithTag);

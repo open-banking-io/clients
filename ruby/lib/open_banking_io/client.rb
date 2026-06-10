@@ -228,6 +228,10 @@ module OpenBankingIO
         uri.query = URI.encode_www_form(params)
       end
 
+      # `path` is an internal, library-controlled API route resolved against the configured
+      # base URI (see #resolve), not user-supplied file/URL input. This is an HTTP API client;
+      # issuing the request is its purpose.
+      # nosemgrep: ruby.rails.security.audit.avoid-tainted-http-request.avoid-tainted-http-request
       request = Net::HTTP::Get.new(uri)
       send_request(uri, request)
     end

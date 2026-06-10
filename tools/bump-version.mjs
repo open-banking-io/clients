@@ -167,14 +167,17 @@ function setRustPackageVersion(rel, version) {
 
 function setCargoLockVersion(rel, pkgName, version) {
   const src = read(rel);
-  // Cargo.lock is a series of [[package]] blocks. Find the one whose name matches
-  // and rewrite the version line within that block only.
-  const re = new RegExp(
-    `(\\[\\[package\\]\\]\\s*\\nname = "${escapeRe(pkgName)}"\\nversion = ")[^"]+(")`,
-  );
-  if (!re.test(src)) die(`no [[package]] "${pkgName}" entry in ${rel}`);
-  const out = src.replace(re, (m, a, b) => `${a}${version}${b}`);
-  write(rel, out);
+  // Cargo.lock is a series of [[package]] blocks, each formatted canonically as
+  // `name = "..."` immediately followed by `version = "..."`. Locate the target
+  // block by a literal string search (no dynamic RegExp -> no ReDoS surface) and
+  // rewrite only that version value.
+  const needle = `name = "${pkgName}"\nversion = "`;
+  const nameIdx = src.indexOf(needle);
+  if (nameIdx === -1) die(`no [[package]] "${pkgName}" entry in ${rel}`);
+  const valStart = nameIdx + needle.length;
+  const valEnd = src.indexOf('"', valStart);
+  if (valEnd === -1) die(`malformed version for "${pkgName}" in ${rel}`);
+  write(rel, src.slice(0, valStart) + version + src.slice(valEnd));
 }
 
 // ---- java helper ----------------------------------------------------------
@@ -256,12 +259,6 @@ function findRubyVersionFile(dir) {
     }
   }
   return fallback;
-}
-
-// ---- misc -----------------------------------------------------------------
-
-function escapeRe(s) {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 // ---- main -----------------------------------------------------------------
