@@ -68,15 +68,20 @@ jobs:
           ( cd dist && sha256sum * > checksums.txt )
           echo "Built:"; ls -1 dist
 
-      - name: Create GitHub Release
+      - name: Publish GitHub Release with binaries
         if: steps.ver.outputs.is_tag == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ steps.ver.outputs.version }}
         run: |
-          gh release create "${GITHUB_REF_NAME}" cli/dist/* \
-            --title "obank ${VERSION}" \
-            --notes "Binaries for linux/macOS/windows (amd64 + arm64). Verify with checksums.txt. Install via Homebrew: \`brew install open-banking-io/tap/obank\`."
+          notes="Binaries for linux/macOS/windows (amd64 + arm64). Verify with checksums.txt. Install via Homebrew: \`brew install open-banking-io/tap/obank\`."
+          # Idempotent: create the release if it doesn't exist yet, otherwise attach the assets to it
+          # (handles re-runs and any pre-created release).
+          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            gh release upload "${GITHUB_REF_NAME}" cli/dist/* --clobber
+          else
+            gh release create "${GITHUB_REF_NAME}" cli/dist/* --title "obank ${VERSION}" --notes "$notes"
+          fi
 
       - name: Update Homebrew tap
         if: steps.ver.outputs.is_tag == 'true' && env.HAS_TAP == 'true'

@@ -89,6 +89,9 @@ jobs:
           echo "::notice::pushed ${TAG} — publish-${PACKAGE}.yml will pick it up"
 
       - name: Create GitHub Release
+        # The cli package's publish-cli.yml owns its release (it attaches the built binaries), so
+        # don't create an empty one here that would collide with it.
+        if: ${{ env.PACKAGE != 'cli' }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release create "${TAG}" --title "${PACKAGE} v${VERSION}" --generate-notes --verify-tag
