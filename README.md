@@ -14,7 +14,7 @@ the data locally with your exported private key — and hand you clean, typed mo
 | Python | `open-banking-io` (PyPI) | [`python/`](python/) |
 | Rust | `open-banking-io` (crates.io) | [`rust/`](rust/) |
 | Go | `github.com/open-banking-io/clients/go` | [`go/`](go/) |
-| Java | `io.openbanking:open-banking-io-client` (Maven Central) | [`java/`](java/) |
+| Java | `io.open-banking:open-banking-io-client` (Maven Central) | [`java/`](java/) |
 
 ## How it works
 
