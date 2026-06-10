@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/open-banking-io/clients/cli/internal/config"
@@ -127,5 +129,67 @@ func TestLoginPreservesEncryptionKey(t *testing.T) {
 	}
 	if got.APIBaseURL != srv.URL {
 		t.Errorf("apiBaseUrl = %q, want %q (empty server value falls back to --api)", got.APIBaseURL, srv.URL)
+	}
+}
+
+// TestLoginRelaysEncryptionKeyFromBrowser drives the one-step flow: the stubbed browser plays the
+// authorize page — it reads the loopback port + state from the start URL and POSTs the unlocked key
+// to the loopback. login() must end up with BOTH the API key and the relayed encryption key, with no
+// manual `key import`.
+func TestLoginRelaysEncryptionKeyFromBrowser(t *testing.T) {
+	cfgPath := filepath.Join(t.TempDir(), "credentials.json")
+	fb := fixtureBundle(t)
+	validKey, validPub := fb.EncryptionKey.PrivateKey, fb.EncryptionKey.PublicKey
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/auth/cli/token" {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"apiKey":"ebk_minted","user":"me@example.com","prefix":"ebk_minted12"}`))
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer srv.Close()
+
+	prev := openBrowser
+	openBrowser = func(target string) error {
+		u, err := url.Parse(target)
+		if err != nil {
+			return err
+		}
+		port, state := u.Query().Get("port"), u.Query().Get("state")
+		body, _ := json.Marshal(map[string]any{
+			"code":          "relay-code",
+			"state":         state,
+			"encryptionKey": map[string]string{"privateKey": validKey, "publicKey": validPub},
+		})
+		go func() {
+			_, _ = http.Post("http://127.0.0.1:"+port+"/callback", "application/json", bytes.NewReader(body))
+		}()
+		return nil
+	}
+	defer func() { openBrowser = prev }()
+
+	var out, errOut bytes.Buffer
+	app := &App{Stdout: &out, Stderr: &errOut, ConfigPath: cfgPath, HTTPClient: srv.Client()}
+	if err := app.login([]string{"--api", srv.URL, "--timeout", "10s"}); err != nil {
+		t.Fatalf("login: %v\nstderr: %s", err, errOut.String())
+	}
+
+	got, err := config.Load(cfgPath)
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	if got.APIKey != "ebk_minted" {
+		t.Errorf("apiKey = %q, want ebk_minted", got.APIKey)
+	}
+	if got.EncryptionKey.PrivateKey != validKey {
+		t.Error("the relayed encryption private key was not saved")
+	}
+	if got.EncryptionKey.PublicKey != validPub {
+		t.Error("the relayed public key was not saved")
+	}
+	if !strings.Contains(out.String(), "encryption key set up") {
+		t.Errorf("expected the one-step success message, got: %q", out.String())
 	}
 }

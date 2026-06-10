@@ -38,6 +38,17 @@ These SDKs implement the client: they hold the private key and decrypt envelopes
 from the bank **without ever holding the uid in plaintext**. Sessions are time-limited (see
 `Connection.validUntil` / `needsReconnect`).
 
+## CLI onboarding (browser-relay)
+
+`openbanking login` sets the CLI up in one step without the private key ever reaching the server. The CLI
+starts a localhost loopback and opens the browser to the app's authorize page; you sign in and enter your
+passphrase **in the browser**, which unlocks the locally-held private key and POSTs the full credentials
+**directly to `http://127.0.0.1:<port>`** — browser → localhost only. The server never sees the private key
+(not even encrypted) or the passphrase. The relay is bound by three things: the random loopback port, the
+PKCE `verifier` (held only by the CLI, required to redeem the one-time code for the API key), and a `state`
+nonce echoed by the authenticated browser. CORS on the loopback is scoped to the app origin. The CLI writes
+`credentials.json` at `0600` and never logs the key or passphrase.
+
 ## Assumptions & limitations
 
 - The private key staying private is load-bearing — if it leaks, future envelopes encrypted to its public
