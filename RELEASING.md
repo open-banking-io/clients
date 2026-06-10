@@ -56,6 +56,26 @@ Go has no manifest — the module version is the tag itself. The Release workflo
 **skips the bump/commit** for `go` and just pushes `go/vX.Y.Z`. Consumers then get
 that version via `go get github.com/open-banking-io/clients/go@vX.Y.Z`.
 
+### CLI specifics (`obank`)
+
+The `cli` package is the `obank` binary, not a library — it has no manifest either
+(its version comes from the tag, baked in via `-ldflags`). Tagging `cli/vX.Y.Z`
+triggers `publish-cli.yml`, which cross-compiles binaries for linux/macOS/windows
+(amd64 + arm64), publishes a GitHub Release with archives + `checksums.txt`, and
+updates the **Homebrew tap** (`open-banking-io/homebrew-tap`). It's a plain
+`go build` matrix (not GoReleaser, whose monorepo/tag-prefix support is Pro-only)
+so it works cleanly with the `cli/`-prefixed tags. On PRs touching the CLI the same
+job builds all targets as a snapshot to validate, without publishing.
+
+Because the CLI ships as a binary built in module mode (`GOWORK=off`), it depends
+on a **published** `go/` SDK version. Release the SDK first if the CLI needs new
+SDK code: cut `go/vX.Y.Z`, bump `cli/go.mod`'s `require .../clients/go` to it, then
+cut `cli/vX.Y.Z`.
+
+Prerequisites for the Homebrew step: the `open-banking-io/homebrew-tap` repo must
+exist, and a `HOMEBREW_TAP_TOKEN` secret (a PAT with write access to that tap repo)
+must be set on this repo — the default `GITHUB_TOKEN` can't push to another repo.
+
 ## The version-consistency gate
 
 Don't hand-edit a manifest and tag separately unless you keep them identical — the

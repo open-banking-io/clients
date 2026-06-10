@@ -19,6 +19,7 @@ type App struct {
 	Stdout     io.Writer
 	Stderr     io.Writer
 	ConfigPath string
+	Version    string       // set by main from the build-time version
 	HTTPClient *http.Client // nil uses the SDK default
 }
 
@@ -54,6 +55,9 @@ func (a *App) Run(args []string) error {
 		return a.banks(rest)
 	case "connect":
 		return a.connect(rest)
+	case "version", "--version", "-v":
+		fmt.Fprintf(a.Stdout, "obank %s\n", a.versionString())
+		return nil
 	case "help", "-h", "--help":
 		a.usage()
 		return nil
@@ -84,6 +88,13 @@ func (a *App) publicClient() (*openbanking.Client, error) {
 	return openbanking.NewPublic(bundle.APIBaseURL, bundle.APIKey, a.HTTPClient)
 }
 
+func (a *App) versionString() string {
+	if a.Version == "" {
+		return "dev"
+	}
+	return a.Version
+}
+
 func (a *App) usage() {
 	fmt.Fprint(a.Stderr, `obank — open-banking.io command line
 
@@ -99,6 +110,7 @@ Commands:
   sync <account-id> | --all      Pull fresh transactions for one account or all
   banks                          List banks available for connection (--country)
   connect <bank-name>            Connect a bank via the browser consent flow
+  version                        Print the obank version
   help                           Show this help
 `)
 }
