@@ -53,6 +53,27 @@ func New(apiBaseURL, apiKey, privateKeyPKCS8B64 string, httpClient *http.Client)
 	}, nil
 }
 
+// NewPublic builds a client for operations that do not decrypt data — listing banks
+// (ListBanks), starting authorizations (StartAuthorization), and listing connections
+// (GetConnections). It needs no encryption key; the decrypting methods (GetAccounts,
+// GetTransactions, Sync, SyncAll) return an error on a client built this way.
+func NewPublic(apiBaseURL, apiKey string, httpClient *http.Client) (*Client, error) {
+	if strings.TrimSpace(apiBaseURL) == "" {
+		return nil, fmt.Errorf("apiBaseUrl is required")
+	}
+	if strings.TrimSpace(apiKey) == "" {
+		return nil, fmt.Errorf("apiKey is required")
+	}
+	if httpClient == nil {
+		httpClient = http.DefaultClient
+	}
+	return &Client{
+		baseURL:    strings.TrimRight(apiBaseURL, "/"),
+		apiKey:     apiKey,
+		httpClient: httpClient,
+	}, nil
+}
+
 // FromCredentials builds a client from a credentials-bundle JSON string or a path to a bundle file.
 func FromCredentials(pathOrJSON string, httpClient *http.Client) (*Client, error) {
 	raw := pathOrJSON
@@ -82,8 +103,20 @@ func FromBundle(bundle CredentialsBundle, httpClient *http.Client) (*Client, err
 	return New(bundle.APIBaseURL, bundle.APIKey, bundle.EncryptionKey.PrivateKey, httpClient)
 }
 
+// errNoKey is returned by the decrypting methods when the client was built without an encryption
+// key (see NewPublic).
+func (c *Client) requireKey() error {
+	if c.privateKey == nil {
+		return fmt.Errorf("this client has no encryption key; build it from a credentials bundle to decrypt data")
+	}
+	return nil
+}
+
 // GetAccounts lists the user's accounts with all sensitive fields decrypted.
 func (c *Client) GetAccounts() ([]Account, error) {
+	if err := c.requireKey(); err != nil {
+		return nil, err
+	}
 	wires, err := c.getAccountWires()
 	if err != nil {
 		return nil, err
@@ -101,6 +134,9 @@ func (c *Client) GetAccounts() ([]Account, error) {
 
 // GetTransactions returns a page of an account's statement, newest first, with decrypted fields.
 func (c *Client) GetTransactions(accountID string, query TransactionQuery) (TransactionPage, error) {
+	if err := c.requireKey(); err != nil {
+		return TransactionPage{}, err
+	}
 	params := url.Values{}
 	if query.From != "" {
 		params.Set("from", query.From)
@@ -147,9 +183,43 @@ func (c *Client) GetConnections() ([]Connection, error) {
 	return conns, nil
 }
 
+// ListBanks lists the banks (ASPSPs) available for connection in a country (e.g. "DK").
+func (c *Client) ListBanks(country string) ([]Bank, error) {
+	path := "/api/aspsps"
+	if country != "" {
+		path += "?country=" + url.QueryEscape(country)
+	}
+	var wires []bankWire
+	if err := c.getJSON(path, &wires); err != nil {
+		return nil, err
+	}
+	banks := make([]Bank, 0, len(wires))
+	for _, w := range wires {
+		banks = append(banks, Bank(w))
+	}
+	return banks, nil
+}
+
+// StartAuthorization starts a bank-authorization (consent) flow and returns the consent URL the
+// user must open in a browser to grant access. The bank's callback completes the flow server-side.
+func (c *Client) StartAuthorization(req AuthorizationRequest) (string, error) {
+	body := map[string]any{"country": req.Country, "aspspName": req.AspspName}
+	if req.PsuType != "" {
+		body["psuType"] = req.PsuType
+	}
+	var out authorizationURLWire
+	if err := c.postJSON("/api/authorizations", body, &out); err != nil {
+		return "", err
+	}
+	return out.URL, nil
+}
+
 // Sync triggers an online sync of one account: decrypts that account's Enable Banking uid and posts
 // it, so the service can fetch fresh data without ever holding the uid in plaintext.
 func (c *Client) Sync(accountID string) (SyncResult, error) {
+	if err := c.requireKey(); err != nil {
+		return SyncResult{}, err
+	}
 	wires, err := c.getAccountWires()
 	if err != nil {
 		return SyncResult{}, err
@@ -182,6 +252,9 @@ func (c *Client) Sync(accountID string) (SyncResult, error) {
 
 // SyncAll triggers an online sync of every account that has an active session.
 func (c *Client) SyncAll() (SyncAllResult, error) {
+	if err := c.requireKey(); err != nil {
+		return SyncAllResult{}, err
+	}
 	wires, err := c.getAccountWires()
 	if err != nil {
 		return SyncAllResult{}, err

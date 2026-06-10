@@ -47,6 +47,11 @@ func startMock(t *testing.T) *mockAPI {
 			send(w, http.StatusOK, readFixture(t, "api/transactions.json"))
 		case r.Method == http.MethodGet && r.URL.Path == "/api/connections":
 			send(w, http.StatusOK, readFixture(t, "api/connections.json"))
+		case r.Method == http.MethodGet && r.URL.Path == "/api/aspsps":
+			send(w, http.StatusOK, []byte(`[{"name":"Lunar","country":"`+r.URL.Query().Get("country")+`","bic":"LUNADK22","beta":false,"psuTypes":["business"]}]`))
+		case r.Method == http.MethodPost && r.URL.Path == "/api/authorizations":
+			m.captureBody(r)
+			send(w, http.StatusOK, []byte(`{"url":"https://bank.example/consent?state=abc"}`))
 		case r.Method == http.MethodPost && accountSyncPath.MatchString(r.URL.Path):
 			m.captureBody(r)
 			send(w, http.StatusOK, readFixture(t, "api/sync.json"))
@@ -179,6 +184,70 @@ func TestSyncAllPostsItemsWithDecryptedUid(t *testing.T) {
 	}
 	if item["uid"] != "c5d93aa7-5e23-4da0-ba88-42b9a584492c" {
 		t.Errorf("uid = %v", item["uid"])
+	}
+}
+
+func TestListBanks(t *testing.T) {
+	m := startMock(t)
+	banks, err := m.client(t).ListBanks("DK")
+	if err != nil {
+		t.Fatalf("ListBanks: %v", err)
+	}
+	if len(banks) != 1 {
+		t.Fatalf("len(banks) = %d, want 1", len(banks))
+	}
+	if banks[0].Name != "Lunar" || banks[0].Country != "DK" || banks[0].Bic != "LUNADK22" {
+		t.Errorf("unexpected bank: %+v", banks[0])
+	}
+	if len(banks[0].PsuTypes) != 1 || banks[0].PsuTypes[0] != "business" {
+		t.Errorf("psuTypes = %v", banks[0].PsuTypes)
+	}
+}
+
+func TestStartAuthorizationReturnsConsentURLAndPostsRequest(t *testing.T) {
+	m := startMock(t)
+	url, err := m.client(t).StartAuthorization(AuthorizationRequest{
+		Country: "DK", AspspName: "Lunar", PsuType: "business",
+	})
+	if err != nil {
+		t.Fatalf("StartAuthorization: %v", err)
+	}
+	if url != "https://bank.example/consent?state=abc" {
+		t.Errorf("url = %q", url)
+	}
+	if m.lastSyncBody["aspspName"] != "Lunar" || m.lastSyncBody["country"] != "DK" ||
+		m.lastSyncBody["psuType"] != "business" {
+		t.Errorf("posted body = %v", m.lastSyncBody)
+	}
+}
+
+func TestPublicClientAllowsBanksButNotDecryption(t *testing.T) {
+	m := startMock(t)
+	c, err := NewPublic(m.server.URL, m.apiKey, nil)
+	if err != nil {
+		t.Fatalf("NewPublic: %v", err)
+	}
+
+	// Non-decrypting calls work without an encryption key.
+	if _, err := c.ListBanks("DK"); err != nil {
+		t.Errorf("ListBanks on public client: %v", err)
+	}
+	if _, err := c.GetConnections(); err != nil {
+		t.Errorf("GetConnections on public client: %v", err)
+	}
+
+	// Decrypting calls fail cleanly rather than panicking.
+	if _, err := c.GetAccounts(); err == nil {
+		t.Error("expected GetAccounts to error on a key-less client")
+	}
+	if _, err := c.GetTransactions("11111111-1111-4111-8111-111111111111", TransactionQuery{}); err == nil {
+		t.Error("expected GetTransactions to error on a key-less client")
+	}
+	if _, err := c.Sync("11111111-1111-4111-8111-111111111111"); err == nil {
+		t.Error("expected Sync to error on a key-less client")
+	}
+	if _, err := c.SyncAll(); err == nil {
+		t.Error("expected SyncAll to error on a key-less client")
 	}
 }
 
