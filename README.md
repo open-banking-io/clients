@@ -1,5 +1,7 @@
 # open-banking.io client SDKs
 
+[![Semgrep](https://github.com/open-banking-io/clients/actions/workflows/semgrep.yml/badge.svg)](https://github.com/open-banking-io/clients/actions/workflows/semgrep.yml)
+
 Server-to-server clients for [open-banking.io](https://open-banking.io) in **.NET, Node, Python,
 Rust, Go, Java, Ruby, and PHP**.
 
