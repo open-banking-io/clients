@@ -20,12 +20,12 @@ final class IntegrationTest extends TestCase
     private $serverProcess;
     private string $baseUrl = '';
     private string $captureFile = '';
-    /** @var array<string, mixed> */
+    /** @var array{apiKey: string, encryptionKey: array{privateKey: string}} */
     private array $credentials;
 
     protected function setUp(): void
     {
-        /** @var array<string, mixed> $credentials */
+        /** @var array{apiKey: string, encryptionKey: array{privateKey: string}} $credentials */
         $credentials = Fixtures::load('credentials.json');
         $this->credentials = $credentials;
 
@@ -135,6 +135,7 @@ final class IntegrationTest extends TestCase
         $result = $this->client()->syncAll();
 
         self::assertSame(1, $result->accounts);
+        /** @var array{items: array<int, array{uid: string, accountId: string}>} $body */
         $body = $this->captured('syncAll');
         self::assertSame('c5d93aa7-5e23-4da0-ba88-42b9a584492c', $body['items'][0]['uid']);
         self::assertSame(self::ACCOUNT_ID, $body['items'][0]['accountId']);
@@ -152,7 +153,10 @@ final class IntegrationTest extends TestCase
             'private_key_type' => OPENSSL_KEYTYPE_EC,
             'curve_name' => 'prime256v1',
         ]);
+        self::assertNotFalse($other);
+        $pem = '';
         openssl_pkey_export($other, $pem);
+        self::assertIsString($pem);
         $wrongB64 = preg_replace('/-----[^-]+-----|\s+/', '', $pem) ?? '';
 
         $client = new Client($this->baseUrl, $this->credentials['apiKey'], $wrongB64);
@@ -171,8 +175,9 @@ final class IntegrationTest extends TestCase
         self::assertNotFalse($raw);
         /** @var array<string, mixed> $all */
         $all = json_decode($raw, true, 512, JSON_THROW_ON_ERROR);
-        /** @var array<string, mixed> $body */
         $body = $all[$label];
+        self::assertIsArray($body);
+        /** @var array<string, mixed> $body */
         return $body;
     }
 

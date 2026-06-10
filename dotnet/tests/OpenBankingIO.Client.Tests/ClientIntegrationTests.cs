@@ -8,6 +8,9 @@ public class ClientIntegrationTests
 {
     private const string AccountId = "11111111-1111-4111-8111-111111111111";
 
+    private static readonly System.Text.Json.JsonSerializerOptions WebJson =
+        new(System.Text.Json.JsonSerializerDefaults.Web);
+
     private static (MockServer Server, OpenBankingClient Client) Make()
     {
         var creds = Fixtures.ReadJson("credentials.json");
@@ -112,7 +115,7 @@ public class ClientIntegrationTests
         // Point the bundle's apiBaseUrl at the mock by overriding via the explicit ctor is cleaner,
         // but here we prove FromCredentials parses + authenticates by swapping in an HttpClient.
         using var http = new HttpClient();
-        var bundle = System.Text.Json.JsonSerializer.Deserialize<CredentialsBundle>(creds, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web))!;
+        var bundle = System.Text.Json.JsonSerializer.Deserialize<CredentialsBundle>(creds, WebJson)!;
         using var client = new OpenBankingClient(server.BaseUrl, bundle.ApiKey!, bundle.EncryptionKey.PrivateKey, http);
 
         var a = Assert.Single(await client.GetAccountsAsync());

@@ -85,9 +85,14 @@ public sealed class OpenBankingClient : IDisposable
             .ConfigureAwait(false) ?? [];
         return wires.Select(c => new Connection
         {
-            SessionId = c.SessionId, AspspName = c.AspspName, AspspCountry = c.AspspCountry,
-            ValidUntil = c.ValidUntil, Status = c.Status, AccountCount = c.AccountCount,
-            LastSyncedAt = c.LastSyncedAt, PsuType = c.PsuType,
+            SessionId = c.SessionId,
+            AspspName = c.AspspName,
+            AspspCountry = c.AspspCountry,
+            ValidUntil = c.ValidUntil,
+            Status = c.Status,
+            AccountCount = c.AccountCount,
+            LastSyncedAt = c.LastSyncedAt,
+            PsuType = c.PsuType,
         }).ToList();
     }
 
@@ -118,7 +123,7 @@ public sealed class OpenBankingClient : IDisposable
         var items = wires
             .Select(a => (a.Id, Uid: DecryptUid(a)))
             .Where(x => x.Uid is not null)
-            .Select(x => new { accountId = x.Id, uid = x.Uid! })
+            .Select(x => new { accountId = x.Id, uid = x.Uid })
             .ToList();
 
         var response = await _http.PostAsJsonAsync("api/sync", new { items }, Json.Options, ct).ConfigureAwait(false);
@@ -141,17 +146,29 @@ public sealed class OpenBankingClient : IDisposable
 
         return new Account
         {
-            Id = a.Id, AspspName = a.AspspName, AspspCountry = a.AspspCountry, Currency = a.Currency,
-            AccountType = a.AccountType, Bic = a.Bic, NeedsReconnect = a.NeedsReconnect,
-            Iban = acc?.Iban, Bban = acc?.Bban, OwnerName = acc?.OwnerName,
-            AccountName = acc?.AccountName, Product = acc?.Product, DisplayName = name?.DisplayName,
+            Id = a.Id,
+            AspspName = a.AspspName,
+            AspspCountry = a.AspspCountry,
+            Currency = a.Currency,
+            AccountType = a.AccountType,
+            Bic = a.Bic,
+            NeedsReconnect = a.NeedsReconnect,
+            Iban = acc?.Iban,
+            Bban = acc?.Bban,
+            OwnerName = acc?.OwnerName,
+            AccountName = acc?.AccountName,
+            Product = acc?.Product,
+            DisplayName = name?.DisplayName,
             Balances = a.Balances.Select(b =>
             {
                 var dec = Envelope.DecryptTo<BalanceEnc>(_privateKey, b.Enc);
                 return new Balance
                 {
-                    Type = b.Type, Currency = b.Currency, ReferenceDate = b.ReferenceDate,
-                    Name = dec?.Name, Amount = ParseDecimal(dec?.Amount),
+                    Type = b.Type,
+                    Currency = b.Currency,
+                    ReferenceDate = b.ReferenceDate,
+                    Name = dec?.Name,
+                    Amount = ParseDecimal(dec?.Amount),
                 };
             }).ToList(),
         };
@@ -162,15 +179,28 @@ public sealed class OpenBankingClient : IDisposable
         var d = Envelope.DecryptTo<TransactionEnc>(_privateKey, t.Enc);
         return new Transaction
         {
-            Id = t.Id, Currency = t.Currency, CreditDebitIndicator = t.CreditDebitIndicator, Status = t.Status,
-            BookingDate = t.BookingDate, ValueDate = t.ValueDate, TransactionDate = t.TransactionDate,
+            Id = t.Id,
+            Currency = t.Currency,
+            CreditDebitIndicator = t.CreditDebitIndicator,
+            Status = t.Status,
+            BookingDate = t.BookingDate,
+            ValueDate = t.ValueDate,
+            TransactionDate = t.TransactionDate,
             BankTransactionCode = t.BankTransactionCode,
             Amount = ParseDecimal(d?.Amount),
-            CreditorName = d?.CreditorName, CreditorIban = d?.CreditorIban, CreditorBban = d?.CreditorBban,
-            CreditorAgentBic = d?.CreditorAgentBic, DebtorName = d?.DebtorName, DebtorIban = d?.DebtorIban,
-            DebtorBban = d?.DebtorBban, RemittanceInformation = d?.RemittanceInformation, Note = d?.Note,
-            ReferenceNumber = d?.ReferenceNumber, ExchangeRate = d?.ExchangeRate,
-            MerchantCategoryCode = d?.MerchantCategoryCode, BalanceAfterCurrency = d?.BalanceAfterCurrency,
+            CreditorName = d?.CreditorName,
+            CreditorIban = d?.CreditorIban,
+            CreditorBban = d?.CreditorBban,
+            CreditorAgentBic = d?.CreditorAgentBic,
+            DebtorName = d?.DebtorName,
+            DebtorIban = d?.DebtorIban,
+            DebtorBban = d?.DebtorBban,
+            RemittanceInformation = d?.RemittanceInformation,
+            Note = d?.Note,
+            ReferenceNumber = d?.ReferenceNumber,
+            ExchangeRate = d?.ExchangeRate,
+            MerchantCategoryCode = d?.MerchantCategoryCode,
+            BalanceAfterCurrency = d?.BalanceAfterCurrency,
             BalanceAfterTransaction = ParseDecimalNullable(d?.BalanceAfter),
         };
     }

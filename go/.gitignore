@@ -1,0 +1,3 @@
+# Coverage artifacts (generated in CI, converted to Cobertura).
+coverage.out
+coverage.xml

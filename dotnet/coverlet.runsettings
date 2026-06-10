@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Coverlet settings for: dotnet test ... collect "XPlat Code Coverage" with
+  settings dotnet/coverlet.runsettings. Forces Cobertura output so CI can pick up a
+  predictable report at tests/**/TestResults/**/coverage.cobertura.xml.
+-->
+<RunSettings>
+  <DataCollectionRunSettings>
+    <DataCollectors>
+      <DataCollector friendlyName="XPlat code coverage">
+        <Configuration>
+          <Format>cobertura</Format>
+          <!-- Only measure the shipping library, not the test assembly or the runner. -->
+          <Include>[OpenBankingIO.Client]*</Include>
+          <ExcludeByAttribute>Obsolete,GeneratedCodeAttribute,CompilerGeneratedAttribute</ExcludeByAttribute>
+          <SkipAutoProps>true</SkipAutoProps>
+        </Configuration>
+      </DataCollector>
+    </DataCollectors>
+  </DataCollectionRunSettings>
+</RunSettings>

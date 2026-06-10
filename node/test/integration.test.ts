@@ -6,10 +6,11 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { OpenBankingClient } from "../src/index.js";
 
 const fixtures = fileURLToPath(new URL("../../fixtures/", import.meta.url));
-const readJson = (name: string) => JSON.parse(readFileSync(fixtures + name, "utf8"));
+const readJson = <T = unknown>(name: string): T =>
+  JSON.parse(readFileSync(fixtures + name, "utf8")) as T;
 
-const API_KEY = readJson("credentials.json").apiKey as string;
-const PRIVATE_KEY = readJson("keypair.json").privateKeyPkcs8B64 as string;
+const API_KEY = readJson<{ apiKey: string }>("credentials.json").apiKey;
+const PRIVATE_KEY = readJson<{ privateKeyPkcs8B64: string }>("keypair.json").privateKeyPkcs8B64;
 
 let server: Server;
 let baseUrl: string;

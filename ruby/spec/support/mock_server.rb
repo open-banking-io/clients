@@ -50,7 +50,7 @@ class MockServer
         handle(client)
       rescue IOError, Errno::EBADF
         break
-      rescue StandardError
+      rescue
         # keep the loop alive on per-connection errors
       ensure
         client&.close
@@ -77,7 +77,7 @@ class MockServer
     path = URI.parse(target).path
 
     unless headers["x-api-key"] == API_KEY
-      respond(client, 401, JSON.generate({ "error" => "unauthorized" }))
+      respond(client, 401, JSON.generate({"error" => "unauthorized"}))
       return
     end
 
@@ -100,14 +100,14 @@ class MockServer
       @captured[:sync_all_body] = JSON.parse(body)
       [200, fixture("sync-all.json")]
     else
-      [404, JSON.generate({ "error" => "not found" })]
+      [404, JSON.generate({"error" => "not found"})]
     end
   end
 
   def respond(client, status, payload)
     payload ||= ""
-    reasons = { 200 => "OK", 401 => "Unauthorized", 404 => "Not Found" }
-    client.write("HTTP/1.1 #{status} #{reasons.fetch(status, 'OK')}\r\n")
+    reasons = {200 => "OK", 401 => "Unauthorized", 404 => "Not Found"}
+    client.write("HTTP/1.1 #{status} #{reasons.fetch(status, "OK")}\r\n")
     client.write("Content-Type: application/json\r\n")
     client.write("Content-Length: #{payload.bytesize}\r\n")
     client.write("Connection: close\r\n")

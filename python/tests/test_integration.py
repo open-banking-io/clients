@@ -68,9 +68,7 @@ def server(httpserver, fixtures_dir):
         captured["sync_all_body"] = json.loads(request.get_data())
         return _json_response(sync_all_data)
 
-    httpserver.expect_request("/api/sync", method="POST").respond_with_handler(
-        sync_all_handler
-    )
+    httpserver.expect_request("/api/sync", method="POST").respond_with_handler(sync_all_handler)
 
     httpserver._captured = captured  # type: ignore[attr-defined]
     return httpserver
@@ -102,9 +100,7 @@ def test_get_accounts_decrypts(server, credentials):
 
 def test_get_transactions_decrypts(server, credentials):
     with _client(server, credentials) as client:
-        page = client.get_transactions(
-            "11111111-1111-4111-8111-111111111111", limit=50
-        )
+        page = client.get_transactions("11111111-1111-4111-8111-111111111111", limit=50)
 
     assert page.total == 1
     txn = page.items[0]

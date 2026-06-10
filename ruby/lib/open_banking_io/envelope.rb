@@ -15,7 +15,7 @@ module OpenBankingIO
     POINT_LEN = 65
     NONCE_LEN = 12
     TAG_LEN = 16
-    HKDF_SALT = ("\x00".b * 32).freeze
+    HKDF_SALT = ("\x00".b * 32)
     HKDF_INFO = "bank.core.ci/zk/v1".b.freeze
     GROUP = OpenSSL::PKey::EC::Group.new("prime256v1")
 

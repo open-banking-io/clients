@@ -1,6 +1,8 @@
 package openbanking
 
 import (
+	"crypto/ecdh"
+	"encoding/base64"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -108,6 +110,117 @@ func TestDecryptsTransactionEnvelope(t *testing.T) {
 	}
 	if tx["creditorName"] != exp["creditorName"] {
 		t.Errorf("creditorName = %v, want %v", tx["creditorName"], exp["creditorName"])
+	}
+}
+
+// loadTestKey loads the fixture private key or fails the test.
+func loadTestKey(t *testing.T) *ecdh.PrivateKey {
+	t.Helper()
+	priv, err := loadPrivateKey(testPrivateKey(t))
+	if err != nil {
+		t.Fatalf("load key: %v", err)
+	}
+	return priv
+}
+
+// rawAccountEnvelope returns the decoded bytes of the account envelope fixture.
+func rawAccountEnvelope(t *testing.T) []byte {
+	t.Helper()
+	envelopes := readJSON(t, "envelopes.json")
+	raw, err := base64.StdEncoding.DecodeString(envelopes["account"].(string))
+	if err != nil {
+		t.Fatalf("decode account envelope: %v", err)
+	}
+	return raw
+}
+
+func TestDecryptEnvelopeTooShort(t *testing.T) {
+	priv := loadTestKey(t)
+	// Anything shorter than the fixed header (1+65+12+16 = 94 bytes) is structurally invalid.
+	for _, n := range []int{0, 1, headerLen - 1} {
+		if _, err := decryptEnvelope(priv, make([]byte, n)); err == nil {
+			t.Errorf("len=%d: expected error for truncated envelope", n)
+		}
+	}
+}
+
+func TestDecryptEnvelopeTruncatedFixture(t *testing.T) {
+	priv := loadTestKey(t)
+	raw := rawAccountEnvelope(t)
+	// Chop the valid envelope below the header length: must error, not panic.
+	if _, err := decryptEnvelope(priv, raw[:headerLen-1]); err == nil {
+		t.Error("expected error for truncated valid envelope")
+	}
+}
+
+func TestDecryptEnvelopeWrongVersionByte(t *testing.T) {
+	priv := loadTestKey(t)
+	raw := rawAccountEnvelope(t)
+	bad := make([]byte, len(raw))
+	copy(bad, raw)
+	bad[0] = 0x02 // unsupported version
+	if _, err := decryptEnvelope(priv, bad); err == nil {
+		t.Error("expected error for unsupported version byte")
+	}
+}
+
+func TestDecryptEnvelopeGarbageEphemeralPublicKey(t *testing.T) {
+	priv := loadTestKey(t)
+	raw := rawAccountEnvelope(t)
+	bad := make([]byte, len(raw))
+	copy(bad, raw)
+	// Overwrite the 65-byte ephemeral public key with bytes that are not a valid P-256 point.
+	for i := 1; i < 1+pointLen; i++ {
+		bad[i] = 0xFF
+	}
+	if _, err := decryptEnvelope(priv, bad); err == nil {
+		t.Error("expected error for garbage ephemeral public key")
+	}
+}
+
+func TestDecryptEnvelopeTamperedCiphertext(t *testing.T) {
+	priv := loadTestKey(t)
+	raw := rawAccountEnvelope(t)
+	bad := make([]byte, len(raw))
+	copy(bad, raw)
+	// Flip a ciphertext byte: GCM auth must reject it.
+	bad[len(bad)-1] ^= 0xFF
+	if _, err := decryptEnvelope(priv, bad); err == nil {
+		t.Error("expected aes-gcm auth failure for tampered ciphertext")
+	}
+}
+
+func TestLoadPrivateKeyInvalidBase64(t *testing.T) {
+	if _, err := loadPrivateKey("not!base64!!!"); err == nil {
+		t.Error("expected error for non-base64 private key")
+	}
+}
+
+func TestLoadPrivateKeyInvalidPKCS8(t *testing.T) {
+	// Valid base64, but not a valid PKCS#8 DER structure.
+	garbage := base64.StdEncoding.EncodeToString([]byte("this is not a pkcs8 key"))
+	if _, err := loadPrivateKey(garbage); err == nil {
+		t.Error("expected error for invalid PKCS#8 key")
+	}
+}
+
+func TestDecryptToInvalidBase64Envelope(t *testing.T) {
+	priv := loadTestKey(t)
+	var out map[string]any
+	if _, err := decryptTo(priv, "not!valid!base64", &out); err == nil {
+		t.Error("expected error for non-base64 envelope")
+	}
+}
+
+func TestDecryptToEmptyEnvelopeIsNotDecrypted(t *testing.T) {
+	priv := loadTestKey(t)
+	var out map[string]any
+	ok, err := decryptTo(priv, "", &out)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if ok {
+		t.Error("expected decrypted=false for an empty envelope")
 	}
 }
 

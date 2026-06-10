@@ -72,6 +72,71 @@ fn decrypts_the_transaction_envelope() {
     assert_eq!(tx["creditorName"], expected["transaction"]["creditorName"]);
 }
 
+fn good_key() -> p256::SecretKey {
+    envelope::load_private_key(
+        read_json("keypair.json")["privateKeyPkcs8B64"]
+            .as_str()
+            .unwrap(),
+    )
+    .unwrap()
+}
+
+#[test]
+fn a_truncated_envelope_is_rejected() {
+    // A valid base64 envelope decoded then sliced shorter than the fixed header.
+    let envelopes = read_json("envelopes.json");
+    let bytes = base64_decode(envelopes["account"].as_str().unwrap());
+    let truncated = &bytes[..10]; // < HEADER_LEN (1 + 65 + 12 + 16 = 94)
+    let res = envelope::decrypt(&good_key(), truncated);
+    assert!(matches!(res, Err(open_banking_io::Error::InvalidEnvelope)));
+}
+
+#[test]
+fn an_empty_envelope_is_rejected() {
+    let res = envelope::decrypt(&good_key(), &[]);
+    assert!(matches!(res, Err(open_banking_io::Error::InvalidEnvelope)));
+}
+
+#[test]
+fn a_wrong_version_byte_is_rejected() {
+    // Full-length envelope but the leading version byte is flipped from 0x01.
+    let envelopes = read_json("envelopes.json");
+    let mut bytes = base64_decode(envelopes["account"].as_str().unwrap());
+    bytes[0] = 0x02;
+    let res = envelope::decrypt(&good_key(), &bytes);
+    assert!(matches!(res, Err(open_banking_io::Error::InvalidEnvelope)));
+}
+
+#[test]
+fn an_invalid_pkcs8_key_string_is_rejected() {
+    // Well-formed base64 that is not a valid PKCS#8 EC key.
+    let res = envelope::load_private_key("bm90LWEta2V5");
+    assert!(matches!(res, Err(open_banking_io::Error::Crypto(_))));
+
+    // Not even valid base64.
+    let res = envelope::load_private_key("!!! not base64 !!!");
+    assert!(matches!(res, Err(open_banking_io::Error::Crypto(_))));
+}
+
+#[test]
+fn an_off_curve_ephemeral_public_key_is_rejected() {
+    // Full-length, correct version, but the 65-byte SEC1 point is garbage:
+    // 0x04 (uncompressed prefix) followed by coordinates not on the P-256 curve.
+    let mut bytes = vec![0u8; 1 + 65 + 12 + 16 + 4];
+    bytes[0] = 0x01; // valid version
+    bytes[1] = 0x04; // uncompressed point prefix
+    for b in bytes.iter_mut().skip(2).take(64) {
+        *b = 0xFF; // (0xFF.., 0xFF..) is not a point on secp256r1
+    }
+    let res = envelope::decrypt(&good_key(), &bytes);
+    assert!(matches!(res, Err(open_banking_io::Error::Crypto(_))));
+}
+
+fn base64_decode(s: &str) -> Vec<u8> {
+    use base64::{engine::general_purpose::STANDARD, Engine};
+    STANDARD.decode(s.trim()).unwrap()
+}
+
 #[test]
 fn a_wrong_key_fails_to_decrypt() {
     // A different valid P-256 PKCS#8 key derives the wrong shared secret.

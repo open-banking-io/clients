@@ -16,14 +16,14 @@ from .models import (
 )
 
 __all__ = [
-    "OpenBankingClient",
     "Account",
     "Balance",
+    "Connection",
+    "OpenBankingClient",
+    "SyncAllResult",
+    "SyncResult",
     "Transaction",
     "TransactionPage",
-    "Connection",
-    "SyncResult",
-    "SyncAllResult",
 ]
 
 __version__ = "0.1.0"

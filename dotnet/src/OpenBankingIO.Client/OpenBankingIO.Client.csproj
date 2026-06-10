@@ -11,6 +11,11 @@
     <!-- DTO/record properties are self-documenting; don't require XML docs on each. -->
     <NoWarn>$(NoWarn);CS1591</NoWarn>
 
+    <!-- Static analysis + code-style enforcement (severities tuned in dotnet/.editorconfig). -->
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+
     <PackageId>OpenBankingIO.Client</PackageId>
     <Version>0.1.0</Version>
     <Authors>open-banking.io</Authors>

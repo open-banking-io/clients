@@ -110,7 +110,7 @@ final class Envelope
             OPENSSL_RAW_DATA,
             $nonce,
             $tag,
-            ''
+            '',
         );
         if ($plaintext === false) {
             throw new EnvelopeException('AES-256-GCM decryption failed (wrong key or tampered data)');

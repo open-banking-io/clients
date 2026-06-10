@@ -18,7 +18,9 @@ const client = OpenBankingClient.fromCredentials("credentials.json");
 
 for (const account of await client.getAccounts()) {
   const booked = account.balances.find((b) => b.type === "ITBD");
-  console.log(`${account.displayName ?? account.ownerName} ${account.iban}: ${booked?.amount} ${account.currency}`);
+  console.log(
+    `${account.displayName ?? account.ownerName} ${account.iban}: ${booked?.amount} ${account.currency}`,
+  );
 
   const page = await client.getTransactions(account.id, { limit: 50 });
   for (const t of page.items) {

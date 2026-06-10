@@ -1,9 +1,5 @@
 export { OpenBankingClient } from "./client.js";
-export {
-  decryptEnvelope,
-  decryptTo,
-  importPrivateKey,
-} from "./envelope.js";
+export { decryptEnvelope, decryptTo, importPrivateKey } from "./envelope.js";
 export type {
   Account,
   Balance,
