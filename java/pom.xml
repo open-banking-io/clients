@@ -6,7 +6,7 @@
 
   <groupId>io.open-banking</groupId>
   <artifactId>open-banking-io-client</artifactId>
-  <version>0.2.0</version>
+  <version>0.2.1</version>
   <packaging>jar</packaging>
 
   <name>open-banking.io client</name>
