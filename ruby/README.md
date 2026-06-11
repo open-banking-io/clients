@@ -61,8 +61,9 @@ Every request sets connect/read timeouts (15s/60s) and a `User-Agent: open-banki
 
 Envelopes use **ECDH P-256 → HKDF-SHA256 → AES-256-GCM**, implemented entirely with Ruby's OpenSSL
 standard library. Decryption requires the private key from your credentials bundle and happens fully
-in-process. See the [repo README](https://github.com/open-banking-io/clients) for the full scheme and
-the other language clients (.NET, Node, Python, Rust, Go, Java).
+in-process. Full wire format and the other language clients:
+[repo README](https://github.com/open-banking-io/clients) ·
+[`THREAT_MODEL.md`](https://github.com/open-banking-io/clients/blob/main/THREAT_MODEL.md).
 
 ## Development
 

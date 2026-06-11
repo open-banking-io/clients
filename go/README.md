@@ -38,6 +38,20 @@ func main() {
 				fmt.Println(a.Iban, b.Amount, a.Currency)
 			}
 		}
+
+		limit := 50
+		page, err := client.GetTransactions(a.ID, openbanking.TransactionQuery{Limit: &limit})
+		if err != nil {
+			log.Fatal(err)
+		}
+		for _, t := range page.Items {
+			fmt.Println(" ", t.BookingDate, t.CreditorName, t.Amount, t.Currency)
+		}
+
+		// Trigger an online sync (decrypts the account uid locally and posts it):
+		if _, err := client.Sync(a.ID); err != nil {
+			log.Fatal(err)
+		}
 	}
 }
 ```
@@ -55,12 +69,14 @@ The client has **no third-party dependencies** — it uses only the standard lib
 When you pass a `nil` httpClient the client builds one with a 30s timeout; every request sends
 `User-Agent: open-banking-io/go/<version>` (see the exported `Version` const).
 
-## Encryption scheme
+## Encryption
 
-Each sensitive value is an envelope: `version(1) | ephemeralPublicKey(65) | nonce(12) | tag(16) |
-ciphertext`, produced with ephemeral ECDH on P-256 → HKDF-SHA256 (salt = 32 zero bytes, info =
-`bank.core.ci/zk/v1`) → AES-256-GCM. Only your private key can open it. The package is verified
-against the shared `fixtures/` so it decrypts identically to the other SDKs.
+Envelopes use **ECDH P-256 → HKDF-SHA256 → AES-256-GCM**, implemented with only the standard library
+(`crypto/ecdh`, `crypto/hkdf`, `crypto/aes`). Decryption requires the private key from your
+credentials bundle and happens entirely in-process. The package is verified against the shared
+`fixtures/` so it decrypts identically to the other SDKs. Full wire format and the other language
+clients: [repo README](https://github.com/open-banking-io/clients) ·
+[`THREAT_MODEL.md`](https://github.com/open-banking-io/clients/blob/main/THREAT_MODEL.md).
 
 ## Development
 

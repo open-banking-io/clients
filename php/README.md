@@ -64,11 +64,9 @@ Money/amount fields are exposed as **decimal `string`s** (exact; never a float).
 ## Encryption
 
 Envelopes use **ECDH P-256 → HKDF-SHA256 → AES-256-GCM** and are decrypted entirely in-process with
-`ext-openssl`. The wire format is
-`version(1)=0x01 | ephemeralPublicKeyRaw(65) | nonce(12) | tag(16) | ciphertext`; HKDF uses info
-`bank.core.ci/zk/v1` and a 32-byte zero salt. See the
-[repo README](https://github.com/open-banking-io/clients) for the full scheme and the other language
-clients (.NET, Go, Python, Node).
+`ext-openssl`. Full wire format and the other language clients:
+[repo README](https://github.com/open-banking-io/clients) ·
+[`THREAT_MODEL.md`](https://github.com/open-banking-io/clients/blob/main/THREAT_MODEL.md).
 
 ## Development
 

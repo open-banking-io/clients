@@ -11,6 +11,20 @@ SDKs protect against and what they assume.
 
 These SDKs implement the client: they hold the private key and decrypt envelopes in-process.
 
+## Encryption scheme
+
+Each sensitive value is an **envelope**:
+
+```
+version(1)=0x01 | ephemeralPublicKey(65) | nonce(12) | tag(16) | ciphertext
+```
+
+It is produced with **ephemeral ECDH on P-256 → HKDF-SHA256** (salt = 32 zero bytes, info =
+`bank.core.ci/zk/v1`) **→ AES-256-GCM**. Only your private key can open it. Every SDK validates that
+the ephemeral public key is a valid point on P-256, and AES-GCM tag verification rejects tampered
+ciphertext. All eight SDKs are verified against the **same fixtures** (`fixtures/`) so they decrypt
+identically and interoperate with the live service's wire format.
+
 ## Trust boundaries
 
 **The SDK trusts:**

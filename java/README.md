@@ -11,21 +11,29 @@ client-side decryption of the zero-knowledge data envelopes with your exported p
 
 ```xml
 <dependency>
-  <groupId>io.openbanking</groupId>
+  <groupId>io.open-banking</groupId>
   <artifactId>open-banking-io-client</artifactId>
-  <version>0.1.0</version>
+  <version>0.2.1</version>
 </dependency>
 ```
 
 ```java
 import io.openbanking.*;
 
+// Load the credentials .json you exported from the app (API key + private key).
 var client = OpenBankingClient.fromCredentials("credentials.json");
 for (Account a : client.getAccounts()) {
     a.balances().stream()
         .filter(b -> b.type().equals("ITBD"))
         .findFirst()
         .ifPresent(b -> System.out.println(a.iban() + " " + b.amount() + " " + a.currency()));
+
+    TransactionPage page = client.getTransactions(a.id(), TransactionQuery.none().withLimit(50));
+    for (Transaction t : page.items())
+        System.out.println("  " + t.bookingDate() + "  " + t.creditorName() + "  " + t.amount() + " " + t.currency());
+
+    // Trigger an online sync (decrypts the account uid locally and posts it):
+    client.sync(a.id());
 }
 ```
 
@@ -42,12 +50,14 @@ The default client uses a 10s connect timeout and a 30s per-request timeout, and
 `User-Agent: open-banking-io/java/<version>` header on every request; an injected `HttpClient` is
 used as-is.
 
-## Encryption scheme
+## Encryption
 
-Each sensitive value is an envelope: `version(1) | ephemeralPublicKey(65) | nonce(12) | tag(16) |
-ciphertext`, produced with ephemeral ECDH on P-256 → HKDF-SHA256 (salt = 32 zero bytes, info =
-`bank.core.ci/zk/v1`) → AES-256-GCM. Only your private key can open it. The library is verified
-against the shared `fixtures/` so it decrypts identically to the other SDKs.
+Envelopes use **ECDH P-256 → HKDF-SHA256 → AES-256-GCM**, implemented with `javax.crypto` (JCA).
+Decryption requires the private key from your credentials bundle and happens entirely in-process. The
+library is verified against the shared `fixtures/` so it decrypts identically to the other SDKs. Full
+wire format and the other language clients:
+[repo README](https://github.com/open-banking-io/clients) ·
+[`THREAT_MODEL.md`](https://github.com/open-banking-io/clients/blob/main/THREAT_MODEL.md).
 
 ## Development
 

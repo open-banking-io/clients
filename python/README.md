@@ -53,9 +53,9 @@ When the client constructs its own `httpx.Client` it applies a default 30s timeo
 ## Encryption
 
 Envelopes use **ECDH P-256 → HKDF-SHA256 → AES-256-GCM**. Decryption requires the private key from
-your credentials bundle and happens entirely in-process. See the
-[repo README](https://github.com/open-banking-io/clients) for the full scheme and the other language
-clients (.NET, Node).
+your credentials bundle and happens entirely in-process. Full wire format and the other language
+clients: [repo README](https://github.com/open-banking-io/clients) ·
+[`THREAT_MODEL.md`](https://github.com/open-banking-io/clients/blob/main/THREAT_MODEL.md).
 
 ## Development
 
