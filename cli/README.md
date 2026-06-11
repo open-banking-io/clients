@@ -33,10 +33,12 @@ openbanking key import ./credentials.json   # (fallback) import a key file on a 
 openbanking accounts                    # list accounts with balances
 openbanking transactions <account-id>   # an account's statement (--from --to --limit)
 openbanking sync --all                  # pull fresh transactions
-openbanking banks                       # banks available to connect
-openbanking connect <bank-name>         # connect a bank via the consent flow
+openbanking banks                       # list available banks (connect them in the web app)
 openbanking version
 ```
+
+> Connecting a new bank is done in the web app (it needs an interactive consent
+> redirect), so the CLI has no `connect` command — it reads and syncs existing connections.
 
 Credentials live in `$OPENBANKING_CONFIG` or
 `<XDG_CONFIG_HOME|~/.config>/open-banking/credentials.json` (written `0600`).

@@ -174,3 +174,13 @@ func TestUnknownCommandErrors(t *testing.T) {
 		t.Fatal("expected an error for an unknown command")
 	}
 }
+
+// Connecting a bank needs an interactive consent redirect, so the CLI has no `connect` command.
+func TestConnectCommandIsRemoved(t *testing.T) {
+	var out, errOut bytes.Buffer
+	app := &App{Stdout: &out, Stderr: &errOut, ConfigPath: filepath.Join(t.TempDir(), "x.json")}
+	err := app.Run([]string{"connect", "some-bank"})
+	if err == nil || !strings.Contains(err.Error(), "unknown command") {
+		t.Fatalf("connect should be an unknown command, got: %v", err)
+	}
+}
