@@ -1,3 +1,9 @@
+<p align="center">
+  <a href="https://open-banking.io">
+    <img src="https://raw.githubusercontent.com/open-banking-io/clients/main/.github/logo.png" alt="open-banking.io" height="56">
+  </a>
+</p>
+
 # open-banking.io client SDKs
 
 [![CI](https://github.com/open-banking-io/clients/actions/workflows/ci.yml/badge.svg)](https://github.com/open-banking-io/clients/actions/workflows/ci.yml)

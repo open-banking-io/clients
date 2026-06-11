@@ -1,6 +1,6 @@
 {
   "name": "@open-banking-io/client",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Server-to-server client for open-banking.io: API-key auth + client-side decryption of the zero-knowledge data envelopes with your exported private key.",
   "type": "module",
   "license": "MIT",

@@ -15,7 +15,7 @@ import (
 )
 
 // Version is the released version of this client. It should track the release tag.
-const Version = "0.2.0"
+const Version = "0.2.1"
 
 // Client is a decrypting client for the open-banking.io API. Authenticates with an API key
 // (X-Api-Key) and decrypts the zero-knowledge data envelopes locally with the exported private key.

@@ -1,3 +1,9 @@
+<p align="center">
+  <a href="https://open-banking.io">
+    <img src="https://raw.githubusercontent.com/open-banking-io/clients/main/.github/logo.png" alt="open-banking.io" height="56">
+  </a>
+</p>
+
 # open-banking.io CLI (`openbanking`)
 
 The **open-banking.io** command line. Authenticate once, then read, sync, and
