@@ -53,8 +53,6 @@ func (a *App) Run(args []string) error {
 		return a.sync(rest)
 	case "banks":
 		return a.banks(rest)
-	case "connect":
-		return a.connect(rest)
 	case "version", "--version", "-v":
 		fmt.Fprintf(a.Stdout, "openbanking %s\n", a.versionString())
 		return nil
@@ -75,7 +73,7 @@ func (a *App) client() (*openbanking.Client, error) {
 	return openbanking.FromBundle(bundle, a.HTTPClient)
 }
 
-// publicClient builds a client for operations that don't decrypt data (banks, connect), so they
+// publicClient builds a client for operations that don't decrypt data (e.g. banks), so they
 // work right after `login`, before any encryption key has been imported.
 func (a *App) publicClient() (*openbanking.Client, error) {
 	bundle, err := config.Load(a.ConfigPath)
@@ -108,8 +106,7 @@ Commands:
   connections                    List your bank connections
   key import [<file>]            Import your encryption key (SPA bundle or PKCS#8; stdin if no file)
   sync <account-id> | --all      Pull fresh transactions for one account or all
-  banks                          List banks available for connection (--country)
-  connect <bank-name>            Connect a bank via the browser consent flow
+  banks                          List available banks (--country); connect them in the web app
   version                        Print the openbanking version
   help                           Show this help
 `)
