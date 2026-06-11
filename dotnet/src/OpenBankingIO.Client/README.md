@@ -45,8 +45,9 @@ using var client = new OpenBankingClient(apiBaseUrl, apiKey, privateKeyPkcs8Base
 ## Encryption
 
 Envelopes use **ECDH P-256 → HKDF-SHA256 → AES-256-GCM**. Decryption requires the private key from
-your credentials bundle and happens entirely in-process; amounts are exposed as `decimal`. See the
-[repo README](https://github.com/open-banking-io/clients) for the full scheme and the other language
-clients (Node, Python).
+your credentials bundle and happens entirely in-process; amounts are exposed as `decimal`. Full wire
+format and the other language clients:
+[repo README](https://github.com/open-banking-io/clients) ·
+[`THREAT_MODEL.md`](https://github.com/open-banking-io/clients/blob/main/THREAT_MODEL.md).
 
 MIT licensed.

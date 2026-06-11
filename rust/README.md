@@ -11,17 +11,27 @@ client-side decryption of the zero-knowledge data envelopes with your exported p
 
 ```toml
 [dependencies]
-open-banking-io = "0.1"
+open-banking-io = "0.2"
 ```
 
 ```rust
-use open_banking_io::OpenBankingClient;
+use open_banking_io::{OpenBankingClient, TransactionQuery};
 
 fn main() -> open_banking_io::Result<()> {
+    // Load the credentials .json you exported from the app (API key + private key).
     let client = OpenBankingClient::from_credentials("credentials.json")?;
+
     for a in client.get_accounts()? {
         let booked = a.balances.iter().find(|b| b.type_ == "ITBD");
         println!("{:?}: {:?} {}", a.iban, booked.map(|b| &b.amount), a.currency);
+
+        let page = client.get_transactions(&a.id, &TransactionQuery { limit: Some(50), ..Default::default() })?;
+        for t in &page.items {
+            println!("  {:?}  {:?}  {} {}", t.booking_date, t.creditor_name, t.amount, t.currency);
+        }
+
+        // Trigger an online sync (decrypts the account uid locally and posts it):
+        client.sync(&a.id)?;
     }
     Ok(())
 }
@@ -38,13 +48,14 @@ Requests carry sensible HTTP timeouts (10s connect / 30s overall) and a
 Monetary amounts are returned as `String` exactly as the service emits them — parse them into your
 decimal type of choice to avoid any float round-trip.
 
-## Encryption scheme
+## Encryption
 
-Each sensitive value is an envelope: `version(1) | ephemeralPublicKey(65) | nonce(12) | tag(16) |
-ciphertext`, produced with ephemeral ECDH on P-256 → HKDF-SHA256 (salt = 32 zero bytes, info =
-`bank.core.ci/zk/v1`) → AES-256-GCM. Only your private key can open it. The crate is verified
-against the shared `fixtures/` so it decrypts identically to the .NET, Node, Python, Go, and Java
-SDKs.
+Envelopes use **ECDH P-256 → HKDF-SHA256 → AES-256-GCM**; decryption requires the private key from
+your credentials bundle and happens entirely in-process (the derived key material is zeroized after
+use). The crate is verified against the shared `fixtures/` so it decrypts identically to the other
+SDKs. Full wire format and the other language clients:
+[repo README](https://github.com/open-banking-io/clients) ·
+[`THREAT_MODEL.md`](https://github.com/open-banking-io/clients/blob/main/THREAT_MODEL.md).
 
 ## Development
 
