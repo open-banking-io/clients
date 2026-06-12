@@ -28,16 +28,16 @@ your data locally with your private key — and hands you clean, typed models.
 Each package has its own README with install instructions, a runnable example, and language-specific
 notes (money types, async, dependencies).
 
-| Language | Package | Guide |
-|---|---|---|
-| .NET | `OpenBankingIO.Client` (NuGet) | [`dotnet/`](dotnet/src/OpenBankingIO.Client/README.md) |
-| Node / TypeScript | `@open-banking-io/client` (npm) | [`node/`](node/) |
-| Python | `open-banking-io` (PyPI) | [`python/`](python/) |
-| Rust | `open-banking-io` (crates.io) | [`rust/`](rust/) |
-| Go | `github.com/open-banking-io/clients/go` | [`go/`](go/) |
-| Java | `io.open-banking:open-banking-io-client` (Maven Central) | [`java/`](java/) |
-| Ruby | `open-banking-io` (RubyGems) | [`ruby/`](ruby/) |
-| PHP | `open-banking-io/client` (Packagist) | [`php/`](php/) |
+| Language | Package | Version | Guide |
+|---|---|---|---|
+| .NET | [`OpenBankingIO.Client`](https://www.nuget.org/packages/OpenBankingIO.Client) (NuGet) | [![NuGet](https://img.shields.io/nuget/v/OpenBankingIO.Client?logo=nuget&label=)](https://www.nuget.org/packages/OpenBankingIO.Client) | [`dotnet/`](dotnet/src/OpenBankingIO.Client/README.md) |
+| Node / TypeScript | [`@open-banking-io/client`](https://www.npmjs.com/package/@open-banking-io/client) (npm) | [![npm](https://img.shields.io/npm/v/%40open-banking-io%2Fclient?logo=npm&label=)](https://www.npmjs.com/package/@open-banking-io/client) | [`node/`](node/) |
+| Python | [`open-banking-io`](https://pypi.org/project/open-banking-io/) (PyPI) | [![PyPI](https://img.shields.io/pypi/v/open-banking-io?logo=pypi&logoColor=white&label=)](https://pypi.org/project/open-banking-io/) | [`python/`](python/) |
+| Rust | [`open-banking-io`](https://crates.io/crates/open-banking-io) (crates.io) | [![crates.io](https://img.shields.io/crates/v/open-banking-io?logo=rust&label=)](https://crates.io/crates/open-banking-io) | [`rust/`](rust/) |
+| Go | [`github.com/open-banking-io/clients/go`](https://pkg.go.dev/github.com/open-banking-io/clients/go) | [![Go Reference](https://pkg.go.dev/badge/github.com/open-banking-io/clients/go.svg)](https://pkg.go.dev/github.com/open-banking-io/clients/go) | [`go/`](go/) |
+| Java | [`io.open-banking:open-banking-io-client`](https://central.sonatype.com/artifact/io.open-banking/open-banking-io-client) (Maven Central) | [![Maven Central](https://img.shields.io/maven-central/v/io.open-banking/open-banking-io-client?logo=apachemaven&label=)](https://central.sonatype.com/artifact/io.open-banking/open-banking-io-client) | [`java/`](java/) |
+| Ruby | [`open-banking-io`](https://rubygems.org/gems/open-banking-io) (RubyGems) | [![Gem](https://img.shields.io/gem/v/open-banking-io?logo=rubygems&label=)](https://rubygems.org/gems/open-banking-io) | [`ruby/`](ruby/) |
+| PHP | [`open-banking-io/client`](https://packagist.org/packages/open-banking-io/client) (Packagist) | [![Packagist](https://img.shields.io/packagist/v/open-banking-io/client?logo=packagist&logoColor=white&label=)](https://packagist.org/packages/open-banking-io/client) | [`php/`](php/) |
 
 Prefer the terminal? There's also a [command-line client](cli/) (`openbanking`).
 
