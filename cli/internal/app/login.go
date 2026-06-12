@@ -100,12 +100,15 @@ func (a *App) login(args []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), *timeout)
 	defer cancel()
 
+	stopSpinner := a.ui().Spinner("Waiting for you to finish signing in…")
 	var result callbackResult
 	select {
 	case result = <-resultCh:
 	case <-ctx.Done():
+		stopSpinner()
 		return fmt.Errorf("timed out waiting for the browser login after %s", *timeout)
 	}
+	stopSpinner()
 
 	token, err := a.exchangeToken(ctx, base, result.code, verifier)
 	if err != nil {

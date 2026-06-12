@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/open-banking-io/clients/cli/internal/config"
+	"github.com/open-banking-io/clients/cli/internal/ui"
 	openbanking "github.com/open-banking-io/clients/go"
 )
 
@@ -144,8 +145,9 @@ func TestRenderBanksShowsBetaFlag(t *testing.T) {
 		{Name: "Lunar", Country: "DK", Bic: "LUNADK22", PsuTypes: []string{"business"}, Beta: false},
 		{Name: "NewBank", Country: "DK", Beta: true},
 	}
-	if err := renderBanks(&out, banks); err != nil {
-		t.Fatalf("renderBanks: %v", err)
+	e := ui.Custom(nil, &out, &out, ui.FormatTable, false, false)
+	if err := e.Render(banksTable(banks), banksView(banks)); err != nil {
+		t.Fatalf("render banks: %v", err)
 	}
 	if !strings.Contains(out.String(), "beta") {
 		t.Errorf("expected a beta marker in output\n%s", out.String())

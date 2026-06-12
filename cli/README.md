@@ -36,11 +36,45 @@ go install github.com/open-banking-io/clients/cli@latest
 ```sh
 openbanking login                       # sign in + unlock in the browser — sets up everything
 openbanking key import ./credentials.json   # (fallback) import a key file on a headless machine
-openbanking accounts                    # list accounts with balances
-openbanking transactions <account-id>   # an account's statement (--from --to --limit)
-openbanking sync --all                  # pull fresh transactions
+openbanking accounts                    # list accounts with balances        (alias: acc, ls)
+openbanking use                         # pick a current account (arrow keys) — or: use <account-id>
+openbanking transactions                # the current account's statement     (alias: tx)
+openbanking transactions <account-id>   # a specific account (--from --to --limit --offset)
+openbanking sync                        # pull fresh transactions for the current account
+openbanking sync --all                  # …or for every connected account
+openbanking connections                 # list bank connections               (alias: conn)
 openbanking banks                       # list available banks (connect them in the web app)
+openbanking                             # no args, in a terminal → interactive menu
 openbanking version
+```
+
+Run `openbanking` with no command in a terminal for an interactive menu, or
+`openbanking help` for the full command list.
+
+### Current account
+
+`use` remembers a default account so `transactions` and `sync` need no id. Run
+`openbanking use` to pick one interactively, or `openbanking use <account-id>` to set it
+directly. An explicit id on `transactions`/`sync` always overrides it. The choice is stored
+in `state.json` beside your credentials (it is CLI-local — never sent anywhere).
+
+### Output formats
+
+Every listing command takes a global `-o`/`--output`:
+
+```sh
+openbanking accounts -o json | jq         # json (also the default when output is piped)
+openbanking transactions -o csv > tx.csv  # csv for spreadsheets
+openbanking accounts -o table             # the pretty, colored table (default in a terminal)
+```
+
+Color is on for terminals and off when piped; disable it with `--no-color` or the
+[`NO_COLOR`](https://no-color.org) environment variable.
+
+### Shell completion
+
+```sh
+source <(openbanking completion zsh)    # also: bash, fish
 ```
 
 > Connecting a new bank is done in the web app (it needs an interactive consent
