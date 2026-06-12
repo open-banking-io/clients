@@ -3,15 +3,14 @@ package app
 import (
 	"flag"
 	"fmt"
-	"io"
-	"text/tabwriter"
 
+	"github.com/open-banking-io/clients/cli/internal/ui"
 	openbanking "github.com/open-banking-io/clients/go"
 )
 
 func (a *App) accounts(args []string) error {
 	fs := flag.NewFlagSet("accounts", flag.ContinueOnError)
-	fs.SetOutput(a.Stderr)
+	fs.SetOutput(a.stderr())
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -20,23 +19,66 @@ func (a *App) accounts(args []string) error {
 	if err != nil {
 		return err
 	}
+	stop := a.ui().Spinner("Fetching accounts…")
 	accounts, err := client.GetAccounts()
+	stop()
 	if err != nil {
 		return fmt.Errorf("could not list accounts: %w", err)
 	}
-	return renderAccounts(a.Stdout, accounts)
+	return a.ui().Render(accountsTable(accounts), accountsView(accounts))
 }
 
-func renderAccounts(w io.Writer, accounts []openbanking.Account) error {
-	tw := tabwriter.NewWriter(w, 0, 4, 2, ' ', 0)
-	fmt.Fprintln(tw, "NAME\tIBAN\tTYPE\tBALANCE\tCUR\tBANK\tID")
+func accountsTable(accounts []openbanking.Account) ui.Table {
+	t := ui.Table{Headers: []string{"NAME", "IBAN", "TYPE", "BALANCE", "CUR", "BANK", "ID"}}
 	for _, acct := range accounts {
 		bal := bookedBalance(acct.Balances)
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
-			accountLabel(acct), accountNumber(acct), dash(acct.AccountType),
-			dash(bal.Amount), dash(acct.Currency), dash(acct.AspspName), acct.ID)
+		balCell := ui.Cell{Text: dash(bal.Amount)}
+		if bal.Amount != "" {
+			balCell.Style = ui.AmountStyle(bal.Amount)
+		}
+		t.Rows = append(t.Rows, []ui.Cell{
+			{Text: accountLabel(acct)},
+			{Text: accountNumber(acct)},
+			{Text: dash(acct.AccountType)},
+			balCell,
+			{Text: dash(acct.Currency)},
+			{Text: dash(acct.AspspName)},
+			{Text: acct.ID, Style: ui.StyleMuted},
+		})
 	}
-	return tw.Flush()
+	return t
+}
+
+// accountView is the stable, CLI-shaped JSON representation of an account (lowerCamel keys, only the
+// fields the CLI surfaces) — deliberately decoupled from the untagged SDK struct.
+type accountView struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Number   string `json:"accountNumber,omitempty"`
+	Type     string `json:"type,omitempty"`
+	Balance  string `json:"balance,omitempty"`
+	Currency string `json:"currency,omitempty"`
+	Bank     string `json:"bank,omitempty"`
+}
+
+func accountsView(accounts []openbanking.Account) []accountView {
+	views := make([]accountView, 0, len(accounts))
+	for _, acct := range accounts {
+		number := acct.Iban
+		if number == "" {
+			number = acct.Bban
+		}
+		views = append(views, accountView{
+			ID:       acct.ID,
+			Name:     accountLabel(acct),
+			Number:   number,
+			Type:     acct.AccountType,
+			Balance:  bookedBalance(acct.Balances).Amount,
+			Currency: acct.Currency,
+			Bank:     acct.AspspName,
+		})
+	}
+	return views
 }
 
 // accountLabel is the most human-friendly name available for an account.

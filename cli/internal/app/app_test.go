@@ -91,7 +91,8 @@ func TestAccountsCommandRendersDecryptedTable(t *testing.T) {
 
 	var out, errOut bytes.Buffer
 	app := &App{Stdout: &out, Stderr: &errOut, ConfigPath: cfg}
-	if err := app.Run([]string{"accounts"}); err != nil {
+	// Pin the table format: a captured buffer is not a terminal, so the default would be json.
+	if err := app.Run([]string{"-o", "table", "accounts"}); err != nil {
 		t.Fatalf("Run accounts: %v\nstderr: %s", err, errOut.String())
 	}
 
@@ -110,7 +111,7 @@ func TestTransactionsCommandRendersSignedAmountAndCounterparty(t *testing.T) {
 
 	var out, errOut bytes.Buffer
 	app := &App{Stdout: &out, Stderr: &errOut, ConfigPath: cfg}
-	if err := app.Run([]string{"transactions", "11111111-1111-4111-8111-111111111111"}); err != nil {
+	if err := app.Run([]string{"-o", "table", "transactions", "11111111-1111-4111-8111-111111111111"}); err != nil {
 		t.Fatalf("Run transactions: %v\nstderr: %s", err, errOut.String())
 	}
 
@@ -147,7 +148,7 @@ func TestConnectionsCommandRendersTable(t *testing.T) {
 
 	var out, errOut bytes.Buffer
 	app := &App{Stdout: &out, Stderr: &errOut, ConfigPath: cfg}
-	if err := app.Run([]string{"connections"}); err != nil {
+	if err := app.Run([]string{"-o", "table", "connections"}); err != nil {
 		t.Fatalf("Run connections: %v\nstderr: %s", err, errOut.String())
 	}
 
