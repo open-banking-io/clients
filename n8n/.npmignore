@@ -1,0 +1,12 @@
+# Source — only the compiled dist/ ships (see "files" in package.json).
+nodes
+credentials
+test
+tsconfig.json
+gulpfile.js
+.eslintrc.js
+.eslintrc.prepublish.js
+.prettierrc.js
+.prettierignore
+vitest.config.ts
+*.tsbuildinfo

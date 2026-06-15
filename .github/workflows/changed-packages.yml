@@ -22,6 +22,8 @@ jobs:
               - 'dotnet/**'
             node:
               - 'node/**'
+            n8n:
+              - 'n8n/**'
             python:
               - 'python/**'
             rust:
@@ -42,6 +44,7 @@ jobs:
         env:
           DOTNET: ${{ steps.filter.outputs.dotnet }}
           NODE: ${{ steps.filter.outputs.node }}
+          N8N: ${{ steps.filter.outputs.n8n }}
           PYTHON: ${{ steps.filter.outputs.python }}
           RUST: ${{ steps.filter.outputs.rust }}
           JAVA: ${{ steps.filter.outputs.java }}
@@ -52,7 +55,7 @@ jobs:
         with:
           script: |
             const MARKER = '<!-- changed-packages-report -->';
-            const ALL = ['dotnet', 'node', 'python', 'rust', 'java', 'go', 'ruby', 'php'];
+            const ALL = ['dotnet', 'node', 'n8n', 'python', 'rust', 'java', 'go', 'ruby', 'php'];
 
             const changed = new Set();
             for (const p of ALL) {

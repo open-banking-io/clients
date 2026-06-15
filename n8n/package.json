@@ -1,0 +1,63 @@
+{
+  "name": "n8n-nodes-open-banking-io",
+  "version": "0.1.0",
+  "description": "n8n community node for open-banking.io: API-key auth with client-side, zero-knowledge decryption of your bank accounts, balances and transactions.",
+  "license": "MIT",
+  "author": {
+    "name": "open-banking.io",
+    "url": "https://open-banking.io"
+  },
+  "homepage": "https://open-banking.io",
+  "keywords": [
+    "n8n-community-node-package",
+    "n8n",
+    "open-banking",
+    "psd2",
+    "banking",
+    "transactions",
+    "fintech"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/open-banking-io/clients"
+  },
+  "engines": {
+    "node": ">=20.15"
+  },
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc && gulp build:icons",
+    "dev": "tsc --watch",
+    "format": "prettier nodes credentials --write",
+    "format:check": "prettier nodes credentials --check",
+    "lint": "eslint nodes credentials package.json",
+    "lint:fix": "eslint nodes credentials package.json --fix",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "prepublishOnly": "npm run build && eslint -c .eslintrc.prepublish.js nodes credentials package.json"
+  },
+  "n8n": {
+    "n8nNodesApiVersion": 1,
+    "credentials": [
+      "dist/credentials/OpenBankingIoApi.credentials.js"
+    ],
+    "nodes": [
+      "dist/nodes/OpenBankingIo/OpenBankingIo.node.js",
+      "dist/nodes/OpenBankingIo/OpenBankingIoTrigger.node.js"
+    ]
+  },
+  "files": [
+    "dist"
+  ],
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@typescript-eslint/parser": "^8.61.0",
+    "eslint": "^8.57.0",
+    "eslint-plugin-n8n-nodes-base": "^1.16.3",
+    "gulp": "^5.0.0",
+    "n8n-workflow": "^1.82.0",
+    "prettier": "^3.8.4",
+    "typescript": "^5.7.2",
+    "vitest": "^3.2.6"
+  }
+}

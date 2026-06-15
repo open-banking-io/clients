@@ -10,6 +10,7 @@ on:
         options:
           - dotnet
           - node
+          - n8n
           - python
           - rust
           - java
