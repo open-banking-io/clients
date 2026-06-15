@@ -3,7 +3,7 @@
 //
 //   node tools/bump-version.mjs <package> <version>
 //
-// <package> ∈ dotnet | node | python | rust | java | ruby   (go and php have no manifest)
+// <package> ∈ dotnet | node | n8n | python | rust | java | ruby   (go and php have no manifest)
 // <version> is a plain semver string, e.g. 0.2.0  or  1.0.0-rc.1
 //
 // Plain Node (>= 20), no dependencies. Edits the version field in the package's
@@ -17,7 +17,7 @@ import { dirname, join, resolve } from "node:path";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..");
 
-const PACKAGES = ["dotnet", "node", "python", "rust", "java", "go", "ruby", "php"];
+const PACKAGES = ["dotnet", "node", "n8n", "python", "rust", "java", "go", "ruby", "php"];
 
 // SemVer 2.0.0 (https://semver.org) — practical, anchored.
 const SEMVER =
@@ -64,6 +64,12 @@ const bumpers = {
     // package.json + package-lock.json both pin "version".
     setJsonVersion("node/package.json", version);
     setLockfileVersion("node/package-lock.json", version);
+  },
+
+  n8n(version) {
+    // The n8n community node package — same shape as node/.
+    setJsonVersion("n8n/package.json", version);
+    setLockfileVersion("n8n/package-lock.json", version);
   },
 
   python(version) {
