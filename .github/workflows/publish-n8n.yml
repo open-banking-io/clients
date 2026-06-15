@@ -38,9 +38,8 @@ jobs:
       - run: npm ci --ignore-scripts
       - run: npm run build
       - run: npm install -g npm@latest
-      # Provenance via OIDC (id-token: write) — required for n8n verified-community-node
-      # submission. Auth uses NODE_AUTH_TOKEN; replace with npm trusted publishing once the
-      # package has a trusted publisher configured on npmjs.
+      # Trusted publishing: npm authenticates from the GitHub OIDC identity (id-token: write),
+      # no token needed — same as the other clients. Requires a trusted publisher configured on
+      # npmjs for this package (GitHub Actions, repo open-banking-io/clients, workflow
+      # publish-n8n.yml, environment Production). --provenance attaches the SLSA attestation.
       - run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NODE_AUTH_TOKEN }}
