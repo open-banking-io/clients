@@ -36,7 +36,7 @@
     "lint:fix": "eslint nodes credentials package.json --fix",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "prepublishOnly": "npm run build && eslint -c .eslintrc.prepublish.js nodes credentials package.json"
+    "prepublishOnly": "npm run build && eslint -c eslint.config.prepublish.js nodes credentials package.json"
   },
   "n8n": {
     "n8nNodesApiVersion": 1,
@@ -55,14 +55,14 @@
     "n8n-workflow": "*"
   },
   "devDependencies": {
-    "@types/node": "^22.10.0",
-    "@typescript-eslint/parser": "^8.61.0",
-    "eslint": "^8.57.0",
-    "eslint-plugin-n8n-nodes-base": "^1.16.3",
-    "gulp": "^5.0.0",
-    "n8n-workflow": "^1.82.0",
+    "@types/node": "^25.9.3",
+    "@typescript-eslint/parser": "^8.61.1",
+    "eslint": "^9.39.4",
+    "eslint-plugin-n8n-nodes-base": "^1.16.6",
+    "gulp": "^5.0.1",
+    "n8n-workflow": "^2.16.0",
     "prettier": "^3.8.4",
-    "typescript": "^5.7.2",
-    "vitest": "^3.2.6"
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.9"
   }
 }

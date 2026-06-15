@@ -4,8 +4,8 @@ credentials
 test
 tsconfig.json
 gulpfile.js
-.eslintrc.js
-.eslintrc.prepublish.js
+eslint.config.js
+eslint.config.prepublish.js
 .prettierrc.js
 .prettierignore
 vitest.config.ts
