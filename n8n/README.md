@@ -1,4 +1,4 @@
-# n8n-nodes-open-banking-io
+# @open-banking-io/n8n-nodes-open-banking-io
 
 An [n8n](https://n8n.io) community node for [open-banking.io](https://open-banking.io).
 
@@ -25,7 +25,7 @@ built into Node, so it qualifies as a verified n8n community node.
 In n8n, go to **Settings → Community Nodes → Install** and enter:
 
 ```
-n8n-nodes-open-banking-io
+@open-banking-io/n8n-nodes-open-banking-io
 ```
 
 ### Manual / development
