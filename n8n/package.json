@@ -1,6 +1,6 @@
 {
   "name": "@open-banking-io/n8n-nodes-open-banking-io",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "n8n community node for open-banking.io: API-key auth with client-side, zero-knowledge decryption of your bank accounts, balances and transactions.",
   "license": "MIT",
   "author": {
