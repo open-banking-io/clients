@@ -38,5 +38,9 @@ jobs:
       - run: npm ci --ignore-scripts
       - run: npm run build
       - run: npm install -g npm@latest
-      # Provenance via OIDC — required for n8n verified-community-node submission.
+      # Provenance via OIDC (id-token: write) — required for n8n verified-community-node
+      # submission. Auth uses NODE_AUTH_TOKEN; replace with npm trusted publishing once the
+      # package has a trusted publisher configured on npmjs.
       - run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NODE_AUTH_TOKEN }}

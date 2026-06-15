@@ -4,8 +4,6 @@
 //
 // Monetary amounts are decimal STRINGS throughout — never parse them to floats.
 
-// ---- Public, decrypted models -------------------------------------------------------------------
-
 export interface Account {
 	id: string;
 	aspspName: string;
@@ -28,7 +26,6 @@ export interface Account {
 export interface Balance {
 	type: string;
 	name: string | null;
-	/** Decimal as a string — never parsed to float. */
 	amount: string;
 	currency: string;
 	referenceDate: string | null;
@@ -44,7 +41,6 @@ export interface Transaction {
 	transactionDate: string | null;
 	bankTransactionCode: string | null;
 
-	/** Decimal as a string — never parsed to float. */
 	amount: string;
 	creditorName: string | null;
 	creditorIban: string | null;
@@ -88,8 +84,6 @@ export interface SyncAllResult {
 	accounts: number;
 	newTransactions: number;
 }
-
-// ---- Wire DTOs (what the API returns; sensitive fields are ciphertext) ---------------------------
 
 export interface AccountWire {
 	id: string;
@@ -155,8 +149,6 @@ export interface Bank {
 	country: string;
 	[key: string]: unknown;
 }
-
-// ---- Decrypted envelope payloads (the camelCase contract with the backend) -----------------------
 
 export interface AccountEnc {
 	ownerName?: string | null;
