@@ -33,7 +33,9 @@ jobs:
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
-      - run: npm ci
+      # --ignore-scripts: skip building isolated-vm (n8n-workflow's sandbox native dep) — it is
+      # unused at build time and the published package itself has zero runtime dependencies.
+      - run: npm ci --ignore-scripts
       - run: npm run build
       - run: npm install -g npm@latest
       # Provenance via OIDC — required for n8n verified-community-node submission.
