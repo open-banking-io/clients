@@ -1,5 +1,11 @@
 name: Publish n8n
 
+# Source of truth is this monorepo (n8n/). On an n8n/v* tag we test the package, then
+# subtree-split n8n/ and force-push it (plus a v* tag) to the open-banking-io/n8n mirror,
+# where the node sits at the repo root. The mirror's own publish.yml then publishes to npm
+# with provenance — see n8n/.github/workflows/publish.yml. This keeps development in the
+# monorepo while giving n8n verification a root-level repo to clone.
+
 on:
   push:
     tags: ['n8n/v*']
@@ -9,37 +15,60 @@ permissions:
   contents: read
 
 jobs:
-  publish:
+  test:
     runs-on: ubuntu-latest
-    environment: Production
-    permissions:
-      id-token: write
-      contents: read
+    strategy:
+      matrix:
+        node-version: [20, 22, 24]
     defaults:
       run:
         working-directory: n8n
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-
-      - name: Verify tag matches manifest version
-        if: startsWith(github.ref, 'refs/tags/')
-        run: |
-          TAG_VERSION="${GITHUB_REF_NAME#n8n/v}"
-          MANIFEST_VERSION="$(grep -oE '"version"[[:space:]]*:[[:space:]]*"[^"]+"' package.json | head -n1 | sed -E 's/.*"([^"]+)"$/\1/')"
-          echo "tag=$TAG_VERSION manifest=$MANIFEST_VERSION"
-          [ "$TAG_VERSION" = "$MANIFEST_VERSION" ] || { echo "::error::tag $TAG_VERSION != manifest $MANIFEST_VERSION"; exit 1; }
-
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
-          node-version: 22
-          registry-url: https://registry.npmjs.org
-      # --ignore-scripts: skip building isolated-vm (n8n-workflow's sandbox native dep) — it is
-      # unused at build time and the published package itself has zero runtime dependencies.
+          node-version: ${{ matrix.node-version }}
       - run: npm ci --ignore-scripts
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm run typecheck
       - run: npm run build
-      - run: npm install -g npm@latest
-      # Trusted publishing: npm authenticates from the GitHub OIDC identity (id-token: write),
-      # no token needed — same as the other clients. Requires a trusted publisher configured on
-      # npmjs for this package (GitHub Actions, repo open-banking-io/clients, workflow
-      # publish-n8n.yml, environment Production). --provenance attaches the SLSA attestation.
-      - run: npm publish --provenance --access public
+      - run: npm test
+
+  mirror:
+    needs: test
+    if: startsWith(github.ref, 'refs/tags/n8n/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Compute mirror tag
+        run: echo "MIRROR_TAG=${GITHUB_REF_NAME#n8n/}" >> "$GITHUB_ENV"
+
+      - name: Subtree-split n8n/ and push to the open-banking-io/n8n mirror
+        env:
+          MIRROR_TOKEN: ${{ secrets.MIRROR_PUSH_TOKEN }}
+        run: |
+          set -euo pipefail
+          git config user.name  "open-banking-io-bot"
+          git config user.email "bot@open-banking.io"
+          SPLIT_SHA="$(git subtree split --prefix=n8n)"
+          echo "split sha: $SPLIT_SHA"
+          REMOTE="https://x-access-token:${MIRROR_TOKEN}@github.com/open-banking-io/n8n.git"
+          git push --force "$REMOTE" "${SPLIT_SHA}:refs/heads/main"
+          git tag -f "${MIRROR_TAG}" "${SPLIT_SHA}"
+          git push --force "$REMOTE" "refs/tags/${MIRROR_TAG}"
+
+      - name: Verify the mirror received the tag
+        run: |
+          for i in $(seq 1 10); do
+            code=$(curl -sS -o /dev/null -w '%{http_code}' \
+              "https://api.github.com/repos/open-banking-io/n8n/git/refs/tags/${MIRROR_TAG}")
+            if [ "$code" = "200" ]; then echo "mirror tag ${MIRROR_TAG} present ✓"; exit 0; fi
+            echo "waiting for mirror tag ${MIRROR_TAG} (got $code)..."; sleep 3
+          done
+          echo "::error::mirror tag ${MIRROR_TAG} not found on open-banking-io/n8n — the subtree-split push failed (check MIRROR_PUSH_TOKEN)"
+          exit 1
