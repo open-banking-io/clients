@@ -1,9 +1,17 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" fill="none">
-  <rect width="64" height="64" rx="12" fill="#0B6E4F"/>
-  <path d="M32 12L50 23H14L32 12Z" fill="#ffffff"/>
-  <rect x="16" y="26" width="4" height="18" fill="#ffffff"/>
-  <rect x="24" y="26" width="4" height="18" fill="#ffffff"/>
-  <rect x="36" y="26" width="4" height="18" fill="#ffffff"/>
-  <rect x="44" y="26" width="4" height="18" fill="#ffffff"/>
-  <rect x="13" y="47" width="38" height="5" rx="1.5" fill="#ffffff"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" fill="none" viewBox="0 0 96 96">
+  <defs>
+    <linearGradient id="tile" x1="24" y1="20" x2="72" y2="76" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#60a5fa"/>
+      <stop offset="1" stop-color="#22d3ee"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(62 66) rotate(-130) scale(46)">
+      <stop stop-color="#47bfff" stop-opacity=".55"/>
+      <stop offset="1" stop-color="#47bfff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <g transform="translate(16 16)">
+    <rect width="64" height="64" rx="15" fill="url(#tile)"/>
+    <rect width="64" height="64" rx="15" fill="url(#glow)"/>
+    <path fill="#fff" transform="translate(12.4 12.9) scale(0.808)" d="M25.842 44.938c-.664.844-2.021.375-2.021-.698V33.937a2.26 2.26 0 0 0-2.262-2.262H10.183c-.92 0-1.456-1.04-.92-1.788l7.48-10.471c1.07-1.498 0-3.579-1.842-3.579H1.133c-.92 0-1.456-1.04-.92-1.787L9.91.473c.214-.297.556-.474.92-.474h28.894c.92 0 1.456 1.04.92 1.788l-7.48 10.471c-1.07 1.498 0 3.578 1.842 3.578h11.377c.943 0 1.473 1.088.89 1.832L25.843 44.94z"/>
+  </g>
 </svg>
