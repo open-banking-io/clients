@@ -64,7 +64,6 @@ export class OpenBankingIo implements INodeType {
 				default: 'transaction',
 			},
 
-			// ---- Account ----
 			{
 				displayName: 'Operation',
 				name: 'operation',
@@ -82,7 +81,6 @@ export class OpenBankingIo implements INodeType {
 				default: 'getMany',
 			},
 
-			// ---- Transaction ----
 			{
 				displayName: 'Operation',
 				name: 'operation',
@@ -154,7 +152,6 @@ export class OpenBankingIo implements INodeType {
 				],
 			},
 
-			// ---- Connection ----
 			{
 				displayName: 'Operation',
 				name: 'operation',
@@ -172,7 +169,6 @@ export class OpenBankingIo implements INodeType {
 				default: 'getMany',
 			},
 
-			// ---- Bank ----
 			{
 				displayName: 'Operation',
 				name: 'operation',
@@ -199,7 +195,6 @@ export class OpenBankingIo implements INodeType {
 				description: 'Optional ISO 3166 country code to filter banks by',
 			},
 
-			// ---- Sync ----
 			{
 				displayName: 'Operation',
 				name: 'operation',

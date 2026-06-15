@@ -93,8 +93,6 @@ export function importBundleKey(bundle: Bundle): Promise<PrivateKey> {
 	return importPrivateKey(bundle.privateKey);
 }
 
-// ---- Decryption mappers (ports of the SDK client's private mappers) -----------------------------
-
 export async function mapAccount(key: PrivateKey, a: AccountWire): Promise<Account> {
 	const acc = await decryptTo<AccountEnc>(key, a.enc);
 	const name = await decryptTo<DisplayNameEnc>(key, a.displayNameEnc);
@@ -177,8 +175,6 @@ export async function decryptUid(key: PrivateKey, a: AccountWire): Promise<strin
 	const dec = await decryptTo<UidEnc>(key, a.uidEnc);
 	return dec?.uid ?? null;
 }
-
-// ---- Pagination ---------------------------------------------------------------------------------
 
 /**
  * Collects transaction wires by looping the offset/limit window until the server's reported total
