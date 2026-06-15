@@ -3,10 +3,10 @@
 // This is a self-contained port of the @open-banking-io/client `envelope.ts`. It
 // deliberately uses ZERO runtime dependencies and avoids `node:crypto` and `Buffer`
 // so the package passes n8n's verified-community-node scan: it relies only on the
-// Web Crypto API exposed as the `globalThis.crypto.subtle` global (present in n8n's
-// Node 20+ runtime) and an `atob`-based base64 decoder.
+// Web Crypto API exposed as the `crypto.subtle` global (present in n8n's Node 20+
+// runtime) and an `atob`-based base64 decoder.
 
-const subtle = globalThis.crypto.subtle;
+const subtle = crypto.subtle;
 
 /** Web Crypto key handle, aliased so we don't import a DOM/node type. */
 export type PrivateKey = Awaited<ReturnType<typeof subtle.importKey>>;
