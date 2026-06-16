@@ -10,7 +10,25 @@ permissions:
   contents: read
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      dotnet: ${{ steps.cp.outputs.dotnet }}
+      node: ${{ steps.cp.outputs.node }}
+      python: ${{ steps.cp.outputs.python }}
+      rust: ${{ steps.cp.outputs.rust }}
+      java: ${{ steps.cp.outputs.java }}
+      go: ${{ steps.cp.outputs.go }}
+      ruby: ${{ steps.cp.outputs.ruby }}
+      php: ${{ steps.cp.outputs.php }}
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - id: cp
+        uses: ./.github/actions/changed-packages
+
   dotnet:
+    needs: changes
+    if: needs.changes.outputs.dotnet == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -26,6 +44,8 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
 
   node:
+    needs: changes
+    if: needs.changes.outputs.node == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -44,6 +64,8 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
 
   python:
+    needs: changes
+    if: needs.changes.outputs.python == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -62,6 +84,8 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
 
   rust:
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -81,6 +105,8 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
 
   go:
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -101,6 +127,8 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
 
   java:
+    needs: changes
+    if: needs.changes.outputs.java == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -119,6 +147,8 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
 
   ruby:
+    needs: changes
+    if: needs.changes.outputs.ruby == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -137,6 +167,8 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
 
   php:
+    needs: changes
+    if: needs.changes.outputs.php == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -155,3 +187,23 @@ jobs:
           flags: php
           fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}
+
+  # Aggregate gate: the single required Coverage status check. Always runs so it
+  # reports even when language jobs are skipped; fails only if a needed job
+  # actually failed or was cancelled (skipped/success both pass).
+  coverage-gate:
+    if: always()
+    needs: [changes, dotnet, node, python, rust, go, java, ruby, php]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail if any coverage job failed
+        run: |
+          results='${{ join(needs.*.result, ',') }}'
+          echo "job results: $results"
+          case ",$results," in
+            *,failure,* | *,cancelled,*)
+              echo "A coverage job did not succeed."
+              exit 1
+              ;;
+          esac
+          echo "All coverage jobs succeeded or were skipped."
