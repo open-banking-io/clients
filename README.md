@@ -10,6 +10,7 @@
 [![Semgrep](https://github.com/open-banking-io/clients/actions/workflows/semgrep.yml/badge.svg)](https://github.com/open-banking-io/clients/actions/workflows/semgrep.yml)
 [![Gitleaks](https://github.com/open-banking-io/clients/actions/workflows/gitleaks.yml/badge.svg)](https://github.com/open-banking-io/clients/actions/workflows/gitleaks.yml)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/open-banking-io/clients/badge)](https://securityscorecards.dev/viewer/?uri=github.com/open-banking-io/clients)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/13284/badge)](https://www.bestpractices.dev/projects/13284)
 [![codecov](https://codecov.io/gh/open-banking-io/clients/branch/main/graph/badge.svg)](https://codecov.io/gh/open-banking-io/clients)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
