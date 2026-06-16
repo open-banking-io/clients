@@ -135,6 +135,12 @@ jobs:
     strategy:
       matrix:
         go-version: ['1.24', '1.25']
+    # Test the SDK in module mode (go/go.mod = go 1.24, zero deps) instead of via the
+    # workspace. The workspace now requires go 1.25 (the cli pulls x/term/x/sys, which need
+    # 1.25), so loading it on the 1.24 matrix entry would fail — GOWORK=off keeps the SDK's
+    # 1.24 support genuinely tested.
+    env:
+      GOWORK: off
     defaults:
       run:
         working-directory: go

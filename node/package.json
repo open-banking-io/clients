@@ -41,6 +41,9 @@
     "lint": "eslint .",
     "format:check": "prettier --check ."
   },
+  "overrides": {
+    "esbuild": "^0.28.1"
+  },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/node": "^25.9.3",
