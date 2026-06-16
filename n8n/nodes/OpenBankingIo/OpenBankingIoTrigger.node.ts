@@ -11,7 +11,7 @@ import {
 	collectTransactionWires,
 	importBundleKey,
 	mapTransaction,
-	parseBundle,
+	resolveBundle,
 	transactionsPath,
 } from './shared/client';
 import type { AccountWire, TransactionPageWire } from './shared/models';
@@ -61,7 +61,7 @@ export class OpenBankingIoTrigger implements INodeType {
 	};
 
 	async poll(this: IPollFunctions): Promise<INodeExecutionData[][] | null> {
-		const bundle = parseBundle((await this.getCredentials('openBankingIoApi')).bundle as string);
+		const bundle = resolveBundle(await this.getCredentials('openBankingIoApi'));
 		const key = await importBundleKey(bundle);
 		const state = this.getWorkflowStaticData('node') as TriggerState;
 		const isManual = this.getMode() === 'manual';

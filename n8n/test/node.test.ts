@@ -18,18 +18,24 @@ function fixture(rel: string): unknown {
 const BUNDLE = readFileSync(join(FIXTURES, 'credentials.json'), 'utf8');
 
 /** Builds a minimal IExecuteFunctions stand-in for one input item. */
-function makeContext(params: Record<string, unknown>, routes: Record<string, unknown>) {
+function makeContext(
+	params: Record<string, unknown>,
+	routes: Record<string, unknown>,
+	baseUrlOverride?: string,
+) {
+	// Requests should target the override host when set, otherwise the bundle's apiBaseUrl.
+	const host = (baseUrlOverride ?? 'http://localhost:8081').replace(/\/+$/, '');
 	const httpRequestWithAuthentication = vi.fn(async (_cred: string, options: { url: string }) => {
-		const path = options.url.replace('http://localhost:8081', '');
+		const path = options.url.replace(host, '');
 		for (const [prefix, body] of Object.entries(routes)) {
 			if (path.startsWith(prefix)) return body;
 		}
-		throw new Error(`unexpected request: ${path}`);
+		throw new Error(`unexpected request: ${options.url}`);
 	});
 
 	const ctx = {
 		getInputData: () => [{ json: {} }],
-		getCredentials: async () => ({ bundle: BUNDLE }),
+		getCredentials: async () => ({ bundle: BUNDLE, baseUrlOverride }),
 		getNodeParameter: (name: string, _i: number, fallback?: unknown) =>
 			name in params ? params[name] : fallback,
 		continueOnFail: () => false,
@@ -80,6 +86,21 @@ describe('OpenBankingIo node execute()', () => {
 		expect(txn.balanceAfterTransaction).toBe('633.90');
 		// One page was enough (total === items.length), so we stop after a single request.
 		expect(httpRequestWithAuthentication).toHaveBeenCalledTimes(1);
+	});
+
+	it('routes requests to the baseUrlOverride when set', async () => {
+		const { ctx, httpRequestWithAuthentication } = makeContext(
+			{ resource: 'account', operation: 'getMany' },
+			{ '/api/accounts': fixture('api/accounts.json') },
+			'https://api.staging.open-banking.io',
+		);
+
+		const [out] = await OpenBankingIo.prototype.execute.call(ctx as never);
+
+		expect(out).toHaveLength(1);
+		// The request URL used the override host, not the bundle's apiBaseUrl.
+		const calledUrl = httpRequestWithAuthentication.mock.calls[0][1].url as string;
+		expect(calledUrl).toBe('https://api.staging.open-banking.io/api/accounts');
 	});
 
 	it('surfaces a clear error for an invalid credentials bundle', async () => {
