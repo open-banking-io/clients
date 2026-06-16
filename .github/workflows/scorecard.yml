@@ -25,6 +25,10 @@ jobs:
           results_file: results.sarif
           results_format: sarif
           publish_results: true
+          # A classic PAT (repo + read:org, or fine-grained with admin:read) lets Scorecard
+          # read branch-protection and other settings the default GITHUB_TOKEN can't see.
+          # Falls back to the workflow token when the secret is absent.
+          repo_token: ${{ secrets.SCORECARD_TOKEN || github.token }}
       - uses: github/codeql-action/upload-sarif@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2
         with:
           sarif_file: results.sarif

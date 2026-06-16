@@ -116,7 +116,7 @@ jobs:
       - run: go test -coverprofile=coverage.out -covermode=atomic ./...
         working-directory: go
       - run: |
-          go install github.com/boumenot/gocover-cobertura@latest
+          go install github.com/boumenot/gocover-cobertura@v1.5.0
           "$(go env GOPATH)/bin/gocover-cobertura" < coverage.out > coverage.xml
         working-directory: go
       - uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0

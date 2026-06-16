@@ -24,6 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      id-token: write # keyless cosign signing of release artifacts via Sigstore OIDC
     env:
       # The brew step is skipped until the tap repo + token exist, so the first release can still
       # ship binaries before the tap is set up.
@@ -67,6 +68,26 @@ jobs:
           done
           ( cd dist && sha256sum * > checksums.txt )
           echo "Built:"; ls -1 dist
+
+      - name: Install cosign
+        if: steps.ver.outputs.is_tag == 'true'
+        uses: sigstore/cosign-installer@d58896d6a1865668819e1d91763c7751a165e159 # v3.9.2
+
+      - name: Sign checksums (keyless)
+        if: steps.ver.outputs.is_tag == 'true'
+        working-directory: cli/dist
+        run: |
+          # Keyless Sigstore signature over checksums.txt. Since every artifact's SHA-256 is
+          # listed there, one signature transitively covers all binaries. The .sig + .pem land
+          # in dist/ and get uploaded alongside the binaries by the release step below.
+          # Verify with:
+          #   cosign verify-blob --certificate checksums.txt.pem --signature checksums.txt.sig \
+          #     --certificate-identity-regexp 'https://github.com/open-banking-io/clients/.*' \
+          #     --certificate-oidc-issuer https://token.actions.githubusercontent.com checksums.txt
+          cosign sign-blob --yes \
+            --output-signature checksums.txt.sig \
+            --output-certificate checksums.txt.pem \
+            checksums.txt
 
       - name: Publish GitHub Release with binaries
         if: steps.ver.outputs.is_tag == 'true'

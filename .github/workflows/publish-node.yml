@@ -35,5 +35,6 @@ jobs:
           registry-url: https://registry.npmjs.org
       - run: npm ci
       - run: npm run build
-      - run: npm install -g npm@latest
+      # node 22 ships an npm new enough for --provenance; no global self-update needed
+      # (an unpinned `npm install -g npm@latest` is also a supply-chain/pinning finding).
       - run: npm publish --provenance --access public
