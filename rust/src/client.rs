@@ -42,11 +42,12 @@ impl OpenBankingClient {
             base_url: api_base_url.trim_end_matches('/').to_string(),
             api_key: api_key.to_string(),
             private_key: envelope::load_private_key(private_key_pkcs8_b64)?,
-            agent: ureq::AgentBuilder::new()
-                .timeout_connect(Duration::from_secs(10))
-                .timeout(Duration::from_secs(30))
+            agent: ureq::Agent::config_builder()
+                .timeout_connect(Some(Duration::from_secs(10)))
+                .timeout_global(Some(Duration::from_secs(30)))
                 .user_agent(USER_AGENT)
-                .build(),
+                .build()
+                .into(),
         })
     }
 
@@ -277,26 +278,28 @@ impl OpenBankingClient {
     ) -> Result<T> {
         let mut req = self
             .agent
-            .get(&format!("{}{}", self.base_url, path))
-            .set("X-Api-Key", &self.api_key);
+            .get(format!("{}{}", self.base_url, path))
+            .header("X-Api-Key", &self.api_key);
         for (k, v) in params {
             req = req.query(k, v);
         }
-        let resp = req
+        let mut resp = req
             .call()
             .map_err(|e| Error::Http(format!("GET {path} failed: {e}")))?;
-        resp.into_json()
+        resp.body_mut()
+            .read_json()
             .map_err(|e| Error::Http(format!("GET {path} decode failed: {e}")))
     }
 
     fn post_json<T: DeserializeOwned, B: Serialize>(&self, path: &str, body: &B) -> Result<T> {
-        let resp = self
+        let mut resp = self
             .agent
-            .post(&format!("{}{}", self.base_url, path))
-            .set("X-Api-Key", &self.api_key)
+            .post(format!("{}{}", self.base_url, path))
+            .header("X-Api-Key", &self.api_key)
             .send_json(body)
             .map_err(|e| Error::Http(format!("POST {path} failed: {e}")))?;
-        resp.into_json()
+        resp.body_mut()
+            .read_json()
             .map_err(|e| Error::Http(format!("POST {path} decode failed: {e}")))
     }
 }
