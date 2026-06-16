@@ -83,6 +83,10 @@ source <(openbanking completion zsh)    # also: bash, fish
 Credentials live in `$OPENBANKING_CONFIG` or
 `<XDG_CONFIG_HOME|~/.config>/open-banking/credentials.json` (written `0600`).
 
+Set `$OPENBANKING_API_BASE_URL` to point every command at a different environment
+(e.g. staging or local) without re-running `login` — it overrides the saved
+bundle's API base URL when non-empty.
+
 ## How it works
 
 `login` runs a localhost loopback + PKCE flow against the API. In the browser you
