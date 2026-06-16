@@ -48,6 +48,10 @@ Create an **Open Banking IO API** credential and paste the **credentials bundle 
 you exported from open-banking.io (or the CLI). It contains `apiBaseUrl`, `apiKey`
 and `encryptionKey.privateKey`. Click **Test** to verify it can reach the API.
 
+Optionally set **API Base URL Override** to point the credential at a different
+environment (e.g. `https://api.staging.open-banking.io` or a local instance) without
+re-exporting a bundle. Leave it empty to use the `apiBaseUrl` from the bundle.
+
 ## Usage notes
 
 - Monetary amounts are returned as **decimal strings** (e.g. `"828.13"`) — never as

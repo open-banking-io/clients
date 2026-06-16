@@ -15,7 +15,7 @@ import {
 	mapAccount,
 	mapConnection,
 	mapTransaction,
-	parseBundle,
+	resolveBundle,
 	transactionsPath,
 	type Bundle,
 } from './shared/client';
@@ -231,7 +231,7 @@ export class OpenBankingIo implements INodeType {
 
 	async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
 		const items = this.getInputData();
-		const bundle = parseBundle((await this.getCredentials('openBankingIoApi')).bundle as string);
+		const bundle = resolveBundle(await this.getCredentials('openBankingIoApi'));
 		const key = await importBundleKey(bundle);
 		const out: INodeExecutionData[] = [];
 

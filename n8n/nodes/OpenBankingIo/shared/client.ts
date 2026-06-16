@@ -57,6 +57,20 @@ export function parseBundle(raw: string): Bundle {
 }
 
 /**
+ * Parses the credentials and applies the optional `baseUrlOverride` field. When set, it replaces
+ * the bundle's `apiBaseUrl` — letting a credential point at a staging/local environment without
+ * re-exporting a different bundle. Empty/whitespace override keeps the bundle's URL.
+ */
+export function resolveBundle(credentials: IDataObject): Bundle {
+	const bundle = parseBundle(credentials.bundle as string);
+	const override = String((credentials.baseUrlOverride as string) ?? '')
+		.trim()
+		.replace(/\/+$/, '');
+	if (override) bundle.apiBaseUrl = override;
+	return bundle;
+}
+
+/**
  * Issues an authenticated request through n8n's HTTP helper. The `X-Api-Key` header is injected
  * by the credential's `authenticate` block, so we never put the key on the wire ourselves.
  */
