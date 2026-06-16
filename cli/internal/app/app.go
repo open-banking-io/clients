@@ -6,12 +6,18 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/open-banking-io/clients/cli/internal/config"
 	"github.com/open-banking-io/clients/cli/internal/ui"
 	openbanking "github.com/open-banking-io/clients/go"
 )
+
+// apiBaseURLEnv overrides the saved bundle's API base URL when set, letting the CLI target a
+// staging/local environment without re-running `login`. Empty/whitespace keeps the bundle's value.
+// Mirrors the n8n node's "API Base URL Override" credential field.
+const apiBaseURLEnv = "OPENBANKING_API_BASE_URL"
 
 // App carries the I/O and configuration a command needs. The zero value is not usable; main wires
 // real os streams and the default config path, while tests inject buffers and a temp path.
@@ -97,9 +103,22 @@ func (a *App) Run(args []string) error {
 	return c.run(a, cargs)
 }
 
+// loadBundle reads the saved credentials bundle and applies the OPENBANKING_API_BASE_URL override
+// when set, so every command can target staging/local without re-running `login`.
+func (a *App) loadBundle() (config.Bundle, error) {
+	bundle, err := config.Load(a.ConfigPath)
+	if err != nil {
+		return config.Bundle{}, err
+	}
+	if override := trimTrailingSlash(strings.TrimSpace(os.Getenv(apiBaseURLEnv))); override != "" {
+		bundle.APIBaseURL = override
+	}
+	return bundle, nil
+}
+
 // client builds a decrypting SDK client from the saved credentials bundle (needs the encryption key).
 func (a *App) client() (*openbanking.Client, error) {
-	bundle, err := config.Load(a.ConfigPath)
+	bundle, err := a.loadBundle()
 	if err != nil {
 		return nil, err
 	}
@@ -109,7 +128,7 @@ func (a *App) client() (*openbanking.Client, error) {
 // publicClient builds a client for operations that don't decrypt data (e.g. banks), so they
 // work right after `login`, before any encryption key has been imported.
 func (a *App) publicClient() (*openbanking.Client, error) {
-	bundle, err := config.Load(a.ConfigPath)
+	bundle, err := a.loadBundle()
 	if err != nil {
 		return nil, err
 	}
