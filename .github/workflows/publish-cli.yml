@@ -25,6 +25,7 @@ jobs:
     permissions:
       contents: write
       id-token: write # keyless cosign signing of release artifacts via Sigstore OIDC
+      attestations: write # SLSA build provenance for the release binaries
     env:
       # The brew step is skipped until the tap repo + token exist, so the first release can still
       # ship binaries before the tap is set up.
@@ -88,6 +89,26 @@ jobs:
             --output-signature checksums.txt.sig \
             --output-certificate checksums.txt.pem \
             checksums.txt
+
+      - name: Attest build provenance
+        if: steps.ver.outputs.is_tag == 'true'
+        id: attest
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3.0.0
+        with:
+          subject-path: |
+            cli/dist/*.tar.gz
+            cli/dist/*.zip
+
+      - name: Attach provenance bundle to the release assets
+        if: steps.ver.outputs.is_tag == 'true'
+        env:
+          BUNDLE: ${{ steps.attest.outputs.bundle-path }}
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          # Ship the SLSA provenance next to the binaries (as *.intoto.jsonl) so the signature
+          # AND its provenance are both discoverable on the GitHub Release. Verify with:
+          #   gh attestation verify openbanking_${VERSION}_<os>_<arch>.tar.gz --repo open-banking-io/clients
+          cp "$BUNDLE" "cli/dist/openbanking_${VERSION}.intoto.jsonl"
 
       - name: Publish GitHub Release with binaries
         if: steps.ver.outputs.is_tag == 'true'
