@@ -1,6 +1,6 @@
 {
   "name": "@open-banking-io/n8n-nodes-open-banking-io",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "n8n community node for open-banking.io: API-key auth with client-side, zero-knowledge decryption of your bank accounts, balances and transactions.",
   "license": "MIT",
   "author": {
@@ -20,8 +20,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/open-banking-io/clients",
-    "directory": "n8n"
+    "url": "git+https://github.com/open-banking-io/n8n.git"
   },
   "engines": {
     "node": ">=20.15"
