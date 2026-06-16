@@ -14,8 +14,16 @@ Report privately via either:
 - **Email** — `security@open-banking.io`
 
 Please include: a description, affected SDK(s) and version(s), reproduction steps or a proof of concept,
-and an impact assessment. We acknowledge reports within **48 hours**, keep you updated, and coordinate a
-fix and disclosure. We're happy to credit you in the release notes.
+and an impact assessment.
+
+Our response targets:
+
+- **Acknowledgement** within **48 hours**.
+- **Initial assessment** (severity and whether it's in scope) within **7 days**.
+- **Fix and coordinated disclosure** as quickly as the severity warrants — we aim for within **90 days**,
+  and faster for issues under active exploitation.
+
+We keep you updated throughout and are happy to credit you in the release notes.
 
 ## Scope
 
