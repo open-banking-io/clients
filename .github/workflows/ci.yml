@@ -9,20 +9,57 @@ permissions:
   contents: read
 
 jobs:
-  dotnet:
+  changes:
     runs-on: ubuntu-latest
+    outputs:
+      dotnet: ${{ steps.filter.outputs.dotnet }}
+      node: ${{ steps.filter.outputs.node }}
+      n8n: ${{ steps.filter.outputs.n8n }}
+      python: ${{ steps.filter.outputs.python }}
+      rust: ${{ steps.filter.outputs.rust }}
+      java: ${{ steps.filter.outputs.java }}
+      go: ${{ steps.filter.outputs.go }}
+      ruby: ${{ steps.filter.outputs.ruby }}
+      php: ${{ steps.filter.outputs.php }}
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-      - uses: actions/setup-dotnet@9a946fdbd5fb07b82b2f5a4466058b876ab72bb2 # v5.3.0
+      # A package's steps run when its own dir changes, OR when shared test
+      # fixtures change (they feed every client), OR when this workflow changes.
+      - id: filter
+        uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
+        with:
+          filters: |
+            dotnet: ['dotnet/**', 'fixtures/**', '.github/workflows/ci.yml']
+            node: ['node/**', 'fixtures/**', '.github/workflows/ci.yml']
+            n8n: ['n8n/**', 'fixtures/**', '.github/workflows/ci.yml']
+            python: ['python/**', 'fixtures/**', '.github/workflows/ci.yml']
+            rust: ['rust/**', 'fixtures/**', '.github/workflows/ci.yml']
+            java: ['java/**', 'fixtures/**', '.github/workflows/ci.yml']
+            go: ['go/**', 'fixtures/**', '.github/workflows/ci.yml']
+            ruby: ['ruby/**', 'fixtures/**', '.github/workflows/ci.yml']
+            php: ['php/**', 'fixtures/**', '.github/workflows/ci.yml']
+
+  dotnet:
+    needs: changes
+    runs-on: ubuntu-latest
+    steps:
+      - if: needs.changes.outputs.dotnet == 'true'
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - if: needs.changes.outputs.dotnet == 'true'
+        uses: actions/setup-dotnet@9a946fdbd5fb07b82b2f5a4466058b876ab72bb2 # v5.3.0
         with:
           dotnet-version: |
             8.0.x
             10.0.x
-      - run: dotnet format dotnet/OpenBankingIO.slnx --verify-no-changes
-      - run: dotnet build dotnet/OpenBankingIO.slnx -c Release -warnaserror
-      - run: dotnet test dotnet/ -c Release
+      - if: needs.changes.outputs.dotnet == 'true'
+        run: dotnet format dotnet/OpenBankingIO.slnx --verify-no-changes
+      - if: needs.changes.outputs.dotnet == 'true'
+        run: dotnet build dotnet/OpenBankingIO.slnx -c Release -warnaserror
+      - if: needs.changes.outputs.dotnet == 'true'
+        run: dotnet test dotnet/ -c Release
 
   node:
+    needs: changes
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -31,18 +68,27 @@ jobs:
       run:
         working-directory: node
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+      - if: needs.changes.outputs.node == 'true'
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - if: needs.changes.outputs.node == 'true'
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: ${{ matrix.node-version }}
-      - run: npm ci
-      - run: npm run lint
-      - run: npm run format:check
-      - run: npm run typecheck
-      - run: npm run build
-      - run: npm test
+      - if: needs.changes.outputs.node == 'true'
+        run: npm ci
+      - if: needs.changes.outputs.node == 'true'
+        run: npm run lint
+      - if: needs.changes.outputs.node == 'true'
+        run: npm run format:check
+      - if: needs.changes.outputs.node == 'true'
+        run: npm run typecheck
+      - if: needs.changes.outputs.node == 'true'
+        run: npm run build
+      - if: needs.changes.outputs.node == 'true'
+        run: npm test
 
   n8n:
+    needs: changes
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -51,20 +97,29 @@ jobs:
       run:
         working-directory: n8n
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+      - if: needs.changes.outputs.n8n == 'true'
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - if: needs.changes.outputs.n8n == 'true'
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: ${{ matrix.node-version }}
       # --ignore-scripts: the only native dep is isolated-vm (via n8n-workflow's expression
       # sandbox), which we never run and which fails to gyp-build on some Node versions.
-      - run: npm ci --ignore-scripts
-      - run: npm run lint
-      - run: npm run format:check
-      - run: npm run typecheck
-      - run: npm run build
-      - run: npm test
+      - if: needs.changes.outputs.n8n == 'true'
+        run: npm ci --ignore-scripts
+      - if: needs.changes.outputs.n8n == 'true'
+        run: npm run lint
+      - if: needs.changes.outputs.n8n == 'true'
+        run: npm run format:check
+      - if: needs.changes.outputs.n8n == 'true'
+        run: npm run typecheck
+      - if: needs.changes.outputs.n8n == 'true'
+        run: npm run build
+      - if: needs.changes.outputs.n8n == 'true'
+        run: npm test
 
   python:
+    needs: changes
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -73,35 +128,50 @@ jobs:
       run:
         working-directory: python
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+      - if: needs.changes.outputs.python == 'true'
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - if: needs.changes.outputs.python == 'true'
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: ${{ matrix.python-version }}
-      - run: pip install -e .[dev]
-      - run: ruff check .
-      - run: ruff format --check .
-      - run: mypy src
-      - run: pytest -q
+      - if: needs.changes.outputs.python == 'true'
+        run: pip install -e .[dev]
+      - if: needs.changes.outputs.python == 'true'
+        run: ruff check .
+      - if: needs.changes.outputs.python == 'true'
+        run: ruff format --check .
+      - if: needs.changes.outputs.python == 'true'
+        run: mypy src
+      - if: needs.changes.outputs.python == 'true'
+        run: pytest -q
 
   rust:
+    needs: changes
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: rust
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+      - if: needs.changes.outputs.rust == 'true'
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - if: needs.changes.outputs.rust == 'true'
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
         with:
           components: clippy, rustfmt
-      - run: cargo fmt --check
-      - run: cargo clippy --all-targets -- -D warnings
-      - run: cargo test
-      - uses: EmbarkStudios/cargo-deny-action@bb137d7af7e4fb67e5f82a49c4fce4fad40782fe # v2
+      - if: needs.changes.outputs.rust == 'true'
+        run: cargo fmt --check
+      - if: needs.changes.outputs.rust == 'true'
+        run: cargo clippy --all-targets -- -D warnings
+      - if: needs.changes.outputs.rust == 'true'
+        run: cargo test
+      - if: needs.changes.outputs.rust == 'true'
+        uses: EmbarkStudios/cargo-deny-action@bb137d7af7e4fb67e5f82a49c4fce4fad40782fe # v2
         with:
           manifest-path: rust/Cargo.toml
           command: check advisories bans sources
 
   go:
+    needs: changes
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -110,18 +180,24 @@ jobs:
       run:
         working-directory: go
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+      - if: needs.changes.outputs.go == 'true'
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - if: needs.changes.outputs.go == 'true'
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
         with:
           go-version: ${{ matrix.go-version }}
-      - run: go vet ./...
-      - uses: golangci/golangci-lint-action@82606bf257cbaff209d206a39f5134f0cfbfd2ee # v9.2.1
+      - if: needs.changes.outputs.go == 'true'
+        run: go vet ./...
+      - if: needs.changes.outputs.go == 'true'
+        uses: golangci/golangci-lint-action@82606bf257cbaff209d206a39f5134f0cfbfd2ee # v9.2.1
         with:
           version: v2.12.2
           working-directory: go
-      - run: go test ./...
+      - if: needs.changes.outputs.go == 'true'
+        run: go test ./...
 
   java:
+    needs: changes
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -130,15 +206,19 @@ jobs:
       run:
         working-directory: java
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-      - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+      - if: needs.changes.outputs.java == 'true'
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - if: needs.changes.outputs.java == 'true'
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
         with:
           distribution: temurin
           java-version: ${{ matrix.java-version }}
           cache: maven
-      - run: mvn -B verify
+      - if: needs.changes.outputs.java == 'true'
+        run: mvn -B verify
 
   ruby:
+    needs: changes
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -147,16 +227,21 @@ jobs:
       run:
         working-directory: ruby
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-      - uses: ruby/setup-ruby@12fd324f1d0b43274fdc8130f6980590a667c455 # v1
+      - if: needs.changes.outputs.ruby == 'true'
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - if: needs.changes.outputs.ruby == 'true'
+        uses: ruby/setup-ruby@12fd324f1d0b43274fdc8130f6980590a667c455 # v1
         with:
           ruby-version: ${{ matrix.ruby-version }}
           bundler-cache: true
           working-directory: ruby
-      - run: bundle exec standardrb
-      - run: bundle exec rspec
+      - if: needs.changes.outputs.ruby == 'true'
+        run: bundle exec standardrb
+      - if: needs.changes.outputs.ruby == 'true'
+        run: bundle exec rspec
 
   php:
+    needs: changes
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -165,13 +250,19 @@ jobs:
       run:
         working-directory: php
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-      - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
+      - if: needs.changes.outputs.php == 'true'
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - if: needs.changes.outputs.php == 'true'
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
         with:
           php-version: ${{ matrix.php-version }}
           extensions: openssl, curl, json
           coverage: pcov
-      - run: composer install --no-interaction --no-progress
-      - run: vendor/bin/phpstan analyse --memory-limit=512M
-      - run: vendor/bin/php-cs-fixer fix --dry-run --diff
-      - run: vendor/bin/phpunit
+      - if: needs.changes.outputs.php == 'true'
+        run: composer install --no-interaction --no-progress
+      - if: needs.changes.outputs.php == 'true'
+        run: vendor/bin/phpstan analyse --memory-limit=512M
+      - if: needs.changes.outputs.php == 'true'
+        run: vendor/bin/php-cs-fixer fix --dry-run --diff
+      - if: needs.changes.outputs.php == 'true'
+        run: vendor/bin/phpunit

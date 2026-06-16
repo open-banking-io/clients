@@ -10,15 +10,48 @@ permissions:
   contents: read
 
 jobs:
-  dotnet:
+  changes:
     runs-on: ubuntu-latest
+    outputs:
+      dotnet: ${{ steps.filter.outputs.dotnet }}
+      node: ${{ steps.filter.outputs.node }}
+      python: ${{ steps.filter.outputs.python }}
+      rust: ${{ steps.filter.outputs.rust }}
+      java: ${{ steps.filter.outputs.java }}
+      go: ${{ steps.filter.outputs.go }}
+      ruby: ${{ steps.filter.outputs.ruby }}
+      php: ${{ steps.filter.outputs.php }}
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-      - uses: actions/setup-dotnet@9a946fdbd5fb07b82b2f5a4466058b876ab72bb2 # v5.3.0
+      # A package's steps run when its own dir changes, OR when shared test
+      # fixtures change (they feed every client), OR when this workflow changes.
+      - id: filter
+        uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
+        with:
+          filters: |
+            dotnet: ['dotnet/**', 'fixtures/**', '.github/workflows/coverage.yml']
+            node: ['node/**', 'fixtures/**', '.github/workflows/coverage.yml']
+            python: ['python/**', 'fixtures/**', '.github/workflows/coverage.yml']
+            rust: ['rust/**', 'fixtures/**', '.github/workflows/coverage.yml']
+            java: ['java/**', 'fixtures/**', '.github/workflows/coverage.yml']
+            go: ['go/**', 'fixtures/**', '.github/workflows/coverage.yml']
+            ruby: ['ruby/**', 'fixtures/**', '.github/workflows/coverage.yml']
+            php: ['php/**', 'fixtures/**', '.github/workflows/coverage.yml']
+
+  dotnet:
+    needs: changes
+    runs-on: ubuntu-latest
+    steps:
+      - if: needs.changes.outputs.dotnet == 'true'
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - if: needs.changes.outputs.dotnet == 'true'
+        uses: actions/setup-dotnet@9a946fdbd5fb07b82b2f5a4466058b876ab72bb2 # v5.3.0
         with:
           dotnet-version: 8.0.x
-      - run: dotnet test dotnet/ -c Release --collect:"XPlat Code Coverage" --settings dotnet/coverlet.runsettings
-      - uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+      - if: needs.changes.outputs.dotnet == 'true'
+        run: dotnet test dotnet/ -c Release --collect:"XPlat Code Coverage" --settings dotnet/coverlet.runsettings
+      - if: needs.changes.outputs.dotnet == 'true'
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
           files: dotnet/tests/OpenBankingIO.Client.Tests/TestResults/**/coverage.cobertura.xml
           flags: dotnet
@@ -26,17 +59,23 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
 
   node:
+    needs: changes
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+      - if: needs.changes.outputs.node == 'true'
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - if: needs.changes.outputs.node == 'true'
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: 22
-      - run: npm ci
+      - if: needs.changes.outputs.node == 'true'
+        run: npm ci
         working-directory: node
-      - run: npm run coverage
+      - if: needs.changes.outputs.node == 'true'
+        run: npm run coverage
         working-directory: node
-      - uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+      - if: needs.changes.outputs.node == 'true'
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
           files: node/coverage/cobertura-coverage.xml
           flags: node
@@ -44,17 +83,23 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
 
   python:
+    needs: changes
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+      - if: needs.changes.outputs.python == 'true'
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - if: needs.changes.outputs.python == 'true'
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: '3.12'
-      - run: pip install -e .[dev]
+      - if: needs.changes.outputs.python == 'true'
+        run: pip install -e .[dev]
         working-directory: python
-      - run: pytest --cov=open_banking_io --cov-report=xml
+      - if: needs.changes.outputs.python == 'true'
+        run: pytest --cov=open_banking_io --cov-report=xml
         working-directory: python
-      - uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+      - if: needs.changes.outputs.python == 'true'
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
           files: python/coverage.xml
           flags: python
@@ -62,18 +107,24 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
 
   rust:
+    needs: changes
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+      - if: needs.changes.outputs.rust == 'true'
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - if: needs.changes.outputs.rust == 'true'
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
         with:
           components: llvm-tools-preview
-      - uses: taiki-e/install-action@fd2f5e3d644b484055ebf4268f474c565f148f25 # v2.81.9
+      - if: needs.changes.outputs.rust == 'true'
+        uses: taiki-e/install-action@fd2f5e3d644b484055ebf4268f474c565f148f25 # v2.81.9
         with:
           tool: cargo-llvm-cov
-      - run: cargo llvm-cov --cobertura --output-path cobertura.xml
+      - if: needs.changes.outputs.rust == 'true'
+        run: cargo llvm-cov --cobertura --output-path cobertura.xml
         working-directory: rust
-      - uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+      - if: needs.changes.outputs.rust == 'true'
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
           files: rust/cobertura.xml
           flags: rust
@@ -81,19 +132,25 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
 
   go:
+    needs: changes
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+      - if: needs.changes.outputs.go == 'true'
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - if: needs.changes.outputs.go == 'true'
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
         with:
           go-version: '1.25'
-      - run: go test -coverprofile=coverage.out -covermode=atomic ./...
+      - if: needs.changes.outputs.go == 'true'
+        run: go test -coverprofile=coverage.out -covermode=atomic ./...
         working-directory: go
-      - run: |
+      - if: needs.changes.outputs.go == 'true'
+        run: |
           go install github.com/boumenot/gocover-cobertura@latest
           "$(go env GOPATH)/bin/gocover-cobertura" < coverage.out > coverage.xml
         working-directory: go
-      - uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+      - if: needs.changes.outputs.go == 'true'
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
           files: go/coverage.xml
           flags: go
@@ -101,17 +158,22 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
 
   java:
+    needs: changes
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-      - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+      - if: needs.changes.outputs.java == 'true'
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - if: needs.changes.outputs.java == 'true'
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
         with:
           distribution: temurin
           java-version: '21'
           cache: maven
-      - run: mvn -B verify
+      - if: needs.changes.outputs.java == 'true'
+        run: mvn -B verify
         working-directory: java
-      - uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+      - if: needs.changes.outputs.java == 'true'
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
           files: java/target/site/jacoco/jacoco.xml
           flags: java
@@ -119,17 +181,22 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
 
   ruby:
+    needs: changes
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-      - uses: ruby/setup-ruby@12fd324f1d0b43274fdc8130f6980590a667c455 # v1
+      - if: needs.changes.outputs.ruby == 'true'
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - if: needs.changes.outputs.ruby == 'true'
+        uses: ruby/setup-ruby@12fd324f1d0b43274fdc8130f6980590a667c455 # v1
         with:
           ruby-version: '3.3'
           bundler-cache: true
           working-directory: ruby
-      - run: bundle exec rspec
+      - if: needs.changes.outputs.ruby == 'true'
+        run: bundle exec rspec
         working-directory: ruby
-      - uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+      - if: needs.changes.outputs.ruby == 'true'
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
           files: ruby/coverage/coverage.xml
           flags: ruby
@@ -137,19 +204,25 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
 
   php:
+    needs: changes
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-      - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
+      - if: needs.changes.outputs.php == 'true'
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - if: needs.changes.outputs.php == 'true'
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
         with:
           php-version: '8.3'
           extensions: openssl, curl, json
           coverage: pcov
-      - run: composer install --no-interaction --no-progress
+      - if: needs.changes.outputs.php == 'true'
+        run: composer install --no-interaction --no-progress
         working-directory: php
-      - run: vendor/bin/phpunit --coverage-cobertura=coverage/cobertura.xml
+      - if: needs.changes.outputs.php == 'true'
+        run: vendor/bin/phpunit --coverage-cobertura=coverage/cobertura.xml
         working-directory: php
-      - uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+      - if: needs.changes.outputs.php == 'true'
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
           files: php/coverage/cobertura.xml
           flags: php
