@@ -9,7 +9,26 @@ permissions:
   contents: read
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      dotnet: ${{ steps.cp.outputs.dotnet }}
+      node: ${{ steps.cp.outputs.node }}
+      n8n: ${{ steps.cp.outputs.n8n }}
+      python: ${{ steps.cp.outputs.python }}
+      rust: ${{ steps.cp.outputs.rust }}
+      java: ${{ steps.cp.outputs.java }}
+      go: ${{ steps.cp.outputs.go }}
+      ruby: ${{ steps.cp.outputs.ruby }}
+      php: ${{ steps.cp.outputs.php }}
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - id: cp
+        uses: ./.github/actions/changed-packages
+
   dotnet:
+    needs: changes
+    if: needs.changes.outputs.dotnet == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -23,6 +42,8 @@ jobs:
       - run: dotnet test dotnet/ -c Release
 
   node:
+    needs: changes
+    if: needs.changes.outputs.node == 'true'
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -43,6 +64,8 @@ jobs:
       - run: npm test
 
   n8n:
+    needs: changes
+    if: needs.changes.outputs.n8n == 'true'
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -65,6 +88,8 @@ jobs:
       - run: npm test
 
   python:
+    needs: changes
+    if: needs.changes.outputs.python == 'true'
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -84,6 +109,8 @@ jobs:
       - run: pytest -q
 
   rust:
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -102,6 +129,8 @@ jobs:
           command: check advisories bans sources
 
   go:
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -122,6 +151,8 @@ jobs:
       - run: go test ./...
 
   java:
+    needs: changes
+    if: needs.changes.outputs.java == 'true'
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -139,6 +170,8 @@ jobs:
       - run: mvn -B verify
 
   ruby:
+    needs: changes
+    if: needs.changes.outputs.ruby == 'true'
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -157,6 +190,8 @@ jobs:
       - run: bundle exec rspec
 
   php:
+    needs: changes
+    if: needs.changes.outputs.php == 'true'
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -175,3 +210,23 @@ jobs:
       - run: vendor/bin/phpstan analyse --memory-limit=512M
       - run: vendor/bin/php-cs-fixer fix --dry-run --diff
       - run: vendor/bin/phpunit
+
+  # Aggregate gate: the single required CI status check. Always runs so it
+  # reports even when language jobs are skipped; fails only if a needed job
+  # actually failed or was cancelled (skipped/success both pass).
+  ci-gate:
+    if: always()
+    needs: [changes, dotnet, node, n8n, python, rust, go, java, ruby, php]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail if any required job failed
+        run: |
+          results='${{ join(needs.*.result, ',') }}'
+          echo "job results: $results"
+          case ",$results," in
+            *,failure,* | *,cancelled,*)
+              echo "A required job did not succeed."
+              exit 1
+              ;;
+          esac
+          echo "All required jobs succeeded or were skipped."
