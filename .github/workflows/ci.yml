@@ -155,6 +155,9 @@ jobs:
           version: v2.12.2
           working-directory: go
       - run: go test ./...
+      # Short fuzz run over the envelope wire parser (attacker-influenced ciphertext). Seeds
+      # always run; -fuzztime adds a brief exploratory pass to catch panics on malformed input.
+      - run: go test -run='^$' -fuzz='FuzzDecryptEnvelope$' -fuzztime=20s .
 
   java:
     needs: changes
