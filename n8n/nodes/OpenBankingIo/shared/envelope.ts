@@ -99,10 +99,16 @@ export async function importPrivateKey(pkcs8Base64: string): Promise<PrivateKey>
 	);
 }
 
-/** Buffer-free base64 -> bytes; `atob` is a global in n8n's Node runtime. */
-function base64ToBytes(b64: string): Uint8Array {
+/**
+ * Buffer-free base64 -> bytes; `atob` is a global in n8n's Node runtime.
+ *
+ * Returns a `Uint8Array<ArrayBuffer>` (not the wider `ArrayBufferLike`) so the bytes
+ * satisfy Web Crypto's `BufferSource` parameter type under @types/node 25+, which
+ * tightened typed-array buffer typing.
+ */
+function base64ToBytes(b64: string): Uint8Array<ArrayBuffer> {
 	const binary = atob(b64);
-	const out = new Uint8Array(binary.length);
+	const out = new Uint8Array(new ArrayBuffer(binary.length));
 	for (let i = 0; i < binary.length; i++) {
 		out[i] = binary.charCodeAt(i);
 	}
