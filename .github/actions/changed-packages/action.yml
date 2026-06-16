@@ -1,0 +1,51 @@
+name: Detect changed packages
+description: >-
+  Path-filter which client packages are affected by a change. A package is
+  affected by its own dir, by shared test fixtures, or by any CI infra change
+  (workflows / composite actions) — so editing CI re-runs everything.
+
+outputs:
+  dotnet:
+    description: Whether the dotnet package is affected
+    value: ${{ steps.filter.outputs.dotnet }}
+  node:
+    description: Whether the node package is affected
+    value: ${{ steps.filter.outputs.node }}
+  n8n:
+    description: Whether the n8n package is affected
+    value: ${{ steps.filter.outputs.n8n }}
+  python:
+    description: Whether the python package is affected
+    value: ${{ steps.filter.outputs.python }}
+  rust:
+    description: Whether the rust package is affected
+    value: ${{ steps.filter.outputs.rust }}
+  java:
+    description: Whether the java package is affected
+    value: ${{ steps.filter.outputs.java }}
+  go:
+    description: Whether the go package is affected
+    value: ${{ steps.filter.outputs.go }}
+  ruby:
+    description: Whether the ruby package is affected
+    value: ${{ steps.filter.outputs.ruby }}
+  php:
+    description: Whether the php package is affected
+    value: ${{ steps.filter.outputs.php }}
+
+runs:
+  using: composite
+  steps:
+    - id: filter
+      uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
+      with:
+        filters: |
+          dotnet: ['dotnet/**', 'fixtures/**', '.github/workflows/**', '.github/actions/**']
+          node: ['node/**', 'fixtures/**', '.github/workflows/**', '.github/actions/**']
+          n8n: ['n8n/**', 'fixtures/**', '.github/workflows/**', '.github/actions/**']
+          python: ['python/**', 'fixtures/**', '.github/workflows/**', '.github/actions/**']
+          rust: ['rust/**', 'fixtures/**', '.github/workflows/**', '.github/actions/**']
+          java: ['java/**', 'fixtures/**', '.github/workflows/**', '.github/actions/**']
+          go: ['go/**', 'fixtures/**', '.github/workflows/**', '.github/actions/**']
+          ruby: ['ruby/**', 'fixtures/**', '.github/workflows/**', '.github/actions/**']
+          php: ['php/**', 'fixtures/**', '.github/workflows/**', '.github/actions/**']
