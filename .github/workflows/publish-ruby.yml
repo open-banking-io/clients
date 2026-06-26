@@ -19,8 +19,8 @@ jobs:
       run:
         working-directory: ruby
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-      - uses: ruby/setup-ruby@12fd324f1d0b43274fdc8130f6980590a667c455 # v1
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: ruby/setup-ruby@9eb537ca036ebaed86729dcb9309076e4c5c3b74 # v1
         with:
           ruby-version: '3.4'
           bundler-cache: true
@@ -37,7 +37,7 @@ jobs:
           [ "$TAG_VERSION" = "$GEM_VERSION" ] || { echo "::error::tag $TAG_VERSION != gem $GEM_VERSION"; exit 1; }
 
       - name: Configure RubyGems credentials (OIDC trusted publishing)
-        uses: rubygems/configure-rubygems-credentials@0fe86296841519356ad7dd2041187e0578738b91 # main
+        uses: rubygems/configure-rubygems-credentials@6861877652452567c1a007a50badad3d316fc9ba # main
 
       - run: gem build open-banking-io.gemspec
       - run: gem push open-banking-io-*.gem
