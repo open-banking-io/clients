@@ -1,10 +1,12 @@
 import {
+	NodeApiError,
 	NodeOperationError,
 	type IDataObject,
 	type IExecuteFunctions,
 	type INodeExecutionData,
 	type INodeType,
 	type INodeTypeDescription,
+	type JsonObject,
 } from 'n8n-workflow';
 
 import {
@@ -275,7 +277,8 @@ export class OpenBankingIo implements INodeType {
 					out.push({ json: { error: (error as Error).message }, pairedItem: i });
 					continue;
 				}
-				throw error;
+				if (error instanceof NodeOperationError) throw error;
+				throw new NodeApiError(this.getNode(), error as JsonObject, { itemIndex: i });
 			}
 		}
 
