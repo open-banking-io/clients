@@ -1,9 +1,11 @@
+import { NodeApiError } from 'n8n-workflow';
 import type {
 	IDataObject,
 	INodeExecutionData,
 	INodeType,
 	INodeTypeDescription,
 	IPollFunctions,
+	JsonObject,
 } from 'n8n-workflow';
 
 import {
@@ -61,63 +63,67 @@ export class OpenBankingIoTrigger implements INodeType {
 	};
 
 	async poll(this: IPollFunctions): Promise<INodeExecutionData[][] | null> {
-		const bundle = resolveBundle(await this.getCredentials('openBankingIoApi'));
-		const key = await importBundleKey(bundle);
-		const state = this.getWorkflowStaticData('node') as TriggerState;
-		const isManual = this.getMode() === 'manual';
+		try {
+			const bundle = resolveBundle(await this.getCredentials('openBankingIoApi'));
+			const key = await importBundleKey(bundle);
+			const state = this.getWorkflowStaticData('node') as TriggerState;
+			const isManual = this.getMode() === 'manual';
 
-		const lookbackDays = this.getNodeParameter('lookbackDays', 7) as number;
-		const from = state.lastBookingDate ?? isoDaysAgo(lookbackDays);
+			const lookbackDays = this.getNodeParameter('lookbackDays', 7) as number;
+			const from = state.lastBookingDate ?? isoDaysAgo(lookbackDays);
 
-		const accounts = await apiRequest<AccountWire[]>(this, bundle, 'GET', '/api/accounts');
+			const accounts = await apiRequest<AccountWire[]>(this, bundle, 'GET', '/api/accounts');
 
-		const seen = new Set(state.seenIds ?? []);
-		const fresh: INodeExecutionData[] = [];
-		// Track each emitted row's booking date so we can keep only the boundary-date IDs below.
-		const emitted: Array<{ id: string; bookingDate: string | null }> = [];
-		let maxBookingDate = from;
+			const seen = new Set(state.seenIds ?? []);
+			const fresh: INodeExecutionData[] = [];
+			// Track each emitted row's booking date so we can keep only the boundary-date IDs below.
+			const emitted: Array<{ id: string; bookingDate: string | null }> = [];
+			let maxBookingDate = from;
 
-		for (const account of accounts) {
-			const path = transactionsPath(account.id);
-			const wires = await collectTransactionWires(
-				(offset, limit) =>
-					apiRequest<TransactionPageWire>(this, bundle, 'GET', path, { from, offset, limit }),
-				Number.POSITIVE_INFINITY,
-			);
+			for (const account of accounts) {
+				const path = transactionsPath(account.id);
+				const wires = await collectTransactionWires(
+					(offset, limit) =>
+						apiRequest<TransactionPageWire>(this, bundle, 'GET', path, { from, offset, limit }),
+					Number.POSITIVE_INFINITY,
+				);
 
-			for (const wire of wires) {
-				if (seen.has(wire.id)) continue;
-				seen.add(wire.id);
-				const bookingDate = wire.bookingDate ?? null;
-				emitted.push({ id: wire.id, bookingDate });
-				fresh.push({
-					json: {
-						accountId: account.id,
-						...(await mapTransaction(key, wire)),
-					} as unknown as IDataObject,
-				});
-				if (bookingDate && bookingDate > maxBookingDate) {
-					maxBookingDate = bookingDate;
+				for (const wire of wires) {
+					if (seen.has(wire.id)) continue;
+					seen.add(wire.id);
+					const bookingDate = wire.bookingDate ?? null;
+					emitted.push({ id: wire.id, bookingDate });
+					fresh.push({
+						json: {
+							accountId: account.id,
+							...(await mapTransaction(key, wire)),
+						} as unknown as IDataObject,
+					});
+					if (bookingDate && bookingDate > maxBookingDate) {
+						maxBookingDate = bookingDate;
+					}
 				}
 			}
-		}
 
-		// A manual test run must not advance the cursor, so the user can re-test freely.
-		if (!isManual) {
-			state.lastBookingDate = maxBookingDate;
-			// Only rows on the new boundary date (or undated/pending ones) can be re-fetched next
-			// poll, so those are all we need to remember. If the date didn't advance, carry the
-			// prior boundary IDs forward; otherwise the earlier date is now out of range — drop it.
-			const boundaryIds = emitted
-				.filter((e) => e.bookingDate == null || e.bookingDate === maxBookingDate)
-				.map((e) => e.id);
-			state.seenIds =
-				maxBookingDate === from
-					? [...new Set([...(state.seenIds ?? []), ...boundaryIds])]
-					: boundaryIds;
-		}
+			// A manual test run must not advance the cursor, so the user can re-test freely.
+			if (!isManual) {
+				state.lastBookingDate = maxBookingDate;
+				// Only rows on the new boundary date (or undated/pending ones) can be re-fetched next
+				// poll, so those are all we need to remember. If the date didn't advance, carry the
+				// prior boundary IDs forward; otherwise the earlier date is now out of range — drop it.
+				const boundaryIds = emitted
+					.filter((e) => e.bookingDate == null || e.bookingDate === maxBookingDate)
+					.map((e) => e.id);
+				state.seenIds =
+					maxBookingDate === from
+						? [...new Set([...(state.seenIds ?? []), ...boundaryIds])]
+						: boundaryIds;
+			}
 
-		return fresh.length ? [fresh] : null;
+			return fresh.length ? [fresh] : null;
+		} catch (error) {
+			throw new NodeApiError(this.getNode(), error as JsonObject);
+		}
 	}
 }
 

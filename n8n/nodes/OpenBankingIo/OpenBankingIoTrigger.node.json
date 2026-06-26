@@ -1,5 +1,5 @@
 {
-	"node": "n8n-nodes-base.openBankingIoTrigger",
+	"node": "@open-banking-io/n8n-nodes-open-banking-io.openBankingIoTrigger",
 	"nodeVersion": "1.0",
 	"codexVersion": "1.0",
 	"categories": ["Finance & Accounting"],
