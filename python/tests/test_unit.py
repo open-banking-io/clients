@@ -38,6 +38,15 @@ def test_user_agent_unknown_when_package_missing(monkeypatch):
     assert _user_agent() == "open-banking-io/python/unknown"
 
 
+def test_version_matches_package_metadata():
+    """__version__ must agree with the version declared in pyproject.toml."""
+    from importlib.metadata import version as pkg_version
+
+    import open_banking_io
+
+    assert open_banking_io.__version__ == pkg_version("open-banking-io")
+
+
 def test_parse_date_none_and_value():
     assert _parse_date(None) is None
     assert _parse_date("") is None
