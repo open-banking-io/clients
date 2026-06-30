@@ -1,0 +1,212 @@
+# ERPNext Open Banking © 2026
+# Author: open-banking.io
+# Licence: MIT
+
+
+"""Sync engine: pulls transactions from open-banking.io and writes them into ERPNext.
+
+For each active Open Banking Connection:
+  1. Fetch transactions from OBI (decrypted locally — zero-knowledge).
+  2. Map each to an ERPNext ``Bank Transaction`` field dict.
+  3. Dedup by ``transaction_id`` (skip if a Bank Transaction with that ID
+     already exists for this bank account).
+  4. Insert new Bank Transactions (status=Pending, ready for reconciliation).
+  5. Log the result to an ``Open Banking Sync Log`` record.
+"""
+
+from __future__ import annotations
+
+from datetime import date, timedelta
+from typing import Any
+
+import frappe
+from frappe import _
+from frappe.utils import now_datetime, get_datetime
+
+from .client import OpenBankingClient
+from .mapper import map_transaction
+
+
+def get_client(settings: dict[str, Any] | None = None) -> OpenBankingClient:
+    """Builds an OpenBankingClient from the Open Banking Settings doctype."""
+    if settings is None:
+        settings = frappe.get_doc("Open Banking Settings").as_dict()
+
+    bundle_raw = settings.get("credentials_bundle", "")
+    if not bundle_raw:
+        frappe.throw(_("Please paste your open-banking.io credentials bundle in Open Banking Settings."))
+
+    return OpenBankingClient.from_credentials(bundle_raw)
+
+
+def sync_connection(connection_name: str) -> dict[str, Any]:
+    """Syncs one Open Banking Connection (one bank account).
+
+    Returns ``{"created": int, "skipped": int, "total": int, "errors": list}``.
+    """
+    conn = frappe.get_doc("Open Banking Connection", connection_name)
+    settings = frappe.get_doc("Open Banking Settings").as_dict()
+
+    if conn.status != "Active":
+        return {"created": 0, "skipped": 0, "total": 0, "errors": ["Connection is not active"]}
+
+    company = settings.get("default_company") or conn.company
+    bank_account = conn.bank_account
+
+    if not bank_account:
+        return {"created": 0, "skipped": 0, "total": 0, "errors": ["No ERPNext Bank Account linked"]}
+
+    # Determine date range: from last sync (or lookback days) to today.
+    lookback_days = int(settings.get("lookback_days", 30))
+    last_synced = conn.last_synced_at
+    if last_synced:
+        date_from = get_datetime(last_synced).date()
+    else:
+        date_from = date.today() - timedelta(days=lookback_days)
+    date_to = date.today()
+
+    # Log record
+    log = frappe.get_doc(
+        {
+            "doctype": "Open Banking Sync Log",
+            "connection": connection_name,
+            "started_at": now_datetime(),
+            "status": "Running",
+        }
+    )
+    log.insert(ignore_permissions=True)
+
+    created = 0
+    skipped = 0
+    total = 0
+    errors: list[str] = []
+
+    try:
+        client = get_client(settings)
+
+        # Trigger an online sync first so the OBI service fetches fresh data
+        # from the bank, then pull transactions.
+        try:
+            client.sync(conn.obi_account_id)
+        except Exception as exc:
+            # Sync may fail if consent expired — we still try to pull cached data.
+            errors.append(f"Online sync warning: {exc}")
+
+        # Paginate through all transactions in the date range.
+        offset = 0
+        page_size = 100
+        all_txns: list[dict[str, Any]] = []
+
+        while True:
+            page = client.get_transactions(
+                conn.obi_account_id,
+                date_from=date_from.isoformat(),
+                date_to=date_to.isoformat(),
+                limit=page_size,
+                offset=offset,
+            )
+            batch = page.get("items", [])
+            total = page.get("total", total)
+            if not batch:
+                break
+            all_txns.extend(batch)
+            offset += len(batch)
+            if offset >= total:
+                break
+
+        client.close()
+
+        # Insert each transaction (dedup by transaction_id).
+        for txn in all_txns:
+            txn_id = txn.get("id", "")
+            if not txn_id:
+                continue
+
+            # Check if a Bank Transaction with this transaction_id already exists.
+            existing = frappe.db.exists(
+                "Bank Transaction",
+                {"transaction_id": txn_id, "bank_account": bank_account},
+            )
+            if existing:
+                skipped += 1
+                continue
+
+            mapped = map_transaction(txn, bank_account, company)
+            if mapped["date"] is None:
+                skipped += 1
+                continue
+
+            bt = frappe.get_doc({"doctype": "Bank Transaction", **mapped})
+            bt.insert(ignore_permissions=True)
+            created += 1
+
+    except Exception as exc:
+        errors.append(str(exc))
+        frappe.log_error(
+            title=f"Open Banking sync failed: {connection_name}",
+            message=str(exc),
+        )
+
+    # Update connection's last_synced_at
+    frappe.db.set_value("Open Banking Connection", connection_name, "last_synced_at", now_datetime())
+
+    # Update log
+    log.db_set(
+        {
+            "completed_at": now_datetime(),
+            "accounts_fetched": 1,
+            "transactions_created": created,
+            "transactions_skipped": skipped,
+            "total_available": total,
+            "status": "Completed" if not errors else "Completed with errors",
+            "error_detail": "\n".join(errors) if errors else "",
+        }
+    )
+
+    return {"created": created, "skipped": skipped, "total": total, "errors": errors}
+
+
+def sync_all_connections() -> list[dict[str, Any]]:
+    """Syncs every active Open Banking Connection. Called by the scheduler."""
+    connections = frappe.get_all(
+        "Open Banking Connection", filters={"status": "Active"}, pluck="name"
+    )
+    results = []
+    for name in connections:
+        try:
+            result = sync_connection(name)
+            results.append({"connection": name, **result})
+        except Exception as exc:
+            results.append({"connection": name, "error": str(exc)})
+    return results
+
+
+@frappe.whitelist()
+def sync_now(bank_account: str | None = None) -> dict[str, Any]:
+    """Whitelisted method for the 'Sync Now' button on the Bank Account form."""
+    filters = {"status": "Active"}
+    if bank_account:
+        filters["bank_account"] = bank_account
+
+    connections = frappe.get_all("Open Banking Connection", filters=filters, pluck="name")
+    if not connections:
+        return {"created": 0, "skipped": 0, "total": 0, "errors": ["No active connection found"]}
+
+    results = []
+    total_created = 0
+    total_skipped = 0
+    all_errors: list[str] = []
+
+    for name in connections:
+        r = sync_connection(name)
+        results.append({"connection": name, **r})
+        total_created += r.get("created", 0)
+        total_skipped += r.get("skipped", 0)
+        all_errors.extend(r.get("errors", []))
+
+    return {
+        "created": total_created,
+        "skipped": total_skipped,
+        "connections": results,
+        "errors": all_errors,
+    }

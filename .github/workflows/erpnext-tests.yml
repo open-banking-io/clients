@@ -1,0 +1,27 @@
+name: ERPNext App Tests
+
+on:
+  push:
+    paths:
+      - 'erpnext/**'
+      - '.github/workflows/erpnext-tests.yml'
+  pull_request:
+    paths:
+      - 'erpnext/**'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.11", "3.13"]
+    defaults:
+      run:
+        working-directory: erpnext
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: pip install pytest cryptography requests
+      - run: python -m pytest tests/ -v
