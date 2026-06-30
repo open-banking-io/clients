@@ -11,17 +11,10 @@ They mirror the envelope tests in the Python SDK and n8n node.
 
 import base64
 import json
-import os
 
 import pytest
 
-# These imports work standalone (no Frappe needed) because envelope.py only
-# depends on the `cryptography` package.
-import sys
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
-from erpnext_open_banking.erpnext_open_banking.utils.envelope import (  # noqa: direct import — avoids __init__ pulling in frappe
+from erpnext_open_banking.erpnext_open_banking.utils.envelope import (
     decrypt,
     decrypt_to_json,
     load_private_key,

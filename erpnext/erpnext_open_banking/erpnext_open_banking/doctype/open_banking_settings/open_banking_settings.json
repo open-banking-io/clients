@@ -13,7 +13,6 @@
   "lookback_days",
   "sync_section",
   "enable_scheduled_sync",
-  "sync_frequency",
   "column_break_2"
  ],
  "fields": [
@@ -64,20 +63,13 @@
    "fieldname": "enable_scheduled_sync",
    "fieldtype": "Check",
    "label": "Enable Scheduled Sync",
-   "default": "0"
-  },
-  {
-   "fieldname": "sync_frequency",
-   "fieldtype": "Select",
-   "label": "Sync Frequency",
-   "options": "\nHourly\nEvery 6 Hours\nDaily",
-   "default": "Daily",
-   "depends_on": "enable_scheduled_sync"
+   "default": "0",
+   "description": "When enabled, transactions are synced automatically every 6 hours."
   },
   {
    "fieldname": "column_break_2",
    "fieldtype": "Column Break"
- }
+  }
  ],
  "issingle": 1,
  "module": "ERPNext Open Banking",

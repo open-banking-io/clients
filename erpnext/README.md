@@ -48,10 +48,14 @@ your ERPNext instance.
 
 ```bash
 # From your bench directory:
-bench get-app https://github.com/open-banking-io/erpnext-open-banking.git
+bench get-app https://github.com/open-banking-io/clients.git --app-path erpnext
 bench install-app erpnext_open_banking
 bench migrate
 ```
+
+> **Note:** This app lives in the [open-banking-io/clients](https://github.com/open-banking-io/clients)
+> monorepo (alongside the Python, Node, Rust, Go and other SDKs). The `--app-path erpnext`
+> flag tells bench to install from the `erpnext/` subdirectory.
 
 ## Setup
 

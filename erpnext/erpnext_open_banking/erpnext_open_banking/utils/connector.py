@@ -135,15 +135,23 @@ def sync_connection(connection_name: str) -> dict[str, Any]:
                 skipped += 1
                 continue
 
-            mapped = map_transaction(txn, bank_account, company)
-            if mapped["date"] is None:
-                skipped += 1
-                continue
+            try:
+                mapped = map_transaction(txn, bank_account, company)
+                if mapped["date"] is None:
+                    skipped += 1
+                    continue
 
-            bt = frappe.get_doc({"doctype": "Bank Transaction", **mapped})
-            bt.insert(ignore_permissions=True)
-            created += 1
-            existing_ids.add(txn_id)
+                bt = frappe.get_doc({"doctype": "Bank Transaction", **mapped})
+                bt.insert(ignore_permissions=True)
+                created += 1
+                existing_ids.add(txn_id)
+            except Exception as txn_exc:
+                # One bad transaction must not abort the entire sync.
+                errors.append(f"Txn {txn_id}: {txn_exc}")
+                frappe.log_error(
+                    title=f"Open Banking: skipped transaction {txn_id}",
+                    message=str(txn_exc),
+                )
 
     except Exception as exc:
         errors.append(str(exc))

@@ -8,16 +8,12 @@ These are pure-function tests — no Frappe, no network. They verify that
 OBI decrypted transaction dicts map correctly to ERPNext Bank Transaction fields.
 """
 
-import os
-import sys
 from datetime import date
 from decimal import Decimal
 
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
-from erpnext_open_banking.erpnext_open_banking.utils.mapper import map_transaction  # noqa: direct import
+from erpnext_open_banking.erpnext_open_banking.utils.mapper import map_transaction
 
 BANK_ACCOUNT = "HDFC-001"
 COMPANY = "My Company"
@@ -37,8 +33,8 @@ class TestMapTransaction:
             "remittance_information": "Invoice #12345",
         }
         result = map_transaction(txn, BANK_ACCOUNT, COMPANY)
-        assert result["deposit"] == 1500.0
-        assert result["withdrawal"] == 0.0
+        assert result["deposit"] == "1500.00"
+        assert result["withdrawal"] == "0"
         assert result["bank_account"] == BANK_ACCOUNT
         assert result["company"] == COMPANY
         assert result["currency"] == "EUR"
@@ -61,8 +57,8 @@ class TestMapTransaction:
             "remittance_information": "Electricity bill June 2026",
         }
         result = map_transaction(txn, BANK_ACCOUNT, COMPANY)
-        assert result["withdrawal"] == 299.95
-        assert result["deposit"] == 0.0
+        assert result["withdrawal"] == "299.95"
+        assert result["deposit"] == "0"
         assert result["bank_party_name"] == "Power Company A/S"
         assert result["bank_party_iban"] == "DK9876543210987654"
 
@@ -77,8 +73,8 @@ class TestMapTransaction:
             "creditor_name": "Coffee Shop",
         }
         result = map_transaction(txn, BANK_ACCOUNT, COMPANY)
-        assert result["withdrawal"] == 50.0
-        assert result["deposit"] == 0.0
+        assert result["withdrawal"] == "50.00"
+        assert result["deposit"] == "0"
 
     def test_fallback_description(self):
         """When no remittance/note, description falls back to counterparty name."""
