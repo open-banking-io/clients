@@ -81,6 +81,7 @@ def sync_connection(connection_name: str) -> dict[str, Any]:
     total = 0
     errors: list[str] = []
 
+    client = None
     try:
         client = get_client(settings)
 
@@ -114,7 +115,15 @@ def sync_connection(connection_name: str) -> dict[str, Any]:
             if offset >= total:
                 break
 
-        client.close()
+        # Batch-fetch existing transaction_ids for this bank account (avoids
+        # N+1 queries — one SELECT instead of one per transaction).
+        existing_ids = set(
+            frappe.get_all(
+                "Bank Transaction",
+                filters={"bank_account": bank_account},
+                pluck="transaction_id",
+            )
+        )
 
         # Insert each transaction (dedup by transaction_id).
         for txn in all_txns:
@@ -122,12 +131,7 @@ def sync_connection(connection_name: str) -> dict[str, Any]:
             if not txn_id:
                 continue
 
-            # Check if a Bank Transaction with this transaction_id already exists.
-            existing = frappe.db.exists(
-                "Bank Transaction",
-                {"transaction_id": txn_id, "bank_account": bank_account},
-            )
-            if existing:
+            if txn_id in existing_ids:
                 skipped += 1
                 continue
 
@@ -139,6 +143,7 @@ def sync_connection(connection_name: str) -> dict[str, Any]:
             bt = frappe.get_doc({"doctype": "Bank Transaction", **mapped})
             bt.insert(ignore_permissions=True)
             created += 1
+            existing_ids.add(txn_id)
 
     except Exception as exc:
         errors.append(str(exc))
@@ -146,9 +151,15 @@ def sync_connection(connection_name: str) -> dict[str, Any]:
             title=f"Open Banking sync failed: {connection_name}",
             message=str(exc),
         )
+    finally:
+        if client is not None:
+            client.close()
 
-    # Update connection's last_synced_at
-    frappe.db.set_value("Open Banking Connection", connection_name, "last_synced_at", now_datetime())
+    # Only advance last_synced_at if we processed at least one transaction
+    # (created or skipped). Otherwise the failed window would be silently
+    # skipped on the next run.
+    if created > 0 or skipped > 0:
+        frappe.db.set_value("Open Banking Connection", connection_name, "last_synced_at", now_datetime())
 
     # Update log
     log.db_set(
@@ -167,7 +178,15 @@ def sync_connection(connection_name: str) -> dict[str, Any]:
 
 
 def sync_all_connections() -> list[dict[str, Any]]:
-    """Syncs every active Open Banking Connection. Called by the scheduler."""
+    """Syncs every active Open Banking Connection. Called by the scheduler.
+
+    Respects the ``enable_scheduled_sync`` checkbox in Settings — if the user
+    has disabled it, the cron tick is a no-op.
+    """
+    settings = frappe.get_doc("Open Banking Settings").as_dict()
+    if not settings.get("enable_scheduled_sync"):
+        return []
+
     connections = frappe.get_all(
         "Open Banking Connection", filters={"status": "Active"}, pluck="name"
     )
@@ -183,7 +202,13 @@ def sync_all_connections() -> list[dict[str, Any]]:
 
 @frappe.whitelist()
 def sync_now(bank_account: str | None = None) -> dict[str, Any]:
-    """Whitelisted method for the 'Sync Now' button on the Bank Account form."""
+    """Whitelisted method for the 'Sync Now' button on the Bank Account form.
+
+    Only Accounts Managers (or System Managers) may trigger a sync.
+    """
+    if not frappe.has_role(["Accounts Manager", "System Manager"]):
+        frappe.throw(_("Only Accounts Managers can trigger bank sync."), frappe.PermissionError)
+
     filters = {"status": "Active"}
     if bank_account:
         filters["bank_account"] = bank_account

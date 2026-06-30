@@ -78,5 +78,5 @@ def map_transaction(
         "bank_party_account_number": (party_account_number or "")[:34],
         "status": "Pending",
         # Extra fields stored for audit / extended bank statement section
-        "transaction_type": txn.get("bank_transaction_code") or "",
+        "transaction_type": (txn.get("bank_transaction_code") or "")[:50],
     }

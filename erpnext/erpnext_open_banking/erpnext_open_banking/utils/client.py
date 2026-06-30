@@ -25,6 +25,8 @@ import requests
 
 from . import envelope
 
+_DEFAULT_TIMEOUT = 30  # seconds — prevents worker threads blocking forever
+
 
 def _parse_date(value: str | None) -> date | None:
     if not value:
@@ -126,7 +128,9 @@ class OpenBankingClient:
             params["offset"] = offset
 
         resp = self._session.get(
-            f"{self._base_url}/api/accounts/{account_id}/transactions", params=params
+            f"{self._base_url}/api/accounts/{account_id}/transactions",
+            params=params,
+            timeout=_DEFAULT_TIMEOUT,
         )
         resp.raise_for_status()
         page = resp.json()
@@ -136,7 +140,7 @@ class OpenBankingClient:
 
     def get_connections(self) -> list[dict[str, Any]]:
         """Lists the user's bank connections (consents)."""
-        resp = self._session.get(f"{self._base_url}/api/connections")
+        resp = self._session.get(f"{self._base_url}/api/connections", timeout=_DEFAULT_TIMEOUT)
         resp.raise_for_status()
         return [
             {
@@ -166,7 +170,9 @@ class OpenBankingClient:
             raise ValueError("Account has no active session (reconnect required) — cannot sync")
 
         resp = self._session.post(
-            f"{self._base_url}/api/accounts/{account_id}/sync", json={"uid": uid}
+            f"{self._base_url}/api/accounts/{account_id}/sync",
+            json={"uid": uid},
+            timeout=_DEFAULT_TIMEOUT,
         )
         resp.raise_for_status()
         result = resp.json()
@@ -184,7 +190,7 @@ class OpenBankingClient:
             if uid is not None:
                 items.append({"accountId": a.get("id"), "uid": uid})
 
-        resp = self._session.post(f"{self._base_url}/api/sync", json={"items": items})
+        resp = self._session.post(f"{self._base_url}/api/sync", json={"items": items}, timeout=_DEFAULT_TIMEOUT)
         resp.raise_for_status()
         result = resp.json()
         return {
@@ -195,7 +201,7 @@ class OpenBankingClient:
     # -- Internals -------------------------------------------------------------
 
     def _get_account_wires(self) -> list[dict[str, Any]]:
-        resp = self._session.get(f"{self._base_url}/api/accounts")
+        resp = self._session.get(f"{self._base_url}/api/accounts", timeout=_DEFAULT_TIMEOUT)
         resp.raise_for_status()
         return resp.json()
 
