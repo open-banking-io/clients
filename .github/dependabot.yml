@@ -32,6 +32,14 @@ updates:
       - dependency-name: '*'
         update-types: ['version-update:semver-major']
 
+  - package-ecosystem: pip
+    directory: /beancount
+    schedule:
+      interval: weekly
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
+
   - package-ecosystem: cargo
     directory: /rust
     schedule:

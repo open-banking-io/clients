@@ -1,0 +1,73 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "beancount-openbanking-io"
+version = "0.1.0"
+description = "Beancount/beangulp importer for open-banking.io — zero-knowledge PSD2 bank sync for EEA & UK banks."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "open-banking.io" }]
+keywords = ["beancount", "beangulp", "banking", "psd2", "open-banking", "nordigen", "gocardless", "plaintextaccounting"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Office/Business :: Financial :: Accounting",
+]
+dependencies = [
+    "beancount>=3.0",
+    "beangulp>=0.2",
+    "open-banking-io>=0.2",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=9.0",
+    "pytest-cov>=7.0",
+    "ruff>=0.15",
+    "mypy>=2.0",
+]
+
+[project.urls]
+Homepage = "https://open-banking.io"
+Repository = "https://github.com/open-banking-io/clients"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/beancount_openbanking_io"]
+
+[tool.coverage.run]
+branch = true
+source = ["beancount_openbanking_io"]
+
+[tool.coverage.report]
+show_missing = true
+
+[tool.coverage.xml]
+output = "coverage.xml"
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "UP", "C4", "SIM", "RUF"]
+
+[tool.mypy]
+python_version = "3.10"
+files = ["src"]
+strict = true
+warn_unreachable = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+disallow_untyped_defs = true
+
+# Downstream deps ship no type information; treat their imports as untyped.
+[[tool.mypy.overrides]]
+module = ["beancount.*", "beangulp.*", "open_banking_io.*", "yaml"]
+ignore_missing_imports = true

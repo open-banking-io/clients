@@ -18,6 +18,7 @@ on:
           - ruby
           - php
           - cli
+          - beancount
       version:
         description: New version, e.g. 0.2.0 (no leading "v")
         required: true

@@ -36,6 +36,8 @@ jobs:
               - 'ruby/**'
             php:
               - 'php/**'
+            beancount:
+              - 'beancount/**'
             fixtures:
               - 'fixtures/**'
 
@@ -51,11 +53,12 @@ jobs:
           GO: ${{ steps.filter.outputs.go }}
           RUBY: ${{ steps.filter.outputs.ruby }}
           PHP: ${{ steps.filter.outputs.php }}
+          BEANCOUNT: ${{ steps.filter.outputs.beancount }}
           FIXTURES: ${{ steps.filter.outputs.fixtures }}
         with:
           script: |
             const MARKER = '<!-- changed-packages-report -->';
-            const ALL = ['dotnet', 'node', 'n8n', 'python', 'rust', 'java', 'go', 'ruby', 'php'];
+            const ALL = ['dotnet', 'node', 'n8n', 'python', 'rust', 'java', 'go', 'ruby', 'php', 'beancount'];
 
             const changed = new Set();
             for (const p of ALL) {

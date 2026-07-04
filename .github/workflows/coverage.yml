@@ -21,6 +21,7 @@ jobs:
       go: ${{ steps.cp.outputs.go }}
       ruby: ${{ steps.cp.outputs.ruby }}
       php: ${{ steps.cp.outputs.php }}
+      beancount: ${{ steps.cp.outputs.beancount }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - id: cp
@@ -188,12 +189,32 @@ jobs:
           fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}
 
+  beancount:
+    needs: changes
+    if: needs.changes.outputs.beancount == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: '3.12'
+      - run: pip install -e .[dev]
+        working-directory: beancount
+      - run: pytest --cov=beancount_openbanking_io --cov-report=xml
+        working-directory: beancount
+      - uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        with:
+          files: beancount/coverage.xml
+          flags: beancount
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+
   # Aggregate gate: the single required Coverage status check. Always runs so it
   # reports even when language jobs are skipped; fails only if a needed job
   # actually failed or was cancelled (skipped/success both pass).
   coverage-gate:
     if: always()
-    needs: [changes, dotnet, node, python, rust, go, java, ruby, php]
+    needs: [changes, dotnet, node, python, rust, go, java, ruby, php, beancount]
     runs-on: ubuntu-latest
     steps:
       - name: Fail if any coverage job failed
