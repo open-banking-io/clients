@@ -21,6 +21,7 @@ jobs:
       go: ${{ steps.cp.outputs.go }}
       ruby: ${{ steps.cp.outputs.ruby }}
       php: ${{ steps.cp.outputs.php }}
+      beancount: ${{ steps.cp.outputs.beancount }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - id: cp
@@ -220,12 +221,33 @@ jobs:
       - run: vendor/bin/php-cs-fixer fix --dry-run --diff
       - run: vendor/bin/phpunit
 
+  beancount:
+    needs: changes
+    if: needs.changes.outputs.beancount == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.10', '3.11', '3.12', '3.13']
+    defaults:
+      run:
+        working-directory: beancount
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: pip install -e .[dev]
+      - run: ruff check .
+      - run: ruff format --check .
+      - run: mypy src
+      - run: pytest -q
+
   # Aggregate gate: the single required CI status check. Always runs so it
   # reports even when language jobs are skipped; fails only if a needed job
   # actually failed or was cancelled (skipped/success both pass).
   ci-gate:
     if: always()
-    needs: [changes, dotnet, node, n8n, python, rust, go, java, ruby, php]
+    needs: [changes, dotnet, node, n8n, python, rust, go, java, ruby, php, beancount]
     runs-on: ubuntu-latest
     steps:
       - name: Fail if any required job failed

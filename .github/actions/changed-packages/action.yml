@@ -32,6 +32,9 @@ outputs:
   php:
     description: Whether the php package is affected
     value: ${{ steps.filter.outputs.php }}
+  beancount:
+    description: Whether the beancount integration package is affected
+    value: ${{ steps.filter.outputs.beancount }}
 
 runs:
   using: composite
@@ -49,3 +52,4 @@ runs:
           go: ['go/**', 'fixtures/**', '.github/workflows/**', '.github/actions/**']
           ruby: ['ruby/**', 'fixtures/**', '.github/workflows/**', '.github/actions/**']
           php: ['php/**', 'fixtures/**', '.github/workflows/**', '.github/actions/**']
+          beancount: ['beancount/**', 'fixtures/**', '.github/workflows/**', '.github/actions/**']
