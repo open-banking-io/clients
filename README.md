@@ -42,6 +42,10 @@ notes (money types, async, dependencies).
 
 Prefer the terminal? There's also a [command-line client](cli/) (`openbanking`).
 
+Ready-made integrations build on top of the SDKs: a [Beancount importer](beancount/)
+([`beancount-openbanking-io`](https://pypi.org/project/beancount-openbanking-io/), PyPI) for
+plaintext accounting, and an [n8n community node](n8n/).
+
 ## Getting started
 
 1. **Get your credentials.** In the [open-banking.io](https://open-banking.io) app, export your
