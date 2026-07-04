@@ -50,14 +50,19 @@ class FakePage:
     total: int
 
 
+_UNSET = object()
+
+
 class FakeClient:
-    def __init__(self, txns, accounts=None):
+    def __init__(self, txns, accounts=None, reported_total=_UNSET):
         self._txns = txns
         self._accounts = accounts or []
+        self._reported_total = reported_total
 
     def get_transactions(self, account_id, limit, offset):
         page = self._txns[offset : offset + limit]
-        return FakePage(items=page, total=len(self._txns))
+        total = len(self._txns) if self._reported_total is _UNSET else self._reported_total
+        return FakePage(items=page, total=total)
 
     def get_accounts(self):
         return self._accounts
@@ -119,6 +124,35 @@ def test_skips_unknown_indicator(tmp_path):
     entries = imp.extract(_write_config(tmp_path), [])
     ids = {e.meta["obio-id"] for e in entries if isinstance(e, data.Transaction)}
     assert ids == {"t2"}
+
+
+def test_skips_dateless_transaction(tmp_path):
+    # A record with no booking/value/transaction date can't anchor an entry (and
+    # would break the date sort) — it must be skipped, not imported or crash.
+    txns = [
+        FakeTxn(
+            "t1",
+            "CRDT",
+            Decimal("5.00"),
+            booking_date=None,
+            value_date=None,
+            transaction_date=None,
+        ),
+        FakeTxn("t2", "DBIT", Decimal("3.00")),
+    ]
+    imp = OpenBankingImporter(client=FakeClient(txns))
+    entries = imp.extract(_write_config(tmp_path), [])
+    ids = {e.meta["obio-id"] for e in entries if isinstance(e, data.Transaction)}
+    assert ids == {"t2"}
+
+
+def test_pagination_when_total_is_falsy(tmp_path):
+    # If the API reports total=0 (or None) alongside full pages, we must still
+    # paginate to the end via short/empty-page detection, not truncate after page 1.
+    txns = [FakeTxn(f"t{i}", "CRDT", Decimal("1.00")) for i in range(1100)]
+    imp = OpenBankingImporter(client=FakeClient(txns, reported_total=0))
+    entries = imp.extract(_write_config(tmp_path), [])
+    assert len([e for e in entries if isinstance(e, data.Transaction)]) == 1100
 
 
 def test_pending_is_flagged(tmp_path):

@@ -136,7 +136,10 @@ class OpenBankingImporter(beangulp.Importer):  # type: ignore[misc]  # untyped t
                 if directive is not None:
                     out.append(directive)
             offset += len(items)
-            if offset >= (page.total or 0):
+            # Terminate on the last (short) page; an exact-multiple total is caught
+            # by the empty-items guard next iteration. Don't rely on `total` alone
+            # (it may be absent), but use it when present to skip an extra fetch.
+            if len(items) < _PAGE_SIZE or (page.total and offset >= page.total):
                 break
         return out
 
@@ -149,9 +152,11 @@ class OpenBankingImporter(beangulp.Importer):  # type: ignore[misc]  # untyped t
         txn: Any,
         want_ccy: str | None,
     ) -> Any | None:
-        # An unknown direction means we cannot sign the amount safely; skip rather
-        # than import an outgoing payment as income (learned the hard way).
-        if txn.amount is None or txn.credit_debit_indicator not in ("CRDT", "DBIT"):
+        date = txn.booking_date or txn.value_date or txn.transaction_date
+        # Skip anything we can't faithfully record: no amount, an unknown direction
+        # (we won't guess a sign, learned the hard way), or no date to anchor the
+        # entry — a dateless entry would also break the caller's date sort.
+        if txn.amount is None or txn.credit_debit_indicator not in ("CRDT", "DBIT") or date is None:
             return None
 
         sign = Decimal(-1) if txn.credit_debit_indicator == "DBIT" else Decimal(1)
@@ -163,7 +168,6 @@ class OpenBankingImporter(beangulp.Importer):  # type: ignore[misc]  # untyped t
             txn.creditor_name if txn.credit_debit_indicator == "DBIT" else txn.debtor_name
         ) or None
         narration = txn.remittance_information or txn.note or ""
-        date = txn.booking_date or txn.value_date or txn.transaction_date
         flag = FLAG_OKAY if (txn.status in (None, "BOOK")) else FLAG_WARNING
 
         meta = data.new_metadata(filepath, lineno, {self._meta_key: txn.id})
