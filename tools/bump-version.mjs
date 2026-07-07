@@ -3,7 +3,7 @@
 //
 //   node tools/bump-version.mjs <package> <version>
 //
-// <package> ∈ dotnet | node | n8n | python | rust | java | ruby   (go and php have no manifest)
+// <package> ∈ dotnet | node | n8n | python | rust | java | ruby | beancount   (go and php have no manifest)
 // <version> is a plain semver string, e.g. 0.2.0  or  1.0.0-rc.1
 //
 // Plain Node (>= 20), no dependencies. Edits the version field in the package's
@@ -17,7 +17,7 @@ import { dirname, join, resolve } from "node:path";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..");
 
-const PACKAGES = ["dotnet", "node", "n8n", "python", "rust", "java", "go", "ruby", "php"];
+const PACKAGES = ["dotnet", "node", "n8n", "python", "rust", "java", "go", "ruby", "php", "beancount"];
 
 // SemVer 2.0.0 (https://semver.org) — practical, anchored.
 const SEMVER =
@@ -77,6 +77,16 @@ const bumpers = {
     // don't accidentally hit requires-python or a dependency spec.
     replaceOne(
       "python/pyproject.toml",
+      /(^version[ \t]*=[ \t]*")[^"]+(?="$)/m,
+      version,
+      'version = "..." (under [project])',
+    );
+  },
+
+  beancount(version) {
+    // The Beancount integration package — same pyproject shape as python/.
+    replaceOne(
+      "beancount/pyproject.toml",
       /(^version[ \t]*=[ \t]*")[^"]+(?="$)/m,
       version,
       'version = "..." (under [project])',
