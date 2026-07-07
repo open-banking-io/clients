@@ -32,6 +32,9 @@ outputs:
   php:
     description: Whether the php package is affected
     value: ${{ steps.filter.outputs.php }}
+  zapier:
+    description: Whether the zapier package is affected
+    value: ${{ steps.filter.outputs.zapier }}
   beancount:
     description: Whether the beancount integration package is affected
     value: ${{ steps.filter.outputs.beancount }}
@@ -53,3 +56,4 @@ runs:
           ruby: ['ruby/**', 'fixtures/**', '.github/workflows/**', '.github/actions/**']
           php: ['php/**', 'fixtures/**', '.github/workflows/**', '.github/actions/**']
           beancount: ['beancount/**', 'fixtures/**', '.github/workflows/**', '.github/actions/**']
+          zapier: ['zapier/**', 'fixtures/**', '.github/workflows/**', '.github/actions/**']
