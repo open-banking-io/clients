@@ -17,6 +17,7 @@ This is a monorepo of independently versioned packages, each released under its 
 | PHP     | `php/v`    | Packagist |
 | CLI     | `cli/v`    | GitHub Releases + Homebrew |
 | n8n     | `n8n/v`    | npm |
+| Beancount | `beancount/v` | PyPI |
 
 ## Per-release notes
 

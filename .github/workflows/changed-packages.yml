@@ -15,7 +15,7 @@ jobs:
 
       - name: Detect changed package dirs
         id: filter
-        uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
+        uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
         with:
           filters: |
             dotnet:
@@ -36,6 +36,8 @@ jobs:
               - 'ruby/**'
             php:
               - 'php/**'
+            beancount:
+              - 'beancount/**'
             fixtures:
               - 'fixtures/**'
 
@@ -51,11 +53,12 @@ jobs:
           GO: ${{ steps.filter.outputs.go }}
           RUBY: ${{ steps.filter.outputs.ruby }}
           PHP: ${{ steps.filter.outputs.php }}
+          BEANCOUNT: ${{ steps.filter.outputs.beancount }}
           FIXTURES: ${{ steps.filter.outputs.fixtures }}
         with:
           script: |
             const MARKER = '<!-- changed-packages-report -->';
-            const ALL = ['dotnet', 'node', 'n8n', 'python', 'rust', 'java', 'go', 'ruby', 'php'];
+            const ALL = ['dotnet', 'node', 'n8n', 'python', 'rust', 'java', 'go', 'ruby', 'php', 'beancount'];
 
             const changed = new Set();
             for (const p of ALL) {

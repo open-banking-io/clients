@@ -1,0 +1,36 @@
+name: Publish Beancount
+
+on:
+  push:
+    tags: ['beancount/v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: Production
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Verify tag matches manifest version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#beancount/v}"
+          MANIFEST_VERSION="$(grep -oE '^version[[:space:]]*=[[:space:]]*"[^"]+"' beancount/pyproject.toml | head -n1 | sed -E 's/.*"([^"]+)"$/\1/')"
+          echo "tag=$TAG_VERSION manifest=$MANIFEST_VERSION"
+          [ "$TAG_VERSION" = "$MANIFEST_VERSION" ] || { echo "::error::tag $TAG_VERSION != manifest $MANIFEST_VERSION"; exit 1; }
+
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: '3.12'
+      - run: pip install build==1.5.0
+      - run: python -m build
+        working-directory: beancount
+      - uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # release/v1
+        with:
+          packages-dir: beancount/dist
