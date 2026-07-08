@@ -7,10 +7,31 @@ module.exports = {
   noun: 'Account',
   display: {
     label: 'Find Account',
-    description: 'Lists all bank accounts with decrypted details and balances.',
+    description: 'Finds bank accounts by IBAN, name or bank — or lists all accounts.',
   },
   operation: {
-    perform: (z, bundle) => listAccounts(z, bundle.authData),
+    // Zapier integration check D009: a search needs at least one input field.
+    inputFields: [
+      {
+        key: 'query',
+        type: 'string',
+        label: 'Search Term',
+        required: false,
+        helpText:
+          'Optional. Case-insensitive match against IBAN, BBAN, account name, ' +
+          'display name, owner name and bank name. Leave empty to return all accounts.',
+      },
+    ],
+    perform: async (z, bundle) => {
+      const accounts = await listAccounts(z, bundle.authData);
+      const query = String(bundle.inputData.query ?? '').trim().toLowerCase();
+      if (!query) return accounts;
+      return accounts.filter((a) =>
+        [a.iban, a.bban, a.accountName, a.displayName, a.ownerName, a.aspspName]
+          .filter(Boolean)
+          .some((v) => String(v).toLowerCase().includes(query)),
+      );
+    },
     sample: {
       id: 'acc_001',
       aspspName: 'Danske Bank',
