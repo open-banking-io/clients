@@ -16,7 +16,6 @@ them locally with the user's private key. The service never sees plaintext.
 from __future__ import annotations
 
 import json
-import os
 from datetime import date
 from decimal import Decimal
 from typing import Any
@@ -83,23 +82,26 @@ class OpenBankingClient:
     @classmethod
     def from_credentials(
         cls,
-        path_or_json: str,
+        bundle_json: str,
         session: requests.Session | None = None,
         *,
         base_url_override: str | None = None,
     ) -> OpenBankingClient:
-        """Builds a client from a credentials-bundle JSON string or path to a file.
+        """Builds a client from a credentials-bundle JSON string.
+
+        Deliberately no path support: the value comes from the encrypted
+        Settings field, and treating it as a filename would hand anyone with
+        Settings write access a local-file-read primitive.
 
         ``base_url_override`` (e.g. a staging URL from Open Banking Settings)
         takes precedence over the bundle's ``apiBaseUrl``.
         """
-        if os.path.exists(path_or_json):
-            with open(path_or_json, encoding="utf-8") as fh:
-                raw = fh.read()
-        else:
-            raw = path_or_json
-
-        bundle = json.loads(raw)
+        try:
+            bundle = json.loads(bundle_json)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("The credentials bundle is not valid JSON") from exc
+        if not isinstance(bundle, dict):
+            raise ValueError("The credentials bundle must be a JSON object")
         api_base_url = base_url_override or bundle.get("apiBaseUrl", "")
         api_key = bundle.get("apiKey")
         if not api_key:
@@ -154,7 +156,15 @@ class OpenBankingClient:
         resp.raise_for_status()
         page = resp.json()
 
-        items = [self._map_transaction(t) for t in page.get("items", [])]
+        # Decrypt per item: one malformed/tampered envelope must not abort the
+        # whole page (and with it the entire sync). Failed items carry a
+        # `_decrypt_error` marker for the caller to report and skip.
+        items = []
+        for t in page.get("items", []):
+            try:
+                items.append(self._map_transaction(t))
+            except Exception as exc:
+                items.append({"id": t.get("id", ""), "_decrypt_error": str(exc)})
         return {"items": items, "total": page.get("total", 0)}
 
     def get_connections(self) -> list[dict[str, Any]]:

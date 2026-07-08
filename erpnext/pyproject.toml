@@ -50,6 +50,11 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 include = ["erpnext_open_banking*"]
 
+[tool.setuptools.package-data]
+# Frappe apps carry doctype JSON, client JS, and modules/patches txt inside the
+# package — without this a non-editable install ships a codeless app.
+erpnext_open_banking = ["**/*.json", "**/*.js", "**/*.txt", "**/*.md", "**/*.css", "**/*.html"]
+
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]

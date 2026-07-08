@@ -2,6 +2,14 @@
 
 frappe.ui.form.on("Open Banking Settings", {
     refresh(frm) {
+        // test_connection is restricted server-side to these roles; don't
+        // offer the button to users who would just get a PermissionError.
+        if (!frappe.user.has_role("Accounts Manager") && !frappe.user.has_role("System Manager")) {
+            return;
+        }
+        if (frm.custom_buttons && frm.custom_buttons[__("Test Connection")]) {
+            return;
+        }
         frm.add_custom_button(__("Test Connection"), function () {
             frappe.call({
                 method:
@@ -10,19 +18,13 @@ frappe.ui.form.on("Open Banking Settings", {
                 freeze_message: __("Testing connection..."),
                 callback: function (r) {
                     if (r.message) {
-                        if (r.message.success) {
-                            frappe.msgprint({
-                                title: __("Success"),
-                                message: r.message.message,
-                                indicator: "green",
-                            });
-                        } else {
-                            frappe.msgprint({
-                                title: __("Error"),
-                                message: r.message.message,
-                                indicator: "red",
-                            });
-                        }
+                        // The message can embed server/exception text — escape it.
+                        const message = frappe.utils.escape_html(String(r.message.message ?? ""));
+                        frappe.msgprint({
+                            title: r.message.success ? __("Success") : __("Error"),
+                            message,
+                            indicator: r.message.success ? "green" : "red",
+                        });
                     }
                 },
             });
