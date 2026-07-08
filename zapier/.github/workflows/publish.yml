@@ -13,17 +13,23 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
 
       - name: Verify tag matches manifest version
         if: startsWith(github.ref, 'refs/tags/')
         run: |
           TAG_VERSION="${GITHUB_REF_NAME#v}"
-          MANIFEST_VERSION="$(grep -oE '"version"[[:space:]]*:[[:space:]]*"[^"]+"' package.json | head -n1 | sed -E 's/.*"([^"]+)"$/\1/')"
+          MANIFEST_VERSION="$(node -p "require('./package.json').version")"
           echo "tag=$TAG_VERSION manifest=$MANIFEST_VERSION"
           [ "$TAG_VERSION" = "$MANIFEST_VERSION" ] || { echo "::error::tag $TAG_VERSION != manifest $MANIFEST_VERSION"; exit 1; }
 
@@ -34,8 +40,10 @@ jobs:
       - run: npm ci
       - run: npm test
 
-      - name: Deploy to Zapier
+      # `zapier push` builds and uploads the version from package.json.
+      # Promoting the uploaded version to users stays a manual step
+      # (`zapier promote <version>`).
+      - name: Push to Zapier
         env:
           ZAPIER_DEPLOY_KEY: ${{ secrets.ZAPIER_DEPLOY_KEY }}
-        run: |
-          npx zapier-platform-cli deploy "$MANIFEST_VERSION" --yes
+        run: npx --yes zapier-platform-cli@19 push

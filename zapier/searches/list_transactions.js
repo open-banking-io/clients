@@ -1,6 +1,7 @@
 'use strict';
 
 const {
+  resolveBundle,
   apiRequest,
   importBundleKey,
   mapTransaction,
@@ -46,19 +47,16 @@ module.exports = {
         type: 'integer',
         label: 'Limit',
         required: false,
-        default: 50,
+        default: '50',
         helpText: 'Maximum number of transactions to return.',
       },
     ],
     perform: async (z, bundle) => {
-      const bundleResolved = {
-        apiBaseUrl: bundle.authData.apiBaseUrl,
-        apiKey: bundle.authData.apiKey,
-        privateKey: bundle.authData.privateKey,
-      };
+      const bundleResolved = resolveBundle(bundle.authData);
       const key = await importBundleKey(bundleResolved);
       const accountId = bundle.inputData.accountId;
-      const limit = bundle.inputData.limit || 50;
+      // ?? (not ||) so an explicit 0 is honoured and returns no rows.
+      const limit = Number(bundle.inputData.limit ?? 50);
 
       const qs = {};
       if (bundle.inputData.from) qs.from = bundle.inputData.from;

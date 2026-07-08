@@ -23,9 +23,7 @@
   },
   "main": "index.js",
   "scripts": {
-    "test": "mocha test/ --recursive",
-    "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "test": "mocha test/ --recursive"
   },
   "engines": {
     "node": ">=20"
@@ -34,10 +32,7 @@
     "zapier-platform-core": "^19.0.0"
   },
   "devDependencies": {
-    "@types/node": "^22.0.0",
     "chai": "^4.5.0",
-    "eslint": "^9.0.0",
-    "mocha": "^10.8.0",
-    "typescript": "^5.7.0"
+    "mocha": "^10.8.0"
   }
 }

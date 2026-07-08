@@ -6,7 +6,8 @@ const { expect } = require('chai');
 
 const { resolveBundle } = require('../lib/client');
 
-const FIXTURES = join(__dirname, '..', '..', 'fixtures');
+// Vendored under test/fixtures so it survives the subtree-split to the mirror repo.
+const FIXTURES = join(__dirname, 'fixtures');
 const BUNDLE = readFileSync(join(FIXTURES, 'credentials.json'), 'utf8');
 // The fixture bundle ships with this apiBaseUrl.
 const BUNDLE_URL = 'http://localhost:8081';

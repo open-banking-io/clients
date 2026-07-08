@@ -1,6 +1,6 @@
 'use strict';
 
-const { apiRequest, importBundleKey, decryptUid } = require('../lib/client');
+const { resolveBundle, apiRequest, importBundleKey, decryptUid } = require('../lib/client');
 
 module.exports = {
   key: 'sync_account',
@@ -21,11 +21,7 @@ module.exports = {
       },
     ],
     perform: async (z, bundle) => {
-      const bundleResolved = {
-        apiBaseUrl: bundle.authData.apiBaseUrl,
-        apiKey: bundle.authData.apiKey,
-        privateKey: bundle.authData.privateKey,
-      };
+      const bundleResolved = resolveBundle(bundle.authData);
       const key = await importBundleKey(bundleResolved);
       const accountId = bundle.inputData.accountId;
 

@@ -12,11 +12,6 @@ module.exports = {
   version: pkg.version,
   platformVersion: require('zapier-platform-core').version,
 
-  appCard: {
-    title: 'open-banking.io',
-    description: 'Connect your bank accounts and pull transactions into Zapier workflows. Zero-knowledge decryption — your data is encrypted end-to-end and decrypted locally.',
-  },
-
   authentication,
 
   triggers: [newTransactionTrigger],

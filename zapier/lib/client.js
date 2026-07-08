@@ -11,6 +11,18 @@ const { decryptTo, importPrivateKey } = require('./envelope');
  */
 
 /**
+ * Trims trailing '/' characters without regex backtracking
+ * (a `/\/+$/` replace is flagged by CodeQL as polynomial ReDoS).
+ * @param {string} value
+ * @returns {string}
+ */
+function stripTrailingSlashes(value) {
+  let end = value.length;
+  while (end > 0 && value.charCodeAt(end - 1) === 47 /* '/' */) end -= 1;
+  return value.slice(0, end);
+}
+
+/**
  * Parses and validates the credentials-bundle JSON the user pasted into auth.
  * @param {string} raw — the bundle JSON string
  * @returns {Bundle}
@@ -23,7 +35,7 @@ function parseBundle(raw) {
     throw new Error('Credentials bundle is not valid JSON');
   }
 
-  const apiBaseUrl = String(parsed.apiBaseUrl ?? '').replace(/\/+$/, '');
+  const apiBaseUrl = stripTrailingSlashes(String(parsed.apiBaseUrl ?? ''));
   const apiKey = String(parsed.apiKey ?? '');
   const encryptionKey = parsed.encryptionKey ?? {};
   const privateKey = String(encryptionKey.privateKey ?? '');
@@ -42,7 +54,7 @@ function parseBundle(raw) {
  */
 function resolveBundle(authData) {
   const bundle = parseBundle(authData.bundle);
-  const override = String(authData.baseUrlOverride ?? '').trim().replace(/\/+$/, '');
+  const override = stripTrailingSlashes(String(authData.baseUrlOverride ?? '').trim());
   if (override) bundle.apiBaseUrl = override;
   return bundle;
 }

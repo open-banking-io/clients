@@ -1,6 +1,7 @@
 'use strict';
 
 const {
+  resolveBundle,
   apiRequest,
   importBundleKey,
   mapTransaction,
@@ -14,7 +15,7 @@ const {
 //   - On first poll, fetch from `lookbackDays` days ago.
 //   - On subsequent polls, fetch from the last booking date seen.
 //   - Track IDs seen on the boundary date to dedupe same-day re-fetches.
-//   - Zapier provides bundle.meta.cursor (a string) — we store our state as JSON in it.
+//   - State is persisted between polls as JSON via z.cursor (requires canPaginate).
 
 const TRIGGER_KEY = 'new_transaction';
 
@@ -34,29 +35,20 @@ const trigger = {
         helpText:
           'On the first poll, how many days back to fetch transactions from. ' +
           'Later polls only fetch transactions newer than the last one seen.',
-        default: 7,
+        default: '7',
       },
     ],
     type: 'polling',
+    canPaginate: true,
     perform: async (z, bundle) => {
-      const {
-        resolveBundle: rb,
-      } = require('../lib/client');
-
-      // The computed auth fields (set by customConfigurator) are in authData.
-      // But we also need the raw bundle for the private key — which was stored as a computed field.
-      const bundleResolved = {
-        apiBaseUrl: bundle.authData.apiBaseUrl,
-        apiKey: bundle.authData.apiKey,
-        privateKey: bundle.authData.privateKey,
-      };
+      const bundleResolved = resolveBundle(bundle.authData);
 
       const key = await importBundleKey(bundleResolved);
-      const lookbackDays = bundle.inputData.lookbackDays || 7;
+      const lookbackDays = Number(bundle.inputData.lookbackDays ?? 7);
 
-      // Parse cursor state from Zapier's meta.cursor (JSON string on subsequent polls).
+      // Parse cursor state persisted by the previous poll (JSON string).
       let state = { lastBookingDate: null, seenIds: [] };
-      const cursorRaw = bundle.meta?.cursor;
+      const cursorRaw = await z.cursor.get();
       if (cursorRaw) {
         try {
           state = JSON.parse(cursorRaw);
@@ -112,10 +104,8 @@ const trigger = {
             : boundaryIds,
       };
 
-      // Zapier stores the cursor for the next poll.
-      if (bundle.meta) {
-        bundle.meta.cursor = JSON.stringify(newState);
-      }
+      // Persist the cursor for the next poll.
+      await z.cursor.set(JSON.stringify(newState));
 
       return fresh;
     },

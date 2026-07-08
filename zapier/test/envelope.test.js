@@ -8,8 +8,10 @@ const { decryptTo, importPrivateKey } = require('../lib/envelope');
 
 // Decrypt the shared cross-language test vectors and assert byte-identical results
 // to the other SDKs. This proves the port matches the canonical implementation.
+// The vectors are vendored under test/fixtures so they survive the subtree-split
+// to the open-banking-io/zapier mirror repo (the monorepo's fixtures/ does not).
 
-const FIXTURES = join(__dirname, '..', '..', 'fixtures');
+const FIXTURES = join(__dirname, 'fixtures');
 
 function loadJson(name) {
   return JSON.parse(readFileSync(join(FIXTURES, name), 'utf8'));
