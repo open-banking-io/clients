@@ -44,8 +44,12 @@ const trigger = {
       const bundleResolved = resolveBundle(bundle.authData);
 
       const key = await importBundleKey(bundleResolved);
-      // Mapped custom values are not guaranteed numeric — fall back on NaN/negatives.
-      const lookbackRaw = Number(bundle.inputData.lookbackDays ?? 7);
+      // Mapped custom values are not guaranteed numeric, and with
+      // cleanInputData off an empty string means "unset" — fall back to 7
+      // on '', NaN and negatives.
+      const lookbackInput = bundle.inputData.lookbackDays;
+      const lookbackRaw =
+        lookbackInput === '' || lookbackInput == null ? 7 : Number(lookbackInput);
       const lookbackDays = Number.isFinite(lookbackRaw) && lookbackRaw >= 0 ? lookbackRaw : 7;
 
       // Parse cursor state persisted by the previous poll (JSON string).

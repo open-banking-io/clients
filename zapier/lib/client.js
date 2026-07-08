@@ -23,6 +23,24 @@ function stripTrailingSlashes(value) {
 }
 
 /**
+ * Asserts a user/bundle-supplied base URL is a parseable http(s) URL
+ * (integration check D026: manually validate domain-style auth input).
+ * @param {string} value
+ * @param {string} label — for the error message
+ */
+function assertHttpUrl(value, label) {
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error(`${label} must be a valid URL (got "${value}")`);
+  }
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+    throw new Error(`${label} must be an http(s) URL (got "${url.protocol}//…")`);
+  }
+}
+
+/**
  * Parses and validates the credentials-bundle JSON the user pasted into auth.
  * @param {string} raw — the bundle JSON string
  * @returns {Bundle}
@@ -46,6 +64,7 @@ function parseBundle(raw) {
   if (!apiBaseUrl) throw new Error('Credentials bundle is missing "apiBaseUrl"');
   if (!apiKey) throw new Error('Credentials bundle is missing "apiKey"');
   if (!privateKey) throw new Error('Credentials bundle is missing "encryptionKey.privateKey"');
+  assertHttpUrl(apiBaseUrl, '"apiBaseUrl" in the credentials bundle');
 
   return { apiBaseUrl, apiKey, privateKey };
 }
@@ -58,7 +77,10 @@ function parseBundle(raw) {
 function resolveBundle(authData) {
   const bundle = parseBundle(authData.bundle);
   const override = stripTrailingSlashes(String(authData.baseUrlOverride ?? '').trim());
-  if (override) bundle.apiBaseUrl = override;
+  if (override) {
+    assertHttpUrl(override, 'API Base URL Override');
+    bundle.apiBaseUrl = override;
+  }
   return bundle;
 }
 

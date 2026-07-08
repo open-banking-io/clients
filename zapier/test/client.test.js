@@ -36,4 +36,25 @@ describe('resolveBundle()', () => {
   it('still rejects an invalid bundle', () => {
     expect(() => resolveBundle({ bundle: 'not json' })).to.throw(/not valid JSON/);
   });
+
+  it('rejects an override that is not a URL', () => {
+    expect(() => resolveBundle({ bundle: BUNDLE, baseUrlOverride: 'not a url' })).to.throw(
+      /must be a valid URL/,
+    );
+  });
+
+  it('rejects a non-http(s) override', () => {
+    expect(() => resolveBundle({ bundle: BUNDLE, baseUrlOverride: 'ftp://x.test' })).to.throw(
+      /must be an http\(s\) URL/,
+    );
+  });
+
+  it('rejects a bundle whose apiBaseUrl is not a URL', () => {
+    const bad = JSON.stringify({
+      apiBaseUrl: 'nonsense',
+      apiKey: 'k',
+      encryptionKey: { privateKey: 'p' },
+    });
+    expect(() => resolveBundle({ bundle: bad })).to.throw(/must be a valid URL/);
+  });
 });

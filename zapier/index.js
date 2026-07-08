@@ -15,6 +15,12 @@ module.exports = {
   version: pkg.version,
   platformVersion: require('zapier-platform-core').version,
 
+  flags: {
+    // Integration check D028: opt out of the platform's automatic input
+    // cleaning; every perform handles ''/null explicitly instead.
+    cleanInputData: false,
+  },
+
   authentication,
 
   triggers: {
