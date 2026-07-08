@@ -39,6 +39,8 @@ jobs:
               - 'php/**'
             beancount:
               - 'beancount/**'
+            zapier:
+              - 'zapier/**'
             fixtures:
               - 'fixtures/**'
 
@@ -55,6 +57,7 @@ jobs:
           RUBY: ${{ steps.filter.outputs.ruby }}
           PHP: ${{ steps.filter.outputs.php }}
           BEANCOUNT: ${{ steps.filter.outputs.beancount }}
+          ZAPIER: ${{ steps.filter.outputs.zapier }}
           FIXTURES: ${{ steps.filter.outputs.fixtures }}
         run: |
           mkdir -p changed-packages-report
@@ -72,6 +75,7 @@ jobs:
               "ruby": ${RUBY},
               "php": ${PHP},
               "beancount": ${BEANCOUNT},
+              "zapier": ${ZAPIER},
               "fixtures": ${FIXTURES}
             }
           }

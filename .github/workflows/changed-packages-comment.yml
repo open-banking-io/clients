@@ -39,7 +39,7 @@ jobs:
             const fs = require('fs');
 
             const MARKER = '<!-- changed-packages-report -->';
-            const ALL = ['dotnet', 'node', 'n8n', 'python', 'rust', 'java', 'go', 'ruby', 'php', 'beancount'];
+            const ALL = ['dotnet', 'node', 'n8n', 'python', 'rust', 'java', 'go', 'ruby', 'php', 'beancount', 'zapier'];
 
             // The artifact comes from an untrusted PR run: accept only a
             // numeric PR number and per-package booleans, nothing else.

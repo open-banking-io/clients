@@ -1,0 +1,38 @@
+{
+  "name": "open-banking-io-zapier",
+  "version": "0.1.0",
+  "description": "Zapier integration for open-banking.io: connect your bank accounts and pull transactions into Zapier workflows with client-side, zero-knowledge decryption.",
+  "license": "MIT",
+  "author": {
+    "name": "open-banking.io",
+    "email": "info@open-banking.io",
+    "url": "https://open-banking.io"
+  },
+  "homepage": "https://open-banking.io",
+  "keywords": [
+    "zapier",
+    "open-banking",
+    "psd2",
+    "banking",
+    "transactions",
+    "fintech"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/open-banking-io/zapier.git"
+  },
+  "main": "index.js",
+  "scripts": {
+    "test": "mocha test/ --recursive"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "zapier-platform-core": "^19.0.0"
+  },
+  "devDependencies": {
+    "chai": "^4.5.0",
+    "mocha": "^10.8.0"
+  }
+}
