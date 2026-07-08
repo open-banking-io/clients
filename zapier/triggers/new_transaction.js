@@ -44,10 +44,15 @@ const trigger = {
       const bundleResolved = resolveBundle(bundle.authData);
 
       const key = await importBundleKey(bundleResolved);
-      const lookbackDays = Number(bundle.inputData.lookbackDays ?? 7);
+      // Mapped custom values are not guaranteed numeric — fall back on NaN/negatives.
+      const lookbackRaw = Number(bundle.inputData.lookbackDays ?? 7);
+      const lookbackDays = Number.isFinite(lookbackRaw) && lookbackRaw >= 0 ? lookbackRaw : 7;
 
       // Parse cursor state persisted by the previous poll (JSON string).
-      let state = { lastBookingDate: null, seenIds: [] };
+      // z.cursor is not durable (Zapier documents ~1h lifetime) — a reset just
+      // means a full lookback re-fetch, and Zapier's id-deduper suppresses
+      // duplicate Zap runs.
+      let state = { lastBookingDate: null, seenIds: [], pendingIds: [] };
       const cursorRaw = await z.cursor.get();
       if (cursorRaw) {
         try {
@@ -85,7 +90,7 @@ const trigger = {
         );
       }
 
-      const seen = new Set(state.seenIds ?? []);
+      const seen = new Set([...(state.seenIds ?? []), ...(state.pendingIds ?? [])]);
       const fresh = [];
       const emitted = [];
       let maxBookingDate = from;
@@ -108,21 +113,32 @@ const trigger = {
         }
       }
 
-      // Advance the cursor: store the new max date + boundary IDs.
+      // Advance the cursor: store the new max date + boundary IDs. Pending
+      // (null-bookingDate) rows are tracked separately so they survive date
+      // advances instead of being re-emitted once the boundary moves on.
+      const MAX_TRACKED_IDS = 200;
       const boundaryIds = emitted
-        .filter((e) => e.bookingDate == null || e.bookingDate === maxBookingDate)
+        .filter((e) => e.bookingDate === maxBookingDate)
         .map((e) => e.id);
+      const newPendingIds = emitted.filter((e) => e.bookingDate == null).map((e) => e.id);
 
       const newState = {
         lastBookingDate: maxBookingDate,
-        seenIds:
-          maxBookingDate === from
-            ? [...new Set([...(state.seenIds ?? []), ...boundaryIds])]
-            : boundaryIds,
+        seenIds: (maxBookingDate === from
+          ? [...new Set([...(state.seenIds ?? []), ...boundaryIds])]
+          : boundaryIds
+        ).slice(-MAX_TRACKED_IDS),
+        pendingIds: [...new Set([...(state.pendingIds ?? []), ...newPendingIds])].slice(
+          -MAX_TRACKED_IDS,
+        ),
       };
 
       // Persist the cursor for the next poll.
       await z.cursor.set(JSON.stringify(newState));
+
+      // Zapier's polling contract wants reverse-chronological order; pending
+      // (undated) rows go last.
+      fresh.sort((a, b) => String(b.bookingDate ?? '').localeCompare(String(a.bookingDate ?? '')));
 
       return fresh;
     },
