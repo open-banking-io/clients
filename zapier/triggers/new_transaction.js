@@ -60,22 +60,30 @@ const trigger = {
       const from = state.lastBookingDate ?? isoDaysAgo(lookbackDays);
 
       // Fetch all accounts, then transactions for each from the cursor date.
-      // The per-account fetches are independent, so they run in parallel;
+      // The per-account fetches are independent, so they run in parallel —
+      // capped per chunk so many linked accounts can't burst the API — and
       // the results are merged sequentially to keep dedup/cursor logic simple.
+      const MAX_CONCURRENT_ACCOUNTS = 4;
       const accounts = await apiRequest(z, bundleResolved, 'GET', '/api/accounts');
-      const wiresByAccount = await Promise.all(
-        accounts.map((account) =>
-          collectTransactionWires(
-            (offset, limit) =>
-              apiRequest(z, bundleResolved, 'GET', transactionsPath(account.id), {
-                from,
-                offset,
-                limit,
-              }),
-            Number.POSITIVE_INFINITY,
-          ).then((wires) => ({ account, wires })),
-        ),
-      );
+      const wiresByAccount = [];
+      for (let i = 0; i < accounts.length; i += MAX_CONCURRENT_ACCOUNTS) {
+        const chunk = accounts.slice(i, i + MAX_CONCURRENT_ACCOUNTS);
+        wiresByAccount.push(
+          ...(await Promise.all(
+            chunk.map((account) =>
+              collectTransactionWires(
+                (offset, limit) =>
+                  apiRequest(z, bundleResolved, 'GET', transactionsPath(account.id), {
+                    from,
+                    offset,
+                    limit,
+                  }),
+                Number.POSITIVE_INFINITY,
+              ).then((wires) => ({ account, wires })),
+            ),
+          )),
+        );
+      }
 
       const seen = new Set(state.seenIds ?? []);
       const fresh = [];
