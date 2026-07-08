@@ -52,4 +52,14 @@ describe('app definition', () => {
       }
     }
   });
+
+  it('pins zapier-platform packages to exact versions', () => {
+    // `zapier push` refuses range specifiers like ^19.0.0 for core; the
+    // schema devDependency is pinned the same way so validation results
+    // don't drift under a floating range.
+    const EXACT = /^\d+\.\d+\.\d+$/;
+    const pkg = require('../package.json');
+    expect(pkg.dependencies['zapier-platform-core']).to.match(EXACT);
+    expect(pkg.devDependencies['zapier-platform-schema']).to.match(EXACT);
+  });
 });
