@@ -12,6 +12,10 @@ frappe.ui.form.on("Bank Account", {
             .get_value("Open Banking Connection", { bank_account: frm.doc.name }, "name")
             .then((r) => {
                 if (r && r.message && r.message.name) {
+                    // refresh fires repeatedly; don't stack duplicate buttons.
+                    if (frm.custom_buttons && frm.custom_buttons[__("Sync from Open Banking")]) {
+                        return;
+                    }
                     frm.add_custom_button(
                         __("Sync from Open Banking"),
                         function () {
@@ -29,9 +33,13 @@ frappe.ui.form.on("Bank Account", {
                                             [result.created, result.skipped]
                                         );
                                         if (result.errors && result.errors.length > 0) {
+                                            // Error strings embed remote-origin data
+                                            // (API ids, decrypted fields) — escape them.
                                             msg +=
                                                 "<br><br><strong>Warnings:</strong><br>" +
-                                                result.errors.join("<br>");
+                                                result.errors
+                                                    .map((e) => frappe.utils.escape_html(String(e)))
+                                                    .join("<br>");
                                         }
                                         frappe.msgprint({
                                             title: __("Open Banking Sync"),

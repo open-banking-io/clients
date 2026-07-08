@@ -7,7 +7,7 @@ license = { text = "MIT" }
 authors = [
     { name = "open-banking.io", email = "info@open-banking.io" }
 ]
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 dependencies = [
     # Uses only cryptography + requests — both already Frappe dependencies.
     # No external packages needed beyond what ERPNext/Frappe already ships.
@@ -30,10 +30,10 @@ classifiers = [
     "Intended Audience :: Financial and Insurance Industry",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Office/Business :: Financial :: Accounting",
 ]
 
@@ -49,6 +49,11 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 include = ["erpnext_open_banking*"]
+
+[tool.setuptools.package-data]
+# Frappe apps carry doctype JSON, client JS, and modules/patches txt inside the
+# package — without this a non-editable install ships a codeless app.
+erpnext_open_banking = ["**/*.json", "**/*.js", "**/*.txt", "**/*.md", "**/*.css", "**/*.html"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

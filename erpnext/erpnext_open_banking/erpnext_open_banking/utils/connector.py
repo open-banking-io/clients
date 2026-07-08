@@ -21,7 +21,7 @@ from typing import Any
 
 import frappe
 from frappe import _
-from frappe.utils import now_datetime, get_datetime
+from frappe.utils import cint, now_datetime, get_datetime
 from frappe.utils.file_lock import LockTimeoutError
 from frappe.utils.synchronization import filelock
 
@@ -78,10 +78,15 @@ def _sync_connection(connection_name: str) -> dict[str, Any]:
         return {"created": 0, "skipped": 0, "total": 0, "errors": ["No ERPNext Bank Account linked"]}
 
     # Determine date range: from last sync (or lookback days) to today.
-    lookback_days = int(settings.get("lookback_days", 30))
+    # The window overlaps the previous sync by a few days because banks book
+    # transactions late with earlier booking dates (pending → booked); dedup by
+    # transaction_id makes the re-fetch free, and a transiently failed insert
+    # gets retried on later runs instead of being lost forever.
+    overlap_days = 7
+    lookback_days = cint(settings.get("lookback_days")) or 30
     last_synced = conn.last_synced_at
     if last_synced:
-        date_from = get_datetime(last_synced).date()
+        date_from = get_datetime(last_synced).date() - timedelta(days=overlap_days)
     else:
         date_from = date.today() - timedelta(days=lookback_days)
     date_to = date.today()
@@ -101,6 +106,7 @@ def _sync_connection(connection_name: str) -> dict[str, Any]:
     skipped = 0
     total = 0
     errors: list[str] = []
+    fetch_completed = False
 
     client = None
     try:
@@ -136,6 +142,8 @@ def _sync_connection(connection_name: str) -> dict[str, Any]:
             if offset >= total:
                 break
 
+        fetch_completed = True
+
         # Batch-fetch which of the fetched transaction_ids already exist for
         # this bank account — one SELECT bounded by the fetched batch, instead
         # of scanning the account's entire transaction history.
@@ -163,6 +171,13 @@ def _sync_connection(connection_name: str) -> dict[str, Any]:
                 skipped += 1
                 continue
 
+            # An undecryptable envelope (flagged by the client) must not brick
+            # the sync: report it and move on. The overlap window retries it on
+            # later runs in case it was transient.
+            if txn.get("_decrypt_error"):
+                errors.append(f"Txn {txn_id}: decrypt failed: {txn['_decrypt_error']}")
+                continue
+
             try:
                 mapped = map_transaction(txn, bank_account, company)
                 if mapped["date"] is None:
@@ -170,7 +185,11 @@ def _sync_connection(connection_name: str) -> dict[str, Any]:
                     continue
 
                 bt = frappe.get_doc({"doctype": "Bank Transaction", **mapped})
-                bt.insert(ignore_permissions=True)
+                bt.flags.ignore_permissions = True
+                bt.insert()
+                # Bank Transaction is submittable, and the Bank Reconciliation
+                # Tool only picks up submitted (docstatus 1) transactions.
+                bt.submit()
                 created += 1
                 existing_ids.add(txn_id)
             except Exception as txn_exc:
@@ -197,15 +216,22 @@ def _sync_connection(connection_name: str) -> dict[str, Any]:
     if created > 0 or skipped > 0:
         frappe.db.set_value("Open Banking Connection", connection_name, "last_synced_at", now_datetime())
 
-    # Update log
+    # Update log. A run that never completed the fetch (credentials/network
+    # failure) is Failed, not merely "completed with errors".
+    if not fetch_completed:
+        status = "Failed"
+    elif errors:
+        status = "Completed with errors"
+    else:
+        status = "Completed"
     log.db_set(
         {
             "completed_at": now_datetime(),
-            "accounts_fetched": 1,
+            "accounts_fetched": 1 if fetch_completed else 0,
             "transactions_created": created,
             "transactions_skipped": skipped,
             "total_available": total,
-            "status": "Completed" if not errors else "Completed with errors",
+            "status": status,
             "error_detail": "\n".join(errors) if errors else "",
         }
     )

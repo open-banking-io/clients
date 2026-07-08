@@ -40,22 +40,25 @@ your ERPNext instance.
 
 ## Requirements
 
-- ERPNext v14+ (Frappe Framework v14+)
-- Python 3.9+
+- ERPNext v15 (Frappe Framework v15) — tested; earlier versions are unsupported
+- Python 3.10+ (Frappe v15 requirement)
 - An [open-banking.io](https://open-banking.io) account with exported credentials bundle
 
 ## Installation
 
-```bash
-# From your bench directory:
-bench get-app https://github.com/open-banking-io/clients.git --app-path erpnext
-bench install-app erpnext_open_banking
-bench migrate
-```
+This app lives in the `erpnext/` subdirectory of the
+[open-banking-io/clients](https://github.com/open-banking-io/clients) monorepo
+(alongside the Python, Node, Rust, Go and other SDKs), so clone the monorepo
+and point `bench get-app` at the subdirectory:
 
-> **Note:** This app lives in the [open-banking-io/clients](https://github.com/open-banking-io/clients)
-> monorepo (alongside the Python, Node, Rust, Go and other SDKs). The `--app-path erpnext`
-> flag tells bench to install from the `erpnext/` subdirectory.
+```bash
+git clone https://github.com/open-banking-io/clients.git /tmp/obi-clients
+
+# From your bench directory:
+bench get-app /tmp/obi-clients/erpnext
+bench --site <your-site> install-app erpnext_open_banking
+bench --site <your-site> migrate
+```
 
 ## Setup
 

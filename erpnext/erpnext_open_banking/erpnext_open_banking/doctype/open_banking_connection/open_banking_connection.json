@@ -29,20 +29,20 @@
    "fieldtype": "Data",
    "label": "OBI Account ID",
    "reqd": 1,
-   "read_only": 1,
-   "unique": 1
+   "unique": 1,
+   "set_only_once": 1,
+   "no_copy": 1,
+   "description": "The account id from open-banking.io (dashboard or CLI). Cannot be changed after saving."
   },
   {
    "fieldname": "aspsp_name",
    "fieldtype": "Data",
-   "label": "Bank (ASPSP)",
-   "read_only": 1
+   "label": "Bank (ASPSP)"
   },
   {
    "fieldname": "aspsp_country",
    "fieldtype": "Data",
-   "label": "Bank Country",
-   "read_only": 1
+   "label": "Bank Country"
   },
   {
    "fieldname": "column_break_1",
@@ -65,8 +65,7 @@
    "fieldname": "currency",
    "fieldtype": "Link",
    "label": "Currency",
-   "options": "Currency",
-   "read_only": 1
+   "options": "Currency"
   },
   {
    "fieldname": "status",
@@ -84,26 +83,22 @@
   {
    "fieldname": "iban",
    "fieldtype": "Data",
-   "label": "IBAN",
-   "read_only": 1
+   "label": "IBAN"
   },
   {
    "fieldname": "bban",
    "fieldtype": "Data",
-   "label": "BBAN",
-   "read_only": 1
+   "label": "BBAN"
   },
   {
    "fieldname": "owner_name",
    "fieldtype": "Data",
-   "label": "Owner Name",
-   "read_only": 1
+   "label": "Owner Name"
   },
   {
    "fieldname": "account_name",
    "fieldtype": "Data",
-   "label": "Account Name",
-   "read_only": 1
+   "label": "Account Name"
   },
   {
    "fieldname": "column_break_2",
