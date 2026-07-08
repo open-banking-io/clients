@@ -97,6 +97,20 @@ function importBundleKey(bundle) {
 }
 
 /**
+ * Fetches and decrypts the full account list — the shared flow behind the
+ * list_accounts trigger (dynamic dropdowns) and search.
+ * @param {Object} z — Zapier's z object
+ * @param {Object} authData — Zapier authData (bundle + optional override)
+ * @returns {Promise<Object[]>}
+ */
+async function listAccounts(z, authData) {
+  const bundle = resolveBundle(authData);
+  const key = await importBundleKey(bundle);
+  const wires = await apiRequest(z, bundle, 'GET', '/api/accounts');
+  return Promise.all(wires.map((w) => mapAccount(key, w)));
+}
+
+/**
  * Decrypts and maps an AccountWire to a plain Account object.
  * @param {CryptoKey} key
  * @param {AccountWire} a
@@ -240,6 +254,7 @@ module.exports = {
   resolveBundle,
   apiRequest,
   importBundleKey,
+  listAccounts,
   mapAccount,
   mapTransaction,
   mapConnection,

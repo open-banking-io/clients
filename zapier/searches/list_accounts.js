@@ -1,6 +1,6 @@
 'use strict';
 
-const { resolveBundle, apiRequest, importBundleKey, mapAccount } = require('../lib/client');
+const { listAccounts } = require('../lib/client');
 
 module.exports = {
   key: 'list_accounts',
@@ -10,12 +10,7 @@ module.exports = {
     description: 'Lists all bank accounts with decrypted details and balances.',
   },
   operation: {
-    perform: async (z, bundle) => {
-      const bundleResolved = resolveBundle(bundle.authData);
-      const key = await importBundleKey(bundleResolved);
-      const wires = await apiRequest(z, bundleResolved, 'GET', '/api/accounts');
-      return Promise.all(wires.map((w) => mapAccount(key, w)));
-    },
+    perform: (z, bundle) => listAccounts(z, bundle.authData),
     sample: {
       id: 'acc_001',
       aspspName: 'Danske Bank',

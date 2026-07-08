@@ -178,6 +178,30 @@ describe('Trigger polling cursor + dedup (real module)', () => {
     expect(cursor.pendingIds).to.deep.equal(['p1']);
   });
 
+  it('does not re-emit a pending row once it finalizes with a real bookingDate', async () => {
+    // Intended behavior: a transaction fires the Zap exactly once — at first
+    // sight, while pending. When the bank later books it (same id, real date),
+    // it must NOT fire again. Zapier's id-deduper would suppress a re-emit
+    // anyway; the cursor logic matches that contract.
+    const initial = JSON.stringify({
+      lastBookingDate: '2026-06-08',
+      seenIds: [],
+      pendingIds: ['p1'],
+    });
+    const { z, bundle, cursorStore } = makeZContext(initial, [
+      wire('p1', '2026-06-09'), // finalized: was pending, now booked
+      wire('t7', '2026-06-09'),
+    ]);
+
+    const out = await perform(z, bundle);
+
+    expect(out.map((t) => t.id)).to.deep.equal(['t7']);
+    const cursor = JSON.parse(cursorStore.value);
+    expect(cursor.lastBookingDate).to.equal('2026-06-09');
+    // p1 stays remembered as pending (capped list) — harmless.
+    expect(cursor.pendingIds).to.deep.equal(['p1']);
+  });
+
   it('returns results reverse-chronologically with pending rows last', async () => {
     const initial = JSON.stringify({ lastBookingDate: '2026-06-07', seenIds: [] });
     const { z, bundle } = makeZContext(initial, [

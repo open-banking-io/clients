@@ -1,6 +1,6 @@
 'use strict';
 
-const { resolveBundle, apiRequest, importBundleKey, mapAccount } = require('../lib/client');
+const { listAccounts } = require('../lib/client');
 
 // Hidden trigger that powers the dynamic "Account ID" dropdowns.
 // Input-field `dynamic` references must point at a *trigger* key — the
@@ -15,12 +15,7 @@ module.exports = {
     hidden: true,
   },
   operation: {
-    perform: async (z, bundle) => {
-      const bundleResolved = resolveBundle(bundle.authData);
-      const key = await importBundleKey(bundleResolved);
-      const wires = await apiRequest(z, bundleResolved, 'GET', '/api/accounts');
-      return Promise.all(wires.map((w) => mapAccount(key, w)));
-    },
+    perform: (z, bundle) => listAccounts(z, bundle.authData),
     sample: {
       id: 'acc_001',
       aspspName: 'Danske Bank',
