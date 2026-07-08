@@ -26,12 +26,9 @@ uses the Web Crypto API built into Node, with no external crypto libraries.
 
 ## Installation
 
-Install from the Zapier app directory (once published), or via the CLI:
-
-```bash
-npm install -g zapier-platform-cli
-zapier install open-banking-io
-```
+Once published, search for **open-banking.io** in the
+[Zapier app directory](https://zapier.com/apps) and connect it from any Zap —
+no installation step is needed for users.
 
 ## Credentials
 
@@ -55,10 +52,18 @@ re-exporting a bundle. Leave it empty to use the `apiBaseUrl` from the bundle.
 
 ```bash
 npm install
-npm test              # mocha tests (envelope roundtrip, client parsing, pagination, trigger cursor)
-zapier test           # full Zapier platform validation
-zapier push           # deploy to Zapier (needs ZAPIER_DEPLOY_KEY)
+npm test              # mocha tests (schema validation, envelope roundtrip, client parsing, trigger cursor)
+
+npm install -g zapier-platform-cli
+zapier validate       # full Zapier platform validation
+zapier push           # deploy (needs `zapier login` or ZAPIER_DEPLOY_KEY, plus a committed .zapierapprc)
 ```
+
+Releases are tag-driven: pushing `zapier/vX.Y.Z` in the monorepo tests the
+package, subtree-splits `zapier/` to the `open-banking-io/zapier` mirror, and
+the mirror's publish workflow runs `zapier push`. The one-time `zapier register`
+/ `zapier link` must be done locally and the resulting `.zapierapprc` committed
+here (it holds only the app id — not a secret).
 
 ## License
 

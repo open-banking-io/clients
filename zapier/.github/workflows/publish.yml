@@ -40,6 +40,18 @@ jobs:
       - run: npm ci
       - run: npm test
 
+      # `zapier push` resolves the target integration from .zapierapprc (the
+      # app id — not a secret; ZAPIER_DEPLOY_KEY only authenticates). The file
+      # must be committed in the monorepo's zapier/ dir: the subtree force-push
+      # overwrites anything added only to this mirror. One-time setup:
+      # `zapier register` (or `zapier link`) in zapier/, then commit .zapierapprc.
+      - name: Ensure the app is linked to a Zapier integration
+        run: |
+          if [ ! -f .zapierapprc ]; then
+            echo "::error::.zapierapprc is missing — run 'zapier link' once in the monorepo's zapier/ directory and commit the file; 'zapier push' cannot resolve the target integration without it."
+            exit 1
+          fi
+
       # `zapier push` builds and uploads the version from package.json.
       # Promoting the uploaded version to users stays a manual step
       # (`zapier promote <version>`).
