@@ -38,6 +38,9 @@ outputs:
   beancount:
     description: Whether the beancount integration package is affected
     value: ${{ steps.filter.outputs.beancount }}
+  erpnext:
+    description: Whether the ERPNext integration app is affected
+    value: ${{ steps.filter.outputs.erpnext }}
 
 runs:
   using: composite
@@ -57,3 +60,4 @@ runs:
           php: ['php/**', 'fixtures/**', '.github/workflows/**', '.github/actions/**']
           beancount: ['beancount/**', 'fixtures/**', '.github/workflows/**', '.github/actions/**']
           zapier: ['zapier/**', 'fixtures/**', '.github/workflows/**', '.github/actions/**']
+          erpnext: ['erpnext/**', 'fixtures/**', '.github/workflows/**', '.github/actions/**']

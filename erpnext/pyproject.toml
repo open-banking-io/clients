@@ -1,0 +1,55 @@
+[project]
+name = "erpnext-open-banking"
+version = "0.1.0"
+description = "Connect your bank accounts to ERPNext via open-banking.io — no eIDAS certificates required."
+readme = "README.md"
+license = { text = "MIT" }
+authors = [
+    { name = "open-banking.io", email = "info@open-banking.io" }
+]
+requires-python = ">=3.9"
+dependencies = [
+    # Uses only cryptography + requests — both already Frappe dependencies.
+    # No external packages needed beyond what ERPNext/Frappe already ships.
+]
+keywords = [
+    "frappe",
+    "erpnext",
+    "open-banking",
+    "psd2",
+    "banking",
+    "bank-feed",
+    "bank-reconciliation",
+    "plaid-alternative",
+    "gocardless-alternative",
+    "fintech",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Framework :: Frappe",
+    "Intended Audience :: Financial and Insurance Industry",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Office/Business :: Financial :: Accounting",
+]
+
+[project.urls]
+Homepage = "https://open-banking.io"
+Repository = "https://github.com/open-banking-io/clients/tree/main/erpnext"
+Documentation = "https://open-banking.io"
+"Bug Tracker" = "https://github.com/open-banking-io/clients/issues"
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["erpnext_open_banking*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

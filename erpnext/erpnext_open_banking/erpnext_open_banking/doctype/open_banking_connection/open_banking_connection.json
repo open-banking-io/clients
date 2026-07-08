@@ -1,0 +1,167 @@
+{
+ "actions": [],
+ "autoname": "OB-CONN-.YYYY.-.#####",
+ "creation": "2026-06-30 15:30:00",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "obi_account_id",
+  "aspsp_name",
+  "aspsp_country",
+  "column_break_1",
+  "bank_account",
+  "company",
+  "currency",
+  "status",
+  "account_details_section",
+  "iban",
+  "bban",
+  "owner_name",
+  "account_name",
+  "column_break_2",
+  "needs_reconnect",
+  "last_synced_at",
+  "valid_until"
+ ],
+ "fields": [
+  {
+   "fieldname": "obi_account_id",
+   "fieldtype": "Data",
+   "label": "OBI Account ID",
+   "reqd": 1,
+   "read_only": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "aspsp_name",
+   "fieldtype": "Data",
+   "label": "Bank (ASPSP)",
+   "read_only": 1
+  },
+  {
+   "fieldname": "aspsp_country",
+   "fieldtype": "Data",
+   "label": "Bank Country",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "bank_account",
+   "fieldtype": "Link",
+   "label": "ERPNext Bank Account",
+   "options": "Bank Account",
+   "reqd": 1
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "label": "Company",
+   "options": "Company"
+  },
+  {
+   "fieldname": "currency",
+   "fieldtype": "Link",
+   "label": "Currency",
+   "options": "Currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Active\nExpired\nNeeds Reconnect\nError",
+   "default": "Active",
+   "reqd": 1
+  },
+  {
+   "fieldname": "account_details_section",
+   "fieldtype": "Section Break",
+   "label": "Account Details"
+  },
+  {
+   "fieldname": "iban",
+   "fieldtype": "Data",
+   "label": "IBAN",
+   "read_only": 1
+  },
+  {
+   "fieldname": "bban",
+   "fieldtype": "Data",
+   "label": "BBAN",
+   "read_only": 1
+  },
+  {
+   "fieldname": "owner_name",
+   "fieldtype": "Data",
+   "label": "Owner Name",
+   "read_only": 1
+  },
+  {
+   "fieldname": "account_name",
+   "fieldtype": "Data",
+   "label": "Account Name",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "needs_reconnect",
+   "fieldtype": "Check",
+   "label": "Needs Reconnect",
+   "read_only": 1,
+   "default": 0
+  },
+  {
+   "fieldname": "last_synced_at",
+   "fieldtype": "Datetime",
+   "label": "Last Synced At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "valid_until",
+   "fieldtype": "Datetime",
+   "label": "Consent Valid Until",
+   "read_only": 1,
+   "description": "PSD2 consents expire after ~90 days. Reconnect before this date."
+  }
+ ],
+ "module": "ERPNext Open Banking",
+ "name": "Open Banking Connection",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Accounts Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "aspsp_name",
+ "track_changes": 1
+}
