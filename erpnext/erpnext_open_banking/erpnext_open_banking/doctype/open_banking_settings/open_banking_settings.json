@@ -1,0 +1,99 @@
+{
+ "actions": [],
+ "autoname": "OB-SET",
+ "creation": "2026-06-30 15:30:00",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "credentials_section",
+  "credentials_bundle",
+  "api_base_url_override",
+  "column_break_1",
+  "default_company",
+  "lookback_days",
+  "sync_section",
+  "enable_scheduled_sync",
+  "column_break_2"
+ ],
+ "fields": [
+  {
+   "fieldname": "credentials_section",
+   "fieldtype": "Section Break",
+   "label": "Credentials"
+  },
+  {
+   "fieldname": "credentials_bundle",
+   "fieldtype": "Password",
+   "label": "Credentials Bundle (JSON)",
+   "reqd": 1,
+   "description": "Paste the credentials bundle JSON you exported from open-banking.io. It contains apiBaseUrl, apiKey and encryptionKey.privateKey. The private key never leaves this server — it is stored encrypted and used only to decrypt data locally.",
+   "length": 10000
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "api_base_url_override",
+   "fieldtype": "Data",
+   "label": "API Base URL Override",
+   "description": "Optional. Overrides the apiBaseUrl in the bundle (e.g. for staging). Leave empty to use the bundle URL."
+  },
+  {
+   "fieldname": "default_company",
+   "fieldtype": "Link",
+   "label": "Default Company",
+   "options": "Company",
+   "reqd": 1
+  },
+  {
+   "fieldname": "lookback_days",
+   "fieldtype": "Int",
+   "label": "Initial Lookback (Days)",
+   "default": "30",
+   "description": "On the first sync, how many days back to fetch transactions from."
+  },
+  {
+   "fieldname": "sync_section",
+   "fieldtype": "Section Break",
+   "label": "Scheduled Sync"
+  },
+  {
+   "fieldname": "enable_scheduled_sync",
+   "fieldtype": "Check",
+   "label": "Enable Scheduled Sync",
+   "default": "0",
+   "description": "When enabled, transactions are synced automatically every 6 hours."
+  },
+  {
+   "fieldname": "column_break_2",
+   "fieldtype": "Column Break"
+  }
+ ],
+ "issingle": 1,
+ "module": "ERPNext Open Banking",
+ "name": "Open Banking Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "read": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "read": 1,
+   "role": "Accounts Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

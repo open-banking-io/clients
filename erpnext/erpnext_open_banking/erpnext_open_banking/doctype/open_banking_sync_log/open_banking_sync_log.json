@@ -1,0 +1,135 @@
+{
+ "actions": [],
+ "autoname": "OB-LOG-.YYYY.-.#####",
+ "creation": "2026-06-30 15:30:00",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "connection",
+  "status",
+  "column_break_1",
+  "started_at",
+  "completed_at",
+  "results_section",
+  "accounts_fetched",
+  "transactions_created",
+  "column_break_2",
+  "transactions_skipped",
+  "total_available",
+  "error_section",
+  "error_detail"
+ ],
+ "fields": [
+  {
+   "fieldname": "connection",
+   "fieldtype": "Link",
+   "label": "Connection",
+   "options": "Open Banking Connection",
+   "reqd": 1
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Running\nCompleted\nCompleted with errors\nFailed",
+   "default": "Running",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "started_at",
+   "fieldtype": "Datetime",
+   "label": "Started At",
+   "reqd": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "completed_at",
+   "fieldtype": "Datetime",
+   "label": "Completed At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "results_section",
+   "fieldtype": "Section Break",
+   "label": "Results"
+  },
+  {
+   "fieldname": "accounts_fetched",
+   "fieldtype": "Int",
+   "label": "Accounts Fetched",
+   "default": 0,
+   "read_only": 1
+  },
+  {
+   "fieldname": "transactions_created",
+   "fieldtype": "Int",
+   "label": "Transactions Created",
+   "default": 0,
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "transactions_skipped",
+   "fieldtype": "Int",
+   "label": "Transactions Skipped (Dedup)",
+   "default": 0,
+   "read_only": 1
+  },
+  {
+   "fieldname": "total_available",
+   "fieldtype": "Int",
+   "label": "Total Available",
+   "default": 0,
+   "read_only": 1,
+   "description": "Total transactions available from the API for this sync window."
+  },
+  {
+   "fieldname": "error_section",
+   "fieldtype": "Section Break",
+   "label": "Errors"
+  },
+  {
+   "fieldname": "error_detail",
+   "fieldtype": "Small Text",
+   "label": "Error Detail",
+   "read_only": 1
+  }
+ ],
+ "in_create": 1,
+ "module": "ERPNext Open Banking",
+ "name": "Open Banking Sync Log",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Accounts Manager"
+  }
+ ],
+ "sort_field": "started_at",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 0
+}
