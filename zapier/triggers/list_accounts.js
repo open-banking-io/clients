@@ -2,12 +2,17 @@
 
 const { listAccounts } = require('../lib/client');
 
+// Hidden trigger that powers the dynamic "Account ID" dropdowns.
+// Input-field `dynamic` references must point at a *trigger* key — the
+// list_accounts *search* cannot serve that role.
+
 module.exports = {
   key: 'list_accounts',
   noun: 'Account',
   display: {
-    label: 'Find Account',
-    description: 'Lists all bank accounts with decrypted details and balances.',
+    label: 'List Accounts',
+    description: 'Lists bank accounts (powers the account dropdowns).',
+    hidden: true,
   },
   operation: {
     perform: (z, bundle) => listAccounts(z, bundle.authData),

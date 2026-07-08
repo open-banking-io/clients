@@ -34,6 +34,9 @@ function parseBundle(raw) {
   } catch {
     throw new Error('Credentials bundle is not valid JSON');
   }
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('Credentials bundle must be a JSON object');
+  }
 
   const apiBaseUrl = stripTrailingSlashes(String(parsed.apiBaseUrl ?? ''));
   const apiKey = String(parsed.apiKey ?? '');
@@ -91,6 +94,20 @@ async function apiRequest(z, bundle, method, path, qs, body) {
 /** Imports the bundle's private key once for reuse. */
 function importBundleKey(bundle) {
   return importPrivateKey(bundle.privateKey);
+}
+
+/**
+ * Fetches and decrypts the full account list — the shared flow behind the
+ * list_accounts trigger (dynamic dropdowns) and search.
+ * @param {Object} z — Zapier's z object
+ * @param {Object} authData — Zapier authData (bundle + optional override)
+ * @returns {Promise<Object[]>}
+ */
+async function listAccounts(z, authData) {
+  const bundle = resolveBundle(authData);
+  const key = await importBundleKey(bundle);
+  const wires = await apiRequest(z, bundle, 'GET', '/api/accounts');
+  return Promise.all(wires.map((w) => mapAccount(key, w)));
 }
 
 /**
@@ -214,7 +231,9 @@ async function collectTransactionWires(fetchPage, userLimit, pageSize = 100) {
     const remaining = userLimit - collected.length;
     const limit = Math.min(pageSize, remaining);
     const page = await fetchPage(offset, limit);
-    total = page.total;
+    // A missing total must not end the loop (NaN comparisons are false) —
+    // keep paging until an empty page instead of silently truncating.
+    total = page.total ?? Number.POSITIVE_INFINITY;
     const items = page.items ?? [];
     if (items.length === 0) break;
     collected.push(...items);
@@ -235,6 +254,7 @@ module.exports = {
   resolveBundle,
   apiRequest,
   importBundleKey,
+  listAccounts,
   mapAccount,
   mapTransaction,
   mapConnection,
