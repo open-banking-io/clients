@@ -55,8 +55,11 @@ module.exports = {
       const bundleResolved = resolveBundle(bundle.authData);
       const key = await importBundleKey(bundleResolved);
       const accountId = bundle.inputData.accountId;
-      // ?? (not ||) so an explicit 0 is honoured and returns no rows.
-      const limit = Number(bundle.inputData.limit ?? 50);
+      // ''/null mean "unset" (cleanInputData is off) → default 50; an
+      // explicit 0 is honoured and returns no rows; NaN falls back to 50.
+      const limitInput = bundle.inputData.limit;
+      const limitRaw = limitInput === '' || limitInput == null ? 50 : Number(limitInput);
+      const limit = Number.isFinite(limitRaw) && limitRaw >= 0 ? limitRaw : 50;
 
       const qs = {};
       if (bundle.inputData.from) qs.from = bundle.inputData.from;

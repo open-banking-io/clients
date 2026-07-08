@@ -31,7 +31,8 @@ module.exports = {
       helpText:
         'Paste the credentials bundle JSON you exported from open-banking.io (or the CLI). ' +
         'It contains "apiBaseUrl", "apiKey" and "encryptionKey.privateKey". ' +
-        'The private key never leaves this Zapier connection — it is used only to decrypt data locally.',
+        'The private key never leaves this Zapier connection — it is used only to decrypt data locally. ' +
+        'See the [setup guide](https://github.com/open-banking-io/zapier#credentials) for how to export the bundle.',
       computed: false,
       altersDynamicFields: false,
     },
@@ -42,7 +43,9 @@ module.exports = {
       required: false,
       helpText:
         'Optional. Overrides the "apiBaseUrl" embedded in the bundle — e.g. to point ' +
-        'at a staging or local environment. Leave empty to use the URL from the bundle.',
+        'at a staging or self-hosted environment. Must be a full http(s) URL. Leave empty ' +
+        'to use the URL from the bundle. See the ' +
+        '[setup guide](https://github.com/open-banking-io/zapier#credentials) for details.',
       computed: false,
       altersDynamicFields: false,
     },
