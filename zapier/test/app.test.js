@@ -53,9 +53,14 @@ describe('app definition', () => {
     }
   });
 
-  it('pins zapier-platform-core to an exact version', () => {
-    // `zapier push` refuses range specifiers like ^19.0.0.
+  it('pins zapier-platform packages to exact versions', () => {
+    // `zapier push` refuses range specifiers like ^19.0.0 for core; the
+    // schema devDependency is pinned to match so validation and upload
+    // always agree on the platform version.
     const pkg = require('../package.json');
     expect(pkg.dependencies['zapier-platform-core']).to.match(/^\d+\.\d+\.\d+$/);
+    expect(pkg.devDependencies['zapier-platform-schema']).to.equal(
+      pkg.dependencies['zapier-platform-core'],
+    );
   });
 });
