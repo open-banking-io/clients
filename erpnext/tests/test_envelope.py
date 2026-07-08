@@ -127,3 +127,40 @@ class TestEnvelope:
         loaded = load_private_key(pkcs8_b64)
         with pytest.raises(ValueError, match="Invalid or unsupported envelope"):
             decrypt(loaded, b"\x01\x00\x01")
+
+    def test_decrypt_tampered_ciphertext(self):
+        """decrypt fails AEAD authentication when the ciphertext is tampered with."""
+        from cryptography.exceptions import InvalidTag
+
+        priv, pkcs8_b64 = _generate_keypair()
+        loaded = load_private_key(pkcs8_b64)
+        envelope_bytes = bytearray(
+            _encrypt_envelope(priv.public_key(), b'{"amount":"42.50"}')
+        )
+        envelope_bytes[-1] ^= 0x01  # flip one bit in the ciphertext
+        with pytest.raises(InvalidTag):
+            decrypt(loaded, bytes(envelope_bytes))
+
+    def test_decrypt_tampered_tag(self):
+        """decrypt fails AEAD authentication when the tag is tampered with."""
+        from cryptography.exceptions import InvalidTag
+
+        priv, pkcs8_b64 = _generate_keypair()
+        loaded = load_private_key(pkcs8_b64)
+        envelope_bytes = bytearray(
+            _encrypt_envelope(priv.public_key(), b'{"amount":"42.50"}')
+        )
+        envelope_bytes[1 + _POINT_LEN + _NONCE_LEN] ^= 0x01  # flip one bit in the tag
+        with pytest.raises(InvalidTag):
+            decrypt(loaded, bytes(envelope_bytes))
+
+    def test_decrypt_wrong_recipient_key(self):
+        """decrypt fails when the envelope was sealed for a different key."""
+        from cryptography.exceptions import InvalidTag
+
+        priv_a, _ = _generate_keypair()
+        _, pkcs8_b64_b = _generate_keypair()
+        wrong_key = load_private_key(pkcs8_b64_b)
+        envelope_bytes = _encrypt_envelope(priv_a.public_key(), b'{"amount":"42.50"}')
+        with pytest.raises(InvalidTag):
+            decrypt(wrong_key, envelope_bytes)

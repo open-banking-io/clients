@@ -29,7 +29,8 @@
    "fieldtype": "Data",
    "label": "OBI Account ID",
    "reqd": 1,
-   "read_only": 1
+   "read_only": 1,
+   "unique": 1
   },
   {
    "fieldname": "aspsp_name",

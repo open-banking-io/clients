@@ -12,20 +12,22 @@ class OpenBankingSettings(Document):
     pass
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def test_connection():
     """Validates the credentials bundle by calling the OBI API.
 
     Called from the Settings form's 'Test Connection' button.
     """
-    from erpnext_open_banking.erpnext_open_banking.utils.client import OpenBankingClient
+    from erpnext_open_banking.erpnext_open_banking.utils.connector import get_client
+
+    frappe.only_for(("Accounts Manager", "System Manager"))
 
     doc = frappe.get_single("Open Banking Settings")
-    if not doc.credentials_bundle:
+    if not doc.get_password("credentials_bundle", raise_exception=False):
         return {"success": False, "message": _("No credentials bundle provided.")}
 
     try:
-        client = OpenBankingClient.from_credentials(doc.credentials_bundle)
+        client = get_client()
         connections = client.get_connections()
         client.close()
         return {

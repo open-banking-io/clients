@@ -23,11 +23,10 @@
   },
   {
    "fieldname": "credentials_bundle",
-   "fieldtype": "Code",
+   "fieldtype": "Password",
    "label": "Credentials Bundle (JSON)",
-   "options": "JSON",
    "reqd": 1,
-   "description": "Paste the credentials bundle JSON you exported from open-banking.io. It contains apiBaseUrl, apiKey and encryptionKey.privateKey. The private key never leaves this server — it is used only to decrypt data locally.",
+   "description": "Paste the credentials bundle JSON you exported from open-banking.io. It contains apiBaseUrl, apiKey and encryptionKey.privateKey. The private key never leaves this server — it is stored encrypted and used only to decrypt data locally.",
    "length": 10000
   },
   {
@@ -79,8 +78,6 @@
   {
    "create": 1,
    "delete": 1,
-   "email": 1,
-   "print": 1,
    "read": 1,
    "role": "System Manager",
    "share": 1,
@@ -89,8 +86,6 @@
   {
    "create": 1,
    "delete": 1,
-   "email": 1,
-   "print": 1,
    "read": 1,
    "role": "Accounts Manager",
    "share": 1,

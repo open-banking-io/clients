@@ -40,6 +40,17 @@ def _parse_decimal(value: str | None) -> Decimal:
     return Decimal(value)
 
 
+def _parse_optional_decimal(value: Any) -> str | None:
+    """Parses an optional numeric field losslessly, preserving ``None``.
+
+    Values arrive from ``json.loads`` as str, int or float; going through
+    ``str`` first avoids binary-float artifacts in the Decimal.
+    """
+    if value is None or value == "":
+        return None
+    return str(Decimal(str(value)))
+
+
 class OpenBankingClient:
     """Decrypting client for the open-banking.io server-to-server API."""
 
@@ -71,9 +82,17 @@ class OpenBankingClient:
 
     @classmethod
     def from_credentials(
-        cls, path_or_json: str, session: requests.Session | None = None
+        cls,
+        path_or_json: str,
+        session: requests.Session | None = None,
+        *,
+        base_url_override: str | None = None,
     ) -> OpenBankingClient:
-        """Builds a client from a credentials-bundle JSON string or path to a file."""
+        """Builds a client from a credentials-bundle JSON string or path to a file.
+
+        ``base_url_override`` (e.g. a staging URL from Open Banking Settings)
+        takes precedence over the bundle's ``apiBaseUrl``.
+        """
         if os.path.exists(path_or_json):
             with open(path_or_json, encoding="utf-8") as fh:
                 raw = fh.read()
@@ -81,7 +100,7 @@ class OpenBankingClient:
             raw = path_or_json
 
         bundle = json.loads(raw)
-        api_base_url = bundle.get("apiBaseUrl", "")
+        api_base_url = base_url_override or bundle.get("apiBaseUrl", "")
         api_key = bundle.get("apiKey")
         if not api_key:
             raise ValueError("The credentials bundle has no apiKey")
@@ -266,9 +285,9 @@ class OpenBankingClient:
             "remittance_information": d.get("remittanceInformation"),
             "note": d.get("note"),
             "reference_number": d.get("referenceNumber"),
-            "exchange_rate": d.get("exchangeRate"),
+            "exchange_rate": _parse_optional_decimal(d.get("exchangeRate")),
             "merchant_category_code": d.get("merchantCategoryCode"),
-            "balance_after_transaction": d.get("balanceAfter"),
+            "balance_after_transaction": _parse_optional_decimal(d.get("balanceAfter")),
             "balance_after_currency": d.get("balanceAfterCurrency"),
         }
 

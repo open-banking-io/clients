@@ -2,6 +2,11 @@
 
 frappe.ui.form.on("Bank Account", {
     refresh(frm) {
+        // Open Banking Connection is restricted to these roles — skip the
+        // lookup (and the sync button) for everyone else.
+        if (!frappe.user.has_role("Accounts Manager") && !frappe.user.has_role("System Manager")) {
+            return;
+        }
         // Only show button if an Open Banking Connection is linked to this Bank Account
         frappe.db
             .get_value("Open Banking Connection", { bank_account: frm.doc.name }, "name")
@@ -41,6 +46,9 @@ frappe.ui.form.on("Bank Account", {
                         __("Open Banking")
                     );
                 }
+            })
+            .catch(() => {
+                // No access to Open Banking Connection — just skip the button.
             });
     },
 });
