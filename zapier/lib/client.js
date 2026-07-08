@@ -100,7 +100,7 @@ function importBundleKey(bundle) {
  */
 async function mapAccount(key, a) {
   const acc = await decryptTo(key, a.enc);
-  const name = await decryptTo(key, a.displayNameEnc);
+  const nameEnvelope = await decryptTo(key, a.displayNameEnc);
   const balances = await Promise.all(
     (a.balances ?? []).map(async (b) => {
       const dec = await decryptTo(key, b.enc);
@@ -127,7 +127,7 @@ async function mapAccount(key, a) {
     ownerName: acc?.ownerName ?? null,
     accountName: acc?.accountName ?? null,
     product: acc?.product ?? null,
-    displayName: name?.displayName ?? null,
+    displayName: nameEnvelope?.displayName ?? null,
     balances,
   };
 }
