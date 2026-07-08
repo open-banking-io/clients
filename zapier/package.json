@@ -1,6 +1,6 @@
 {
   "name": "open-banking-io-zapier",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Zapier integration for open-banking.io: connect your bank accounts and pull transactions into Zapier workflows with client-side, zero-knowledge decryption.",
   "license": "MIT",
   "author": {
@@ -29,11 +29,11 @@
     "node": ">=20"
   },
   "dependencies": {
-    "zapier-platform-core": "^19.0.0"
+    "zapier-platform-core": "19.0.0"
   },
   "devDependencies": {
     "chai": "^4.5.0",
     "mocha": "^10.8.0",
-    "zapier-platform-schema": "^19.0.0"
+    "zapier-platform-schema": "19.0.0"
   }
 }
