@@ -46,19 +46,22 @@ your ERPNext instance.
 
 ## Installation
 
-This app lives in the `erpnext/` subdirectory of the
-[open-banking-io/clients](https://github.com/open-banking-io/clients) monorepo
-(alongside the Python, Node, Rust, Go and other SDKs), so clone the monorepo
-and point `bench get-app` at the subdirectory:
+Install directly from the dedicated app repo (a root-level mirror of this
+directory, so `bench get-app` works with a plain URL):
 
 ```bash
-git clone https://github.com/open-banking-io/clients.git /tmp/obi-clients
-
 # From your bench directory:
-bench get-app /tmp/obi-clients/erpnext
+bench get-app https://github.com/open-banking-io/erpnext --branch v0.1.0
 bench --site <your-site> install-app erpnext_open_banking
 bench --site <your-site> migrate
 ```
+
+> **Source of truth:** development happens in the `erpnext/` directory of the
+> [open-banking-io/clients](https://github.com/open-banking-io/clients) monorepo
+> (alongside the Python, Node, Rust, Go and other SDKs); each `erpnext/vX.Y.Z`
+> release subtree-splits it to the [open-banking-io/erpnext](https://github.com/open-banking-io/erpnext)
+> mirror that `bench` installs from. To install from a local checkout instead,
+> `bench get-app /path/to/clients/erpnext`.
 
 ## Setup
 
