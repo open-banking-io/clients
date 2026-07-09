@@ -303,7 +303,8 @@ jobs:
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: ${{ matrix.python-version }}
-      - run: pip install pytest cryptography requests
+      - run: pip install ruff pytest cryptography requests
+      - run: ruff check erpnext_open_banking/ tests/
       - run: python -m pytest tests/ -v
 
   # Aggregate gate: the single required CI status check. Always runs so it

@@ -9,9 +9,7 @@ OBI decrypted transaction dicts map correctly to ERPNext Bank Transaction fields
 """
 
 from datetime import date
-from decimal import Decimal
 
-import pytest
 
 from erpnext_open_banking.erpnext_open_banking.utils.mapper import map_transaction
 
