@@ -1,6 +1,6 @@
 [project]
 name = "erpnext-open-banking"
-version = "0.1.2"
+version = "0.1.3"
 description = "Connect your bank accounts to ERPNext via open-banking.io — no eIDAS certificates required."
 readme = "README.md"
 license = { text = "MIT" }
@@ -48,10 +48,13 @@ requires = ["setuptools>=68.0"]
 build-backend = "setuptools.build_meta"
 
 # Frappe/ERPNext version compatibility — read by bench and the Frappe Cloud
-# Marketplace (which requires NPM-style semver ranges). Tested on ERPNext v15.
+# Marketplace. Use the COMMA form: press parses it as
+# value.replace(" ","").replace(","," ") -> a bounded NpmSpec, so a space-form
+# range like ">=15.0.0 <16.0.0" collapses to an invalid ">=15.0.0<16.0.0".
+# Tested on ERPNext v15.
 [tool.bench.frappe-dependencies]
-frappe = ">=15.0.0 <16.0.0"
-erpnext = ">=15.0.0 <16.0.0"
+frappe = ">=15.0.0,<16.0.0"
+erpnext = ">=15.0.0,<16.0.0"
 
 [tool.setuptools.packages.find]
 include = ["erpnext_open_banking*"]
