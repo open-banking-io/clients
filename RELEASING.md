@@ -11,8 +11,9 @@ Every release is a **package-prefixed git tag**:
 <dir>/vX.Y.Z
 ```
 
-where `<dir>` ∈ `dotnet`, `node`, `python`, `rust`, `java`, `go`, `ruby`, `php`, and `X.Y.Z` is a
-[SemVer](https://semver.org) version (the literal `v` is part of the prefix, e.g. `node/v0.2.0`).
+where `<dir>` ∈ `dotnet`, `node`, `python`, `rust`, `java`, `go`, `ruby`, `php`, `beancount`, `erpnext`,
+`zapier`, `cli`, and `X.Y.Z` is a [SemVer](https://semver.org) version (the literal `v` is part of the
+prefix, e.g. `node/v0.2.0`).
 
 Each `publish-<dir>.yml` triggers **only** on its own `<dir>/v*` tags, so tagging `node/v0.2.0` publishes
 the Node package and nothing else.

@@ -13,8 +13,11 @@ on:
 permissions:
   contents: read
 
+# Fixed group (not per-ref) so all erpnext releases serialize: the mirror push
+# is a non-idempotent `git push --force`, and overlapping runs for different
+# tags could otherwise apply out of order and revert the mirror to stale content.
 concurrency:
-  group: publish-erpnext-${{ github.ref }}
+  group: publish-erpnext
   cancel-in-progress: false
 
 jobs:
