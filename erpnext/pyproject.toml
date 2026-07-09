@@ -1,6 +1,6 @@
 [project]
 name = "erpnext-open-banking"
-version = "0.1.1"
+version = "0.1.2"
 description = "Connect your bank accounts to ERPNext via open-banking.io — no eIDAS certificates required."
 readme = "README.md"
 license = { text = "MIT" }
@@ -46,6 +46,12 @@ Documentation = "https://open-banking.io"
 [build-system]
 requires = ["setuptools>=68.0"]
 build-backend = "setuptools.build_meta"
+
+# Frappe/ERPNext version compatibility — read by bench and the Frappe Cloud
+# Marketplace (which requires NPM-style semver ranges). Tested on ERPNext v15.
+[tool.bench.frappe-dependencies]
+frappe = ">=15.0.0 <16.0.0"
+erpnext = ">=15.0.0 <16.0.0"
 
 [tool.setuptools.packages.find]
 include = ["erpnext_open_banking*"]
