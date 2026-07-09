@@ -17,7 +17,7 @@ import { dirname, join, resolve } from "node:path";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..");
 
-const PACKAGES = ["dotnet", "node", "n8n", "python", "rust", "java", "go", "ruby", "php", "beancount"];
+const PACKAGES = ["dotnet", "node", "n8n", "python", "rust", "java", "go", "ruby", "php", "beancount", "erpnext"];
 
 // SemVer 2.0.0 (https://semver.org) — practical, anchored.
 const SEMVER =
@@ -90,6 +90,23 @@ const bumpers = {
       /(^version[ \t]*=[ \t]*")[^"]+(?="$)/m,
       version,
       'version = "..." (under [project])',
+    );
+  },
+
+  erpnext(version) {
+    // The ERPNext (Frappe) app — pyproject [project] version plus the
+    // app package's __version__ (Frappe reads it for the app metadata).
+    replaceOne(
+      "erpnext/pyproject.toml",
+      /(^version[ \t]*=[ \t]*")[^"]+(?="$)/m,
+      version,
+      'version = "..." (under [project])',
+    );
+    replaceOne(
+      "erpnext/erpnext_open_banking/__init__.py",
+      /(^__version__[ \t]*=[ \t]*")[^"]+(?="$)/m,
+      version,
+      '__version__ = "..."',
     );
   },
 

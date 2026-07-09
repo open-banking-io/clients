@@ -29,6 +29,9 @@ the Node package and nothing else.
 | `ruby`   | `ruby/lib/open_banking_io/version.rb` (`VERSION`) | gemspec |
 | `go`     | **none** — version *is* the tag; `Version` const in `go/client.go` is cosmetic (User-Agent) | — |
 | `php`    | **none** — Packagist derives version from the tag; `Client::VERSION` const is cosmetic | — |
+| `beancount` | `beancount/pyproject.toml` (`[project].version`) | — |
+| `erpnext` | `erpnext/pyproject.toml` (`[project].version`) | `erpnext/erpnext_open_banking/__init__.py` (`__version__`) |
+| `zapier` | `zapier/package.json` (`version`) | `zapier/package-lock.json` |
 
 ## Cutting a release (two steps — `main` is protected)
 
@@ -76,6 +79,25 @@ cut `cli/vX.Y.Z`.
 Prerequisites for the Homebrew step: the `open-banking-io/homebrew-tap` repo must
 exist, and a `HOMEBREW_TAP_TOKEN` secret (a PAT with write access to that tap repo)
 must be set on this repo — the default `GITHUB_TOKEN` can't push to another repo.
+
+### ERPNext app specifics (`erpnext_open_banking`)
+
+The `erpnext` package is a **Frappe/ERPNext app**, distributed by git (there is no
+registry — `bench get-app` clones a repo). Tagging `erpnext/vX.Y.Z` triggers
+`publish-erpnext.yml`, which runs the pytest suite, verifies `tag == pyproject ==
+__init__.__version__`, then **subtree-splits** `erpnext/` and force-pushes it (plus
+the `vX.Y.Z` tag) to the **`open-banking-io/erpnext` mirror**, where the app sits at
+the repo root so users can:
+
+```bash
+bench get-app https://github.com/open-banking-io/erpnext --branch v0.1.0
+bench --site <site> install-app erpnext_open_banking
+```
+
+Same subtree-split model as `n8n`, `php`, and `zapier`. Requires the
+`MIRROR_PUSH_TOKEN` secret (shared with the other mirrors) and the mirror repo to
+exist. Anything committed only to the mirror is wiped by the next release's
+force-push — the monorepo `erpnext/` is the single source of truth.
 
 ## The version-consistency gate
 

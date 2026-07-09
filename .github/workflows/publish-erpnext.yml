@@ -1,0 +1,88 @@
+name: Publish ERPNext
+
+# Source of truth is this monorepo (erpnext/). On an erpnext/v* tag we test the
+# app, then subtree-split erpnext/ and force-push it (plus a v* tag) to the
+# open-banking-io/erpnext mirror, where the Frappe app sits at the repo root so
+# users can `bench get-app https://github.com/open-banking-io/erpnext`.
+
+on:
+  push:
+    tags: ['erpnext/v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-erpnext-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.10', '3.11', '3.13']
+    defaults:
+      run:
+        working-directory: erpnext
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: pip install pytest cryptography requests
+      - run: python -m pytest tests/ -v
+      # Fail before the mirror push if the tag doesn't match the manifest.
+      - name: Verify tag matches manifest version
+        if: startsWith(github.ref, 'refs/tags/erpnext/v')
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#erpnext/v}"
+          MANIFEST_VERSION="$(grep -oE '^version[[:space:]]*=[[:space:]]*"[^"]+"' pyproject.toml | head -1 | sed -E 's/.*"([^"]+)"/\1/')"
+          INIT_VERSION="$(grep -oE '^__version__[[:space:]]*=[[:space:]]*"[^"]+"' erpnext_open_banking/__init__.py | head -1 | sed -E 's/.*"([^"]+)"/\1/')"
+          echo "tag=$TAG_VERSION pyproject=$MANIFEST_VERSION __init__=$INIT_VERSION"
+          [ "$TAG_VERSION" = "$MANIFEST_VERSION" ] || { echo "::error::tag $TAG_VERSION != pyproject $MANIFEST_VERSION"; exit 1; }
+          [ "$TAG_VERSION" = "$INIT_VERSION" ] || { echo "::error::tag $TAG_VERSION != __init__ $INIT_VERSION"; exit 1; }
+
+  mirror:
+    needs: test
+    if: startsWith(github.ref, 'refs/tags/erpnext/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Compute mirror tag
+        run: echo "MIRROR_TAG=${GITHUB_REF_NAME#erpnext/}" >> "$GITHUB_ENV"
+
+      - name: Subtree-split erpnext/ and push to the open-banking-io/erpnext mirror
+        env:
+          MIRROR_TOKEN: ${{ secrets.MIRROR_PUSH_TOKEN }}
+        run: |
+          set -euo pipefail
+          git config user.name  "open-banking-io-bot"
+          git config user.email "bot@open-banking.io"
+          SPLIT_SHA="$(git subtree split --prefix=erpnext)"
+          echo "split sha: $SPLIT_SHA"
+          REMOTE="https://x-access-token:${MIRROR_TOKEN}@github.com/open-banking-io/erpnext.git"
+          git push --force "$REMOTE" "${SPLIT_SHA}:refs/heads/main"
+          git tag -f "${MIRROR_TAG}" "${SPLIT_SHA}"
+          git push --force "$REMOTE" "refs/tags/${MIRROR_TAG}"
+
+      - name: Verify the mirror received the tag
+        env:
+          MIRROR_TOKEN: ${{ secrets.MIRROR_PUSH_TOKEN }}
+        run: |
+          REMOTE="https://x-access-token:${MIRROR_TOKEN}@github.com/open-banking-io/erpnext.git"
+          for i in $(seq 1 10); do
+            if git ls-remote --exit-code "$REMOTE" "refs/tags/${MIRROR_TAG}" > /dev/null; then
+              echo "mirror tag ${MIRROR_TAG} present ✓"; exit 0
+            fi
+            echo "waiting for mirror tag ${MIRROR_TAG}..."; sleep 3
+          done
+          echo "::error::mirror tag ${MIRROR_TAG} not found on open-banking-io/erpnext — the subtree-split push failed (check MIRROR_PUSH_TOKEN)"
+          exit 1
