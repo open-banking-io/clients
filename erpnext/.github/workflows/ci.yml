@@ -1,0 +1,32 @@
+name: CI
+
+# Runs in the open-banking-io/erpnext mirror repo (this app lives at its root
+# there, pushed by the monorepo's publish-erpnext.yml subtree-split). Gives the
+# marketplace-facing repo its own passing lint + test checks, per the Frappe
+# Cloud app-authoring guidelines. Dormant in the monorepo (GitHub only runs
+# workflows under the repo-root .github/).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.10', '3.11', '3.13']
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: pip install ruff==0.13.1 pytest cryptography requests
+      - run: ruff check erpnext_open_banking/ tests/
+      - run: python -m pytest tests/ -v
