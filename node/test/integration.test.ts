@@ -142,6 +142,70 @@ describe("integration against a mock API", () => {
     expect(lastHeaders["user-agent"]).toMatch(/^open-banking-io\/node\//);
   });
 
+  it("uses a custom fetch implementation and forwards X-Api-Key/User-Agent", async () => {
+    const calls: { url: string; headers: Record<string, string> }[] = [];
+    const spyFetch: typeof globalThis.fetch = (input, init) => {
+      const url = input instanceof Request ? input.url : String(input);
+      const headers = new Headers(
+        init?.headers ?? (input instanceof Request ? input.headers : undefined),
+      );
+      calls.push({ url, headers: Object.fromEntries(headers.entries()) });
+      // Delegate to the real fetch so decryption still runs against the mock server.
+      return fetch(input, init);
+    };
+
+    const spied = new OpenBankingClient({
+      apiBaseUrl: baseUrl,
+      apiKey: API_KEY,
+      privateKeyPkcs8: PRIVATE_KEY,
+      fetch: spyFetch,
+    });
+
+    const accounts = await spied.getAccounts();
+    expect(accounts).toHaveLength(1);
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.url).toBe(`${baseUrl}/api/accounts`);
+    expect(calls[0]!.headers["x-api-key"]).toBe(API_KEY);
+    expect(calls[0]!.headers["user-agent"]).toMatch(/^open-banking-io\/node\//);
+  });
+
+  it("strips trailing slashes from apiBaseUrl (including a pathological input, quickly)", async () => {
+    // A spy fetch that just records the URL and returns an empty account list — this lets us
+    // observe how baseUrl was normalized without depending on the mock server's port.
+    const seen: string[] = [];
+    const spyFetch: typeof globalThis.fetch = (input) => {
+      seen.push(input instanceof Request ? input.url : String(input));
+      return Promise.resolve(
+        new Response("[]", { headers: { "Content-Type": "application/json" } }),
+      );
+    };
+
+    // One trailing slash is stripped exactly as before.
+    const single = new OpenBankingClient({
+      apiBaseUrl: "http://example.test/",
+      apiKey: API_KEY,
+      privateKeyPkcs8: PRIVATE_KEY,
+      fetch: spyFetch,
+    });
+    await single.getAccounts();
+    expect(seen.at(-1)).toBe("http://example.test/api/accounts");
+
+    // Pathological input: 10k trailing slashes. The old /\/+$/ regex backtracks O(n²); the
+    // char-scan trim must return quickly and strip every trailing slash.
+    const start = performance.now();
+    const many = new OpenBankingClient({
+      apiBaseUrl: "http://example.test" + "/".repeat(10_000),
+      apiKey: API_KEY,
+      privateKeyPkcs8: PRIVATE_KEY,
+      fetch: spyFetch,
+    });
+    await many.getAccounts();
+    const elapsed = performance.now() - start;
+    expect(seen.at(-1)).toBe("http://example.test/api/accounts");
+    expect(elapsed).toBeLessThan(1000);
+  });
+
   it("a wrong API key throws", async () => {
     await expect(client("wrong-key").getAccounts()).rejects.toThrow();
   });

@@ -87,6 +87,26 @@ Set `$OPENBANKING_API_BASE_URL` to point every command at a different environmen
 (e.g. staging or local) without re-running `login` — it overrides the saved
 bundle's API base URL when non-empty.
 
+### HTTP client (timeout, proxy, custom CA)
+
+By default the CLI uses the SDK's built-in HTTP client. Two optional knobs let you
+tailor it without changing anything else:
+
+```sh
+openbanking --timeout 30s accounts        # per-request HTTP timeout (any Go duration, e.g. 500ms, 1m)
+OPENBANKING_CA_CERT=/path/corp-root.pem openbanking sync   # trust an extra root CA (PEM)
+```
+
+- **`--timeout <duration>`** — global flag; sets the HTTP client timeout. Omit it to keep
+  the SDK default.
+- **`OPENBANKING_CA_CERT`** — path to a PEM file of one or more root CAs, trusted *in
+  addition* to the system trust store. Handy behind a TLS-inspecting proxy or against a
+  private-CA staging environment.
+- **Proxies** need no configuration: the standard `HTTPS_PROXY` / `HTTP_PROXY` / `NO_PROXY`
+  environment variables are honored automatically.
+
+With none of these set, behavior is identical to before (the SDK's default client is used).
+
 ## How it works
 
 `login` runs a localhost loopback + PKCE flow against the API. In the browser you
