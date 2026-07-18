@@ -24,7 +24,12 @@ public sealed class OpenBankingClient : IDisposable
     /// <param name="apiKey">The API key from your credentials bundle.</param>
     /// <param name="privateKeyPkcs8Base64">The base64 PKCS#8 encryption private key from your bundle.</param>
     /// <param name="httpClient">Optional injected client (e.g. for testing); otherwise one is created.</param>
-    public OpenBankingClient(string apiBaseUrl, string apiKey, string privateKeyPkcs8Base64, HttpClient? httpClient = null)
+    /// <param name="timeout">
+    /// Optional request timeout applied only to the default <see cref="HttpClient"/> the SDK creates when no
+    /// <paramref name="httpClient"/> is injected. A caller-owned client is never mutated — configure its
+    /// <see cref="HttpClient.Timeout"/> yourself. When null, the default 30s timeout is used.
+    /// </param>
+    public OpenBankingClient(string apiBaseUrl, string apiKey, string privateKeyPkcs8Base64, HttpClient? httpClient = null, TimeSpan? timeout = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(apiBaseUrl);
         ArgumentException.ThrowIfNullOrWhiteSpace(apiKey);
@@ -34,7 +39,7 @@ public sealed class OpenBankingClient : IDisposable
         _privateKey.ImportPkcs8PrivateKey(Convert.FromBase64String(privateKeyPkcs8Base64), out _);
 
         _ownsHttp = httpClient is null;
-        _http = httpClient ?? new HttpClient { Timeout = DefaultTimeout };
+        _http = httpClient ?? new HttpClient { Timeout = timeout ?? DefaultTimeout };
         _http.BaseAddress = new Uri(apiBaseUrl.TrimEnd('/') + "/");
         _http.DefaultRequestHeaders.Remove("X-Api-Key");
         _http.DefaultRequestHeaders.Add("X-Api-Key", apiKey);
@@ -59,19 +64,19 @@ public sealed class OpenBankingClient : IDisposable
     }
 
     /// <summary>Builds a client from a credentials-bundle JSON string or a path to a bundle file.</summary>
-    public static OpenBankingClient FromCredentials(string jsonOrPath, HttpClient? httpClient = null)
+    public static OpenBankingClient FromCredentials(string jsonOrPath, HttpClient? httpClient = null, TimeSpan? timeout = null)
     {
         var json = File.Exists(jsonOrPath) ? File.ReadAllText(jsonOrPath) : jsonOrPath;
         var bundle = JsonSerializer.Deserialize<CredentialsBundle>(json, Json.Options)
             ?? throw new ArgumentException("Could not parse the credentials bundle", nameof(jsonOrPath));
-        return FromBundle(bundle, httpClient);
+        return FromBundle(bundle, httpClient, timeout);
     }
 
-    public static OpenBankingClient FromBundle(CredentialsBundle bundle, HttpClient? httpClient = null)
+    public static OpenBankingClient FromBundle(CredentialsBundle bundle, HttpClient? httpClient = null, TimeSpan? timeout = null)
     {
         if (string.IsNullOrWhiteSpace(bundle.ApiKey))
             throw new ArgumentException("The credentials bundle has no apiKey", nameof(bundle));
-        return new OpenBankingClient(bundle.ApiBaseUrl, bundle.ApiKey!, bundle.EncryptionKey.PrivateKey, httpClient);
+        return new OpenBankingClient(bundle.ApiBaseUrl, bundle.ApiKey!, bundle.EncryptionKey.PrivateKey, httpClient, timeout);
     }
 
     /// <summary>Lists the user's accounts with all sensitive fields decrypted.</summary>
