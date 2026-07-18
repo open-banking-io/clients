@@ -108,6 +108,26 @@ RSpec.describe OpenBankingIO::Client do
       expect(sent["x-api-key"]).to eq(api_key)
       expect(sent["user-agent"]).to start_with("open-banking-io/ruby/")
     end
+
+    it "threads the HTTP options through self.from_credentials" do
+      fake = FakeHttp.new(File.read(File.join(FIXTURES_DIR, "api", "accounts.json")))
+      json = File.read(File.join(FIXTURES_DIR, "credentials.json"))
+
+      client = described_class.from_credentials(
+        json,
+        open_timeout: 5,
+        read_timeout: 9,
+        http_client: fake
+      )
+
+      expect(client.instance_variable_get(:@open_timeout)).to eq(5)
+      expect(client.instance_variable_get(:@read_timeout)).to eq(9)
+      expect(client.instance_variable_get(:@http_client)).to be(fake)
+
+      # The injected client is really wired in: no socket is opened and it serves the response.
+      expect(client.get_accounts.first.iban).to eq("DK6466952001724927")
+      expect(fake.requests.length).to eq(1)
+    end
   end
 
   describe "base URL normalization" do
