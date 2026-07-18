@@ -22,7 +22,7 @@ pub mod envelope;
 mod error;
 mod models;
 
-pub use client::OpenBankingClient;
+pub use client::{OpenBankingClient, OpenBankingClientBuilder};
 pub use error::{Error, Result};
 pub use models::{
     Account, Balance, Connection, CredentialsBundle, EncryptionKey, SyncAllResult, SyncResult,
