@@ -73,6 +73,14 @@ jobs:
       - name: Install cosign
         if: steps.ver.outputs.is_tag == 'true'
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          # Pin to a pre-2.5 cosign. cosign 2.5.0 flipped `sign-blob`'s default to
+          # `--new-bundle-format`, under which `--output-signature`/`--output-certificate`
+          # are ignored and a `--bundle` path is required — which aborts the sign step
+          # ("create bundle file: open : no such file or directory") and broke every CLI
+          # release since v0.2.8. Keep the .sig/.pem artifact flow until we deliberately
+          # migrate the release + Homebrew verification to the bundle format.
+          cosign-release: 'v2.4.3'
 
       - name: Sign checksums (keyless)
         if: steps.ver.outputs.is_tag == 'true'
