@@ -142,6 +142,34 @@ describe("integration against a mock API", () => {
     expect(lastHeaders["user-agent"]).toMatch(/^open-banking-io\/node\//);
   });
 
+  it("uses a custom fetch implementation and forwards X-Api-Key/User-Agent", async () => {
+    const calls: { url: string; headers: Record<string, string> }[] = [];
+    const spyFetch: typeof globalThis.fetch = (input, init) => {
+      const url = input instanceof Request ? input.url : String(input);
+      const headers = new Headers(
+        init?.headers ?? (input instanceof Request ? input.headers : undefined),
+      );
+      calls.push({ url, headers: Object.fromEntries(headers.entries()) });
+      // Delegate to the real fetch so decryption still runs against the mock server.
+      return fetch(input, init);
+    };
+
+    const spied = new OpenBankingClient({
+      apiBaseUrl: baseUrl,
+      apiKey: API_KEY,
+      privateKeyPkcs8: PRIVATE_KEY,
+      fetch: spyFetch,
+    });
+
+    const accounts = await spied.getAccounts();
+    expect(accounts).toHaveLength(1);
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.url).toBe(`${baseUrl}/api/accounts`);
+    expect(calls[0]!.headers["x-api-key"]).toBe(API_KEY);
+    expect(calls[0]!.headers["user-agent"]).toMatch(/^open-banking-io\/node\//);
+  });
+
   it("a wrong API key throws", async () => {
     await expect(client("wrong-key").getAccounts()).rejects.toThrow();
   });
