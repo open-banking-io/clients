@@ -1,6 +1,6 @@
 [package]
 name = "open-banking-io"
-version = "0.2.1"
+version = "0.3.0"
 edition = "2021"
 rust-version = "1.74"
 description = "Server-to-server client for open-banking.io with local zero-knowledge envelope decryption."
