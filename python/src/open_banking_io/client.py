@@ -72,6 +72,7 @@ class OpenBankingClient:
         api_key: str,
         private_key_pkcs8: str,
         http_client: httpx.Client | None = None,
+        timeout: float | None = None,
     ) -> None:
         if not api_base_url or not api_base_url.strip():
             raise ValueError("api_base_url is required")
@@ -82,7 +83,9 @@ class OpenBankingClient:
 
         self._private_key = envelope.load_private_key(private_key_pkcs8)
         self._owns_http = http_client is None
-        self._http = http_client or httpx.Client(timeout=httpx.Timeout(30.0))
+        # A caller-injected client is used as-is; only the default client honors `timeout`.
+        default_timeout = httpx.Timeout(30.0 if timeout is None else timeout)
+        self._http = http_client or httpx.Client(timeout=default_timeout)
         self._http.base_url = httpx.URL(api_base_url.rstrip("/") + "/")
         self._http.headers["X-Api-Key"] = api_key
         self._http.headers["User-Agent"] = _user_agent()
@@ -91,7 +94,10 @@ class OpenBankingClient:
 
     @classmethod
     def from_credentials(
-        cls, path_or_json: str, http_client: httpx.Client | None = None
+        cls,
+        path_or_json: str,
+        http_client: httpx.Client | None = None,
+        timeout: float | None = None,
     ) -> OpenBankingClient:
         """Builds a client from a credentials-bundle JSON string or a path to a bundle file."""
         if os.path.exists(path_or_json):
@@ -111,7 +117,7 @@ class OpenBankingClient:
         if not private_key:
             raise ValueError("The credentials bundle has no encryption private key")
 
-        return cls(api_base_url, api_key, private_key, http_client)
+        return cls(api_base_url, api_key, private_key, http_client, timeout)
 
     # -- Public API ------------------------------------------------------------
 
