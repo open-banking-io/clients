@@ -173,6 +173,51 @@ def test_from_credentials_file_path_roundtrip(tmp_path: Path, credentials):
         assert client._http.headers["X-Api-Key"] == credentials["apiKey"]
 
 
+# -- Timeout -----------------------------------------------------------------
+
+
+def test_default_http_client_uses_default_timeout(credentials):
+    # No timeout passed -> the default httpx.Client keeps the 30s default.
+    with OpenBankingClient(
+        api_base_url="https://example.test",
+        api_key=API_KEY,
+        private_key_pkcs8=_priv(credentials),
+    ) as client:
+        assert client._http.timeout == httpx.Timeout(30.0)
+
+
+def test_default_http_client_honors_custom_timeout(credentials):
+    # With no injected client, `timeout=` is applied to the default httpx.Client.
+    with OpenBankingClient(
+        api_base_url="https://example.test",
+        api_key=API_KEY,
+        private_key_pkcs8=_priv(credentials),
+        timeout=5.0,
+    ) as client:
+        assert client._http.timeout == httpx.Timeout(5.0)
+
+
+def test_timeout_ignored_when_http_client_injected(credentials):
+    # An injected client is used as-is; the constructor must not override its timeout.
+    injected = httpx.Client(timeout=httpx.Timeout(12.0))
+    client = OpenBankingClient(
+        api_base_url="https://example.test",
+        api_key=API_KEY,
+        private_key_pkcs8=_priv(credentials),
+        http_client=injected,
+        timeout=5.0,
+    )
+    assert client._http is injected
+    assert injected.timeout == httpx.Timeout(12.0)
+    injected.close()
+
+
+def test_from_credentials_threads_timeout(credentials):
+    raw = json.dumps(credentials)
+    with OpenBankingClient.from_credentials(raw, timeout=7.5) as client:
+        assert client._http.timeout == httpx.Timeout(7.5)
+
+
 # -- Lifecycle ---------------------------------------------------------------
 
 
