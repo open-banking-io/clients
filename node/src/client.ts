@@ -45,7 +45,10 @@ export class OpenBankingClient {
     if (!apiKey?.trim()) throw new Error("apiKey is required");
     if (!privateKeyPkcs8?.trim()) throw new Error("privateKeyPkcs8 is required");
 
-    this.baseUrl = apiBaseUrl.replace(/\/+$/, "");
+    // Strip all trailing "/" without a backtracking regex (avoids ReDoS on long inputs).
+    let end = apiBaseUrl.length;
+    while (end > 0 && apiBaseUrl.charCodeAt(end - 1) === 47 /* "/" */) end--;
+    this.baseUrl = apiBaseUrl.slice(0, end);
     this.apiKey = apiKey;
     this.timeoutMs = timeoutMs ?? OpenBankingClient.DEFAULT_TIMEOUT_MS;
     this.fetchImpl = options.fetch ?? fetch;
