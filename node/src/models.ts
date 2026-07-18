@@ -127,6 +127,25 @@ export interface OpenBankingClientOptions {
    * Defaults to {@link DEFAULT_TIMEOUT_MS} (30s).
    */
   timeoutMs?: number;
+  /**
+   * Custom `fetch` implementation, used in place of the global `fetch` for every request.
+   * Typed to the WHATWG `fetch` signature only, so the SDK keeps zero runtime dependencies.
+   *
+   * A custom HTTP transport (proxy, custom CA/mTLS, keep-alive, connection pooling) is
+   * expressed by passing a `fetch` bound to an undici `Dispatcher`, e.g.:
+   *
+   * ```ts
+   * import { Agent, fetch as undiciFetch } from "undici";
+   * const dispatcher = new Agent({ keepAliveTimeout: 60_000 });
+   * const client = new OpenBankingClient({
+   *   apiBaseUrl, apiKey, privateKeyPkcs8,
+   *   fetch: (input, init) => undiciFetch(input, { ...init, dispatcher }),
+   * });
+   * ```
+   *
+   * Defaults to the global `fetch`.
+   */
+  fetch?: typeof globalThis.fetch;
 }
 
 // ---- Wire DTOs (what the API returns; sensitive fields are ciphertext) ---------------------------
