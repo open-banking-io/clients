@@ -35,6 +35,10 @@ jobs:
           registry-url: https://registry.npmjs.org
       - run: npm ci
       - run: npm run build
-      # node 22 ships an npm new enough for --provenance; no global self-update needed
-      # (an unpinned `npm install -g npm@latest` is also a supply-chain/pinning finding).
+      # OIDC Trusted Publishing (the token-less publish auth) requires npm >= 11.5.1.
+      # Node 22 bundles npm 10.9.x, which signs --provenance fine but CANNOT perform the
+      # trusted-publishing OIDC token exchange, so the registry PUT is sent unauthenticated
+      # and the registry returns 404 (it masks 403 as 404). Pin an exact npm version — not
+      # `npm@latest` — to satisfy dependency pinning while meeting the >= 11.5.1 floor.
+      - run: npm install -g npm@11.5.1
       - run: npm publish --provenance --access public
