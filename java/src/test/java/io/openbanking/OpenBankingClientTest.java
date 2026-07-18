@@ -184,8 +184,7 @@ class OpenBankingClientTest {
       long elapsed = System.nanoTime() - started;
       assertTrue(ex.getMessage().contains("failed"));
       // Would exceed the bound under the old fixed 30s timeout — proves the short one was applied.
-      assertTrue(
-          elapsed < TIMEOUT_UPPER_BOUND_NANOS, "configured request timeout was not applied");
+      assertTrue(elapsed < TIMEOUT_UPPER_BOUND_NANOS, "configured request timeout was not applied");
     } finally {
       release.countDown();
       slow.stop(0);
@@ -216,12 +215,10 @@ class OpenBankingClientTest {
       long started = System.nanoTime();
       OpenBankingException ex =
           assertThrows(
-              OpenBankingException.class,
-              () -> c.sync("11111111-1111-4111-8111-111111111111"));
+              OpenBankingException.class, () -> c.sync("11111111-1111-4111-8111-111111111111"));
       long elapsed = System.nanoTime() - started;
       assertTrue(ex.getMessage().contains("failed"));
-      assertTrue(
-          elapsed < TIMEOUT_UPPER_BOUND_NANOS, "configured request timeout was not applied");
+      assertTrue(elapsed < TIMEOUT_UPPER_BOUND_NANOS, "configured request timeout was not applied");
     } finally {
       release.countDown();
       slow.stop(0);
