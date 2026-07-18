@@ -32,7 +32,12 @@ module OpenBankingIO
     USER_AGENT = "open-banking-io/ruby/#{VERSION}".freeze
 
     # Builds a client from a credentials-bundle JSON string or a path to a bundle file.
-    def self.from_credentials(path_or_json)
+    #
+    # Optional +open_timeout+/+read_timeout+ (seconds) and a caller-supplied +http_client+
+    # (an object responding to +#request+, e.g. a preconfigured Net::HTTP) are threaded
+    # straight through to +#initialize+; the defaults preserve the previous behaviour.
+    def self.from_credentials(path_or_json, open_timeout: DEFAULT_OPEN_TIMEOUT,
+      read_timeout: DEFAULT_READ_TIMEOUT, http_client: nil)
       raw = if File.file?(path_or_json.to_s)
         File.read(path_or_json)
       else
@@ -50,10 +55,23 @@ module OpenBankingIO
         raise ArgumentError, "The credentials bundle has no encryption private key"
       end
 
-      new(api_base_url: api_base_url, api_key: api_key, private_key_pkcs8: private_key)
+      new(
+        api_base_url: api_base_url,
+        api_key: api_key,
+        private_key_pkcs8: private_key,
+        open_timeout: open_timeout,
+        read_timeout: read_timeout,
+        http_client: http_client
+      )
     end
 
-    def initialize(api_base_url:, api_key:, private_key_pkcs8:)
+    # +open_timeout+/+read_timeout+ are seconds applied to the internally built Net::HTTP.
+    # +http_client+, when given, is any object responding to +#request+ (e.g. a preconfigured
+    # Net::HTTP for a proxy, custom CA/mTLS or connection pooling); it is used as-is instead
+    # of building one internally. All three are optional and default to the previous behaviour.
+    def initialize(api_base_url:, api_key:, private_key_pkcs8:,
+      open_timeout: DEFAULT_OPEN_TIMEOUT, read_timeout: DEFAULT_READ_TIMEOUT,
+      http_client: nil)
       raise ArgumentError, "api_base_url is required" if blank?(api_base_url)
       raise ArgumentError, "api_key is required" if blank?(api_key)
       raise ArgumentError, "private_key_pkcs8 is required" if blank?(private_key_pkcs8)
@@ -61,6 +79,9 @@ module OpenBankingIO
       @base_uri = URI.parse(api_base_url.to_s.sub(%r{/+\z}, "") + "/")
       @api_key = api_key
       @private_key = Envelope.load_private_key(private_key_pkcs8)
+      @open_timeout = open_timeout
+      @read_timeout = read_timeout
+      @http_client = http_client
     end
 
     # Lists the user's accounts with all sensitive fields decrypted.
@@ -255,10 +276,7 @@ module OpenBankingIO
       request["Accept"] = "application/json"
       request["User-Agent"] = USER_AGENT
 
-      http = Net::HTTP.new(uri.host, uri.port)
-      http.use_ssl = (uri.scheme == "https")
-      http.open_timeout = DEFAULT_OPEN_TIMEOUT
-      http.read_timeout = DEFAULT_READ_TIMEOUT
+      http = @http_client || build_http(uri)
 
       response = http.request(request)
       code = response.code.to_i
@@ -268,6 +286,14 @@ module OpenBankingIO
       return nil if body.nil? || body.empty?
 
       JSON.parse(body)
+    end
+
+    def build_http(uri)
+      http = Net::HTTP.new(uri.host, uri.port)
+      http.use_ssl = (uri.scheme == "https")
+      http.open_timeout = @open_timeout
+      http.read_timeout = @read_timeout
+      http
     end
   end
 end
