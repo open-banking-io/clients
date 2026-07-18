@@ -21,6 +21,13 @@ $apiKey = getenv('OBK_API_KEY') ?: '';
 $captureFile = getenv('OBK_CAPTURE_FILE') ?: '';
 $accountsMode = getenv('OBK_ACCOUNTS_MODE') ?: '';
 
+// OBK_DELAY_MS delays every response by N milliseconds, so a test can drive the
+// client's request timeout against a deliberately slow server.
+$delayMs = (int) (getenv('OBK_DELAY_MS') ?: '0');
+if ($delayMs > 0) {
+    usleep($delayMs * 1000);
+}
+
 $accountId = '11111111-1111-4111-8111-111111111111';
 
 $requestUri = is_string($_SERVER['REQUEST_URI'] ?? null) ? $_SERVER['REQUEST_URI'] : '/';
