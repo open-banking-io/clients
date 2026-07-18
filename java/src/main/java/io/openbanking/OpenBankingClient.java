@@ -40,6 +40,7 @@ public final class OpenBankingClient {
   private final String apiKey;
   private final ECPrivateKey privateKey;
   private final HttpClient http;
+  private final Duration requestTimeout;
   private final ObjectMapper mapper =
       new ObjectMapper().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 
@@ -51,6 +52,22 @@ public final class OpenBankingClient {
    */
   public OpenBankingClient(
       String apiBaseUrl, String apiKey, String privateKeyPkcs8Base64, HttpClient httpClient) {
+    this(apiBaseUrl, apiKey, privateKeyPkcs8Base64, httpClient, REQUEST_TIMEOUT);
+  }
+
+  /**
+   * @param apiBaseUrl e.g. {@code https://open-banking.io}
+   * @param apiKey the API key from your credentials bundle
+   * @param privateKeyPkcs8Base64 the base64 PKCS#8 encryption private key from your bundle
+   * @param httpClient an injected client (e.g. for testing), or {@code null} for a default one
+   * @param requestTimeout the per-request timeout, or {@code null} for the 30s default
+   */
+  public OpenBankingClient(
+      String apiBaseUrl,
+      String apiKey,
+      String privateKeyPkcs8Base64,
+      HttpClient httpClient,
+      Duration requestTimeout) {
     if (isBlank(apiBaseUrl)) {
       throw new OpenBankingException("apiBaseUrl is required");
     }
@@ -67,6 +84,7 @@ public final class OpenBankingClient {
         httpClient != null
             ? httpClient
             : HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build();
+    this.requestTimeout = requestTimeout != null ? requestTimeout : REQUEST_TIMEOUT;
   }
 
   /**
@@ -301,7 +319,7 @@ public final class OpenBankingClient {
         HttpRequest.newBuilder(URI.create(baseUrl + path))
             .header("X-Api-Key", apiKey)
             .header("User-Agent", USER_AGENT)
-            .timeout(REQUEST_TIMEOUT)
+            .timeout(requestTimeout)
             .GET()
             .build();
     return send(req, "GET", path);
@@ -319,7 +337,7 @@ public final class OpenBankingClient {
             .header("X-Api-Key", apiKey)
             .header("Content-Type", "application/json")
             .header("User-Agent", USER_AGENT)
-            .timeout(REQUEST_TIMEOUT)
+            .timeout(requestTimeout)
             .POST(HttpRequest.BodyPublishers.ofString(payload, StandardCharsets.UTF_8))
             .build();
     byte[] data = send(req, "POST", path);
