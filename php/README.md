@@ -50,6 +50,27 @@ Or construct it explicitly:
 $client = new Client($apiBaseUrl, $apiKey, $privateKeyPkcs8);
 ```
 
+## Custom transport & timeouts
+
+Both the constructor and `Client::fromCredentials()` take an optional `array $options` for
+proxy, custom CA / mTLS, and timeout control. `curl_options` (a map of `CURLOPT_* => value`) is
+applied **last**, so it wins over the SDK defaults; `timeout` / `connect_timeout` (seconds)
+override the 30s / 10s defaults:
+
+```php
+$client = new Client($apiBaseUrl, $apiKey, $privateKeyPkcs8, [
+    'timeout' => 60,          // total request timeout (seconds)
+    'connect_timeout' => 5,   // connection-establishment timeout (seconds)
+    'curl_options' => [
+        CURLOPT_PROXY  => 'http://proxy.internal:8080',
+        CURLOPT_CAINFO => '/etc/ssl/corp-ca.pem',
+    ],
+]);
+
+// Same options are accepted by the bundle loader:
+$client = Client::fromCredentials('credentials.json', ['timeout' => 60]);
+```
+
 ## API
 
 - `getAccounts(): Account[]` — decrypts each account's envelope, display name and balances.
