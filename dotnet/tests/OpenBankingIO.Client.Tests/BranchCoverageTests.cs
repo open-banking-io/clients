@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Text.Json;
 
 namespace OpenBankingIO.Client.Tests;
@@ -121,6 +122,63 @@ public class BranchCoverageTests
 
         var a = Assert.Single(await client.GetAccountsAsync());
         Assert.Equal("DK6466952001724927", a.Iban);
+    }
+
+    /// <summary>Reads the private <c>_http</c> field so we can assert its configured timeout.</summary>
+    private static HttpClient InnerHttp(OpenBankingClient client)
+        => (HttpClient)typeof(OpenBankingClient)
+            .GetField("_http", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetValue(client)!;
+
+    [Fact]
+    public void Constructor_Timeout_Applied_To_Default_Client()
+    {
+        var (apiKey, privateKey) = Creds();
+        var timeout = TimeSpan.FromSeconds(7);
+        // No HttpClient injected → the SDK creates its own and must honour the caller's timeout.
+        using var client = new OpenBankingClient("https://example.test", apiKey, privateKey, timeout: timeout);
+
+        Assert.Equal(timeout, InnerHttp(client).Timeout);
+    }
+
+    [Fact]
+    public void Constructor_No_Timeout_Uses_Default_On_Default_Client()
+    {
+        var (apiKey, privateKey) = Creds();
+        // No timeout → the default 30s timeout is applied to the SDK-created client.
+        using var client = new OpenBankingClient("https://example.test", apiKey, privateKey);
+
+        Assert.Equal(TimeSpan.FromSeconds(30), InnerHttp(client).Timeout);
+    }
+
+    [Fact]
+    public void Constructor_Timeout_Never_Mutates_Injected_Client()
+    {
+        var (apiKey, privateKey) = Creds();
+        // A distinctive value that is neither the SDK default (30s) nor HttpClient's own default (100s).
+        var callerTimeout = TimeSpan.FromSeconds(42);
+        using var http = new HttpClient { Timeout = callerTimeout };
+
+        // Even though a timeout is requested, a caller-owned client must be left untouched.
+        using var client = new OpenBankingClient(
+            "https://example.test", apiKey, privateKey, http, timeout: TimeSpan.FromSeconds(7));
+
+        Assert.Same(http, InnerHttp(client));
+        Assert.Equal(callerTimeout, http.Timeout);
+    }
+
+    [Fact]
+    public void FromBundle_Threads_Timeout_To_Default_Client()
+    {
+        var creds = Fixtures.Read("credentials.json");
+        var bundle = JsonSerializer.Deserialize<CredentialsBundle>(creds, WebJson)! with
+        {
+            ApiBaseUrl = "https://example.test",
+        };
+        var timeout = TimeSpan.FromSeconds(13);
+
+        using var client = OpenBankingClient.FromBundle(bundle, timeout: timeout);
+        Assert.Equal(timeout, InnerHttp(client).Timeout);
     }
 
     [Fact]
