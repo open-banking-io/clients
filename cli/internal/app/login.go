@@ -159,6 +159,9 @@ func (a *App) exchangeToken(ctx context.Context, apiBaseURL, code, verifier stri
 		return cliTokenResponse{}, err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	// Identify the CLI (and its version) to the server; without this the raw request would go out as
+	// Go's default Go-http-client/1.1 with no product/version. versionString defaults to "dev".
+	req.Header.Set("User-Agent", "open-banking-io/cli/"+a.versionString())
 
 	client := a.HTTPClient
 	if client == nil {

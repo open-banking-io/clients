@@ -64,6 +64,42 @@ func TestExchangeTokenSendsCodeAndVerifier(t *testing.T) {
 	}
 }
 
+func TestExchangeTokenSendsVersionedUserAgent(t *testing.T) {
+	var gotUA string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotUA = r.Header.Get("User-Agent")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"apiKey":"ebk_minted","apiBaseUrl":"https://api.example","user":"a@b.c","prefix":"ebk_minted12"}`))
+	}))
+	defer srv.Close()
+
+	app := &App{HTTPClient: srv.Client(), Version: "1.2.3"}
+	if _, err := app.exchangeToken(context.Background(), srv.URL, "code", "verifier"); err != nil {
+		t.Fatalf("exchangeToken: %v", err)
+	}
+	if want := "open-banking-io/cli/1.2.3"; gotUA != want {
+		t.Errorf("User-Agent = %q, want %q", gotUA, want)
+	}
+}
+
+func TestExchangeTokenUserAgentDefaultsToDev(t *testing.T) {
+	var gotUA string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotUA = r.Header.Get("User-Agent")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"apiKey":"ebk_minted","apiBaseUrl":"https://api.example","user":"a@b.c","prefix":"ebk_minted12"}`))
+	}))
+	defer srv.Close()
+
+	app := &App{HTTPClient: srv.Client()} // no Version set
+	if _, err := app.exchangeToken(context.Background(), srv.URL, "code", "verifier"); err != nil {
+		t.Fatalf("exchangeToken: %v", err)
+	}
+	if want := "open-banking-io/cli/dev"; gotUA != want {
+		t.Errorf("User-Agent = %q, want %q", gotUA, want)
+	}
+}
+
 func TestExchangeTokenSurfacesServerError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"invalid or expired login code"}`, http.StatusBadRequest)
