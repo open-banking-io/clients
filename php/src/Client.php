@@ -25,7 +25,7 @@ final class Client
      * Client version, sent as the User-Agent. Tracks the published release tag
      * (PHP has no build manifest -- Packagist is tag-based), so bump this when tagging.
      */
-    public const VERSION = '0.2.1';
+    public const VERSION = '0.3.0';
 
     /** Total request timeout, in seconds. */
     private const TIMEOUT_SECONDS = 30;
@@ -37,7 +37,31 @@ final class Client
     private readonly string $apiKey;
     private readonly Envelope $envelope;
 
-    public function __construct(string $apiBaseUrl, string $apiKey, string $privateKeyPkcs8)
+    /** Effective total request timeout, in seconds (caller may override). */
+    private readonly int $timeoutSeconds;
+
+    /** Effective connection-establishment timeout, in seconds (caller may override). */
+    private readonly int $connectTimeoutSeconds;
+
+    /**
+     * Extra cURL options (CURLOPT_* => value) applied last, so callers win over SDK defaults.
+     *
+     * @var array<int, mixed>
+     */
+    private readonly array $curlOptions;
+
+    /**
+     * @param array{
+     *     curl_options?: array<int, mixed>,
+     *     timeout?: int,
+     *     connect_timeout?: int,
+     * } $options Optional transport overrides. Supported keys:
+     *   - `curl_options`: array of `CURLOPT_* => value` merged **last**, so a caller can set
+     *     `CURLOPT_PROXY`, `CURLOPT_CAINFO`, mTLS options, etc.
+     *   - `timeout`: total request timeout in seconds (overrides the SDK default).
+     *   - `connect_timeout`: connection-establishment timeout in seconds (overrides the SDK default).
+     */
+    public function __construct(string $apiBaseUrl, string $apiKey, string $privateKeyPkcs8, array $options = [])
     {
         if (trim($apiBaseUrl) === '') {
             throw new \InvalidArgumentException('apiBaseUrl is required');
@@ -52,12 +76,27 @@ final class Client
         $this->apiBaseUrl = rtrim($apiBaseUrl, '/');
         $this->apiKey = $apiKey;
         $this->envelope = Envelope::fromPkcs8Base64($privateKeyPkcs8);
+
+        $this->timeoutSeconds = isset($options['timeout']) ? (int) $options['timeout'] : self::TIMEOUT_SECONDS;
+        $this->connectTimeoutSeconds = isset($options['connect_timeout'])
+            ? (int) $options['connect_timeout']
+            : self::CONNECT_TIMEOUT_SECONDS;
+        /** @var array<int, mixed> $curlOptions */
+        $curlOptions = is_array($options['curl_options'] ?? null) ? $options['curl_options'] : [];
+        $this->curlOptions = $curlOptions;
     }
 
     /**
      * Builds a client from a credentials-bundle JSON string or a path to a bundle file.
      */
-    public static function fromCredentials(string $pathOrJson): self
+    /**
+     * @param array{
+     *     curl_options?: array<int, mixed>,
+     *     timeout?: int,
+     *     connect_timeout?: int,
+     * } $options Optional transport overrides; see the constructor.
+     */
+    public static function fromCredentials(string $pathOrJson, array $options = []): self
     {
         $raw = $pathOrJson;
         if (str_ends_with(strtolower(trim($pathOrJson)), '.json') || @is_file($pathOrJson)) {
@@ -88,7 +127,7 @@ final class Client
             throw new OpenBankingException('The credentials bundle has no encryption private key');
         }
 
-        return new self($apiBaseUrl, $apiKey, $privateKey);
+        return new self($apiBaseUrl, $apiKey, $privateKey, $options);
     }
 
     // -- Public API ------------------------------------------------------------
@@ -362,8 +401,8 @@ final class Client
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
         curl_setopt($ch, CURLOPT_USERAGENT, 'open-banking-io/php/' . self::VERSION);
-        curl_setopt($ch, CURLOPT_TIMEOUT, self::TIMEOUT_SECONDS);
-        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, self::CONNECT_TIMEOUT_SECONDS);
+        curl_setopt($ch, CURLOPT_TIMEOUT, $this->timeoutSeconds);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, $this->connectTimeoutSeconds);
 
         if ($body !== null) {
             $payload = json_encode($body, JSON_THROW_ON_ERROR);
@@ -372,6 +411,12 @@ final class Client
         }
 
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+
+        // Caller-supplied cURL options are applied LAST so they win over the SDK defaults
+        // (proxy, custom CA/CAINFO, mTLS client cert, keep-alive, etc.).
+        if ($this->curlOptions !== []) {
+            curl_setopt_array($ch, $this->curlOptions);
+        }
 
         $responseBody = curl_exec($ch);
         if ($responseBody === false) {
