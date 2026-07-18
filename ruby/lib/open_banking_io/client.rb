@@ -76,7 +76,11 @@ module OpenBankingIO
       raise ArgumentError, "api_key is required" if blank?(api_key)
       raise ArgumentError, "private_key_pkcs8 is required" if blank?(private_key_pkcs8)
 
-      @base_uri = URI.parse(api_base_url.to_s.sub(%r{/+\z}, "") + "/")
+      # Strip any trailing slashes without a backtracking regex (avoids ReDoS on
+      # pathological input) then re-append a single one, so the base always ends in "/".
+      base = api_base_url.to_s
+      base = base.chomp("/") while base.end_with?("/")
+      @base_uri = URI.parse(base + "/")
       @api_key = api_key
       @private_key = Envelope.load_private_key(private_key_pkcs8)
       @open_timeout = open_timeout

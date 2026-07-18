@@ -109,4 +109,33 @@ RSpec.describe OpenBankingIO::Client do
       expect(sent["user-agent"]).to start_with("open-banking-io/ruby/")
     end
   end
+
+  describe "base URL normalization" do
+    def base_uri_for(url)
+      client = described_class.new(
+        api_base_url: url,
+        api_key: api_key,
+        private_key_pkcs8: private_key
+      )
+      client.instance_variable_get(:@base_uri).to_s
+    end
+
+    it "leaves a base URL without a trailing slash ending in exactly one slash" do
+      expect(base_uri_for("http://x")).to eq("http://x/")
+    end
+
+    it "collapses multiple trailing slashes to a single one" do
+      expect(base_uri_for("http://x///")).to eq("http://x/")
+    end
+
+    it "normalizes a pathological run of trailing slashes quickly (no ReDoS)" do
+      url = "http://x" + ("/" * 10_000)
+      started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      result = base_uri_for(url)
+      elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
+
+      expect(result).to eq("http://x/")
+      expect(elapsed).to be < 1.0
+    end
+  end
 end
