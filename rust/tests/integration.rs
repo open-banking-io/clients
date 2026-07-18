@@ -4,6 +4,7 @@ use std::fs;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::thread;
+use std::time::Duration;
 
 use open_banking_io::{OpenBankingClient, TransactionQuery};
 use serde_json::Value;
@@ -208,6 +209,61 @@ fn requests_send_the_open_banking_io_user_agent() {
         ua.starts_with("open-banking-io/rust/"),
         "unexpected User-Agent: {ua}"
     );
+}
+
+#[test]
+fn builder_with_custom_timeouts_builds_a_working_client() {
+    let api = start_mock();
+    let client = OpenBankingClient::builder(&api.base_url, &api.api_key, &api.private_key)
+        .connect_timeout(Duration::from_secs(5))
+        .timeout(Duration::from_secs(15))
+        .build()
+        .unwrap();
+    let accounts = client.get_accounts().unwrap();
+    assert_eq!(accounts.len(), 1);
+    // Custom-timeout agent still emits the SDK User-Agent.
+    let ua = api.last_user_agent.lock().unwrap().clone().unwrap();
+    assert!(
+        ua.starts_with("open-banking-io/rust/"),
+        "unexpected User-Agent: {ua}"
+    );
+}
+
+#[test]
+fn builder_with_a_custom_agent_builds_a_working_client() {
+    let api = start_mock();
+    let agent: ureq::Agent = ureq::Agent::config_builder()
+        .timeout_connect(Some(Duration::from_secs(3)))
+        .user_agent("open-banking-io/rust/custom-agent-test")
+        .build()
+        .into();
+    let client = OpenBankingClient::builder(&api.base_url, &api.api_key, &api.private_key)
+        .agent(agent)
+        .build()
+        .unwrap();
+    let accounts = client.get_accounts().unwrap();
+    assert_eq!(accounts.len(), 1);
+    // The caller-supplied agent's User-Agent is used verbatim (not overridden by the SDK).
+    let ua = api.last_user_agent.lock().unwrap().clone().unwrap();
+    assert_eq!(ua, "open-banking-io/rust/custom-agent-test");
+}
+
+#[test]
+fn builder_validates_like_new() {
+    let api = start_mock();
+    assert!(
+        OpenBankingClient::builder("", &api.api_key, &api.private_key)
+            .build()
+            .is_err()
+    );
+    assert!(
+        OpenBankingClient::builder(&api.base_url, "", &api.private_key)
+            .build()
+            .is_err()
+    );
+    assert!(OpenBankingClient::builder(&api.base_url, &api.api_key, "")
+        .build()
+        .is_err());
 }
 
 #[test]

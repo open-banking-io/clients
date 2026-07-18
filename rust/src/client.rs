@@ -25,9 +25,47 @@ pub struct OpenBankingClient {
     agent: ureq::Agent,
 }
 
+/// Default connect timeout applied when none is supplied.
+const DEFAULT_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+/// Default global (whole-request) timeout applied when none is supplied.
+const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// Builds a `ureq::Agent` with the given optional timeouts, falling back to the SDK defaults.
+///
+/// Always sets the SDK `User-Agent` (derived from `CARGO_PKG_VERSION`).
+fn build_agent(connect_timeout: Option<Duration>, timeout: Option<Duration>) -> ureq::Agent {
+    ureq::Agent::config_builder()
+        .timeout_connect(Some(connect_timeout.unwrap_or(DEFAULT_CONNECT_TIMEOUT)))
+        .timeout_global(Some(timeout.unwrap_or(DEFAULT_TIMEOUT)))
+        .user_agent(USER_AGENT)
+        .build()
+        .into()
+}
+
+/// Builds the default `ureq::Agent` used by [`OpenBankingClient::new`] and friends.
+fn default_agent() -> ureq::Agent {
+    build_agent(None, None)
+}
+
 impl OpenBankingClient {
     /// Builds a client from an API base url, API key, and base64 PKCS#8 encryption private key.
     pub fn new(api_base_url: &str, api_key: &str, private_key_pkcs8_b64: &str) -> Result<Self> {
+        Self::construct(
+            api_base_url,
+            api_key,
+            private_key_pkcs8_b64,
+            default_agent(),
+        )
+    }
+
+    /// Shared validation + construction used by both [`Self::new`] and the builder. The supplied
+    /// `agent` becomes the client's transport; validation is identical regardless of caller.
+    fn construct(
+        api_base_url: &str,
+        api_key: &str,
+        private_key_pkcs8_b64: &str,
+        agent: ureq::Agent,
+    ) -> Result<Self> {
         if api_base_url.trim().is_empty() {
             return Err(Error::Config("api_base_url is required".into()));
         }
@@ -42,13 +80,30 @@ impl OpenBankingClient {
             base_url: api_base_url.trim_end_matches('/').to_string(),
             api_key: api_key.to_string(),
             private_key: envelope::load_private_key(private_key_pkcs8_b64)?,
-            agent: ureq::Agent::config_builder()
-                .timeout_connect(Some(Duration::from_secs(10)))
-                .timeout_global(Some(Duration::from_secs(30)))
-                .user_agent(USER_AGENT)
-                .build()
-                .into(),
+            agent,
         })
+    }
+
+    /// Starts building a client with a customizable HTTP transport and/or timeouts.
+    ///
+    /// The defaults match [`Self::new`]. Supply a custom [`ureq::Agent`] (for proxies, custom CA /
+    /// mTLS, connection pooling, etc.) via [`OpenBankingClientBuilder::agent`], or tune the default
+    /// agent's timeouts via [`OpenBankingClientBuilder::connect_timeout`] /
+    /// [`OpenBankingClientBuilder::timeout`]. A supplied agent takes precedence over the timeout
+    /// setters (the SDK will not override a caller-owned agent's configuration).
+    pub fn builder(
+        api_base_url: &str,
+        api_key: &str,
+        private_key_pkcs8_b64: &str,
+    ) -> OpenBankingClientBuilder {
+        OpenBankingClientBuilder {
+            api_base_url: api_base_url.to_string(),
+            api_key: api_key.to_string(),
+            private_key_pkcs8_b64: private_key_pkcs8_b64.to_string(),
+            agent: None,
+            connect_timeout: None,
+            timeout: None,
+        }
     }
 
     /// Builds a client from a credentials-bundle JSON string or a path to a bundle file.
@@ -301,6 +356,55 @@ impl OpenBankingClient {
         resp.body_mut()
             .read_json()
             .map_err(|e| Error::Http(format!("POST {path} decode failed: {e}")))
+    }
+}
+
+/// Builder for [`OpenBankingClient`] that allows supplying a custom HTTP transport and/or timeouts.
+///
+/// Created via [`OpenBankingClient::builder`]. All construction validation happens in
+/// [`OpenBankingClientBuilder::build`] and matches [`OpenBankingClient::new`].
+pub struct OpenBankingClientBuilder {
+    api_base_url: String,
+    api_key: String,
+    private_key_pkcs8_b64: String,
+    agent: Option<ureq::Agent>,
+    connect_timeout: Option<Duration>,
+    timeout: Option<Duration>,
+}
+
+impl OpenBankingClientBuilder {
+    /// Uses a caller-supplied [`ureq::Agent`] as the transport (for proxies, custom CA / mTLS,
+    /// connection pooling, etc.). Takes precedence over [`Self::connect_timeout`] / [`Self::timeout`].
+    pub fn agent(mut self, agent: ureq::Agent) -> Self {
+        self.agent = Some(agent);
+        self
+    }
+
+    /// Overrides the connect timeout of the default agent. Ignored when a custom [`Self::agent`] is set.
+    pub fn connect_timeout(mut self, connect_timeout: Duration) -> Self {
+        self.connect_timeout = Some(connect_timeout);
+        self
+    }
+
+    /// Overrides the global (whole-request) timeout of the default agent. Ignored when a custom
+    /// [`Self::agent`] is set.
+    pub fn timeout(mut self, timeout: Duration) -> Self {
+        self.timeout = Some(timeout);
+        self
+    }
+
+    /// Validates the configuration and builds the client. Validation is identical to
+    /// [`OpenBankingClient::new`].
+    pub fn build(self) -> Result<OpenBankingClient> {
+        let agent = self
+            .agent
+            .unwrap_or_else(|| build_agent(self.connect_timeout, self.timeout));
+        OpenBankingClient::construct(
+            &self.api_base_url,
+            &self.api_key,
+            &self.private_key_pkcs8_b64,
+            agent,
+        )
     }
 }
 
