@@ -15,7 +15,7 @@ import (
 )
 
 // Version is the released version of this client. It should track the release tag.
-const Version = "0.2.1"
+const Version = "0.3.0"
 
 // Client is a decrypting client for the open-banking.io API. Authenticates with an API key
 // (X-Api-Key) and decrypts the zero-knowledge data envelopes locally with the exported private key.
@@ -51,6 +51,80 @@ func New(apiBaseURL, apiKey, privateKeyPKCS8B64 string, httpClient *http.Client)
 		privateKey: priv,
 		httpClient: httpClient,
 	}, nil
+}
+
+// optionState holds the mutable HTTP client an Option chain builds up. Options are applied in
+// the order the caller passed them, each mutating this state, so last-applied wins across all
+// option types.
+type optionState struct {
+	client *http.Client
+}
+
+// ensure returns the current *http.Client, lazily creating the same 30s-timeout default as New
+// when no WithHTTPClient has been applied yet.
+func (s *optionState) ensure() *http.Client {
+	if s.client == nil {
+		s.client = &http.Client{Timeout: 30 * time.Second}
+	}
+	return s.client
+}
+
+// Option configures a Client built via NewWithOptions. Options are applied in the order given,
+// each mutating the in-progress HTTP client, so the last option to set a given field wins.
+type Option func(*optionState)
+
+// WithHTTPClient supplies a fully-configured *http.Client for the SDK to use. This gives the
+// caller complete control over transport, timeout, redirects, and cookie handling. Applying it
+// replaces the in-progress client outright — so a WithTransport / WithTimeout that comes AFTER
+// it mutates this client, while one that came BEFORE it is discarded (last-wins). A nil client
+// is ignored.
+func WithHTTPClient(hc *http.Client) Option {
+	return func(s *optionState) {
+		if hc != nil {
+			s.client = hc
+		}
+	}
+}
+
+// WithTransport sets the http.RoundTripper on the in-progress *http.Client (the current
+// WithHTTPClient client, or the 30s-timeout default if none has been applied yet). Use this to
+// plug in a proxy, custom CA / mTLS, or connection-pooling transport.
+func WithTransport(rt http.RoundTripper) Option {
+	return func(s *optionState) {
+		s.ensure().Transport = rt
+	}
+}
+
+// WithTimeout sets the Timeout on the in-progress *http.Client (the current WithHTTPClient
+// client, or the 30s-timeout default if none has been applied yet).
+func WithTimeout(d time.Duration) Option {
+	return func(s *optionState) {
+		s.ensure().Timeout = d
+	}
+}
+
+// NewWithOptions builds a client like New, but accepts functional options for HTTP behavior.
+// It is additive to New: with no options it behaves identically, defaulting to an
+// &http.Client{Timeout: 30 * time.Second}.
+//
+// Options are applied in the order given, each mutating the in-progress *http.Client, so the
+// last option to set a given field wins across all option types. For example
+// WithTransport(rt), WithHTTPClient(hc) yields hc unchanged (the later WithHTTPClient discards
+// the earlier transport), whereas WithHTTPClient(hc), WithTransport(rt) yields hc with rt.
+func NewWithOptions(apiBaseURL, apiKey, privateKeyPKCS8B64 string, opts ...Option) (*Client, error) {
+	var state optionState
+	for _, opt := range opts {
+		if opt != nil {
+			opt(&state)
+		}
+	}
+
+	httpClient := state.client
+	if httpClient == nil {
+		httpClient = &http.Client{Timeout: 30 * time.Second}
+	}
+
+	return New(apiBaseURL, apiKey, privateKeyPKCS8B64, httpClient)
 }
 
 // NewPublic builds a client for operations that do not decrypt data — listing banks

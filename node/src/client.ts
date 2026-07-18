@@ -36,6 +36,7 @@ export class OpenBankingClient {
   private readonly baseUrl: string;
   private readonly apiKey: string;
   private readonly timeoutMs: number;
+  private readonly fetchImpl: typeof globalThis.fetch;
   private readonly privateKey: Promise<CryptoKey>;
 
   constructor(options: OpenBankingClientOptions) {
@@ -44,28 +45,46 @@ export class OpenBankingClient {
     if (!apiKey?.trim()) throw new Error("apiKey is required");
     if (!privateKeyPkcs8?.trim()) throw new Error("privateKeyPkcs8 is required");
 
-    this.baseUrl = apiBaseUrl.replace(/\/+$/, "");
+    // Strip all trailing "/" without a backtracking regex (avoids ReDoS on long inputs).
+    let end = apiBaseUrl.length;
+    while (end > 0 && apiBaseUrl.charCodeAt(end - 1) === 47 /* "/" */) end--;
+    this.baseUrl = apiBaseUrl.slice(0, end);
     this.apiKey = apiKey;
     this.timeoutMs = timeoutMs ?? OpenBankingClient.DEFAULT_TIMEOUT_MS;
+    this.fetchImpl = options.fetch ?? fetch;
     this.privateKey = importPrivateKey(privateKeyPkcs8);
   }
 
-  /** Builds a client from a credentials-bundle JSON string or a path to a bundle file. */
-  static fromCredentials(jsonOrPath: string): OpenBankingClient {
+  /**
+   * Builds a client from a credentials-bundle JSON string or a path to a bundle file.
+   *
+   * `overrides` (optional) lets the bundle path set the same transport knobs as the
+   * constructor — e.g. a custom {@link OpenBankingClientOptions.fetch} or
+   * {@link OpenBankingClientOptions.timeoutMs}.
+   */
+  static fromCredentials(
+    jsonOrPath: string,
+    overrides: Partial<Pick<OpenBankingClientOptions, "fetch" | "timeoutMs">> = {},
+  ): OpenBankingClient {
     let json = jsonOrPath;
     if (!jsonOrPath.trimStart().startsWith("{")) {
       json = readFileSync(jsonOrPath, "utf8");
     }
     const bundle = JSON.parse(json) as CredentialsBundle;
-    return OpenBankingClient.fromBundle(bundle);
+    return OpenBankingClient.fromBundle(bundle, overrides);
   }
 
-  static fromBundle(bundle: CredentialsBundle): OpenBankingClient {
+  static fromBundle(
+    bundle: CredentialsBundle,
+    overrides: Partial<Pick<OpenBankingClientOptions, "fetch" | "timeoutMs">> = {},
+  ): OpenBankingClient {
     if (!bundle.apiKey?.trim()) throw new Error("The credentials bundle has no apiKey");
     return new OpenBankingClient({
       apiBaseUrl: bundle.apiBaseUrl,
       apiKey: bundle.apiKey,
       privateKeyPkcs8: bundle.encryptionKey.privateKey,
+      timeoutMs: overrides.timeoutMs,
+      fetch: overrides.fetch,
     });
   }
 
@@ -219,7 +238,7 @@ export class OpenBankingClient {
   }
 
   private async getJson<T>(path: string): Promise<T> {
-    const res = await fetch(this.baseUrl + path, {
+    const res = await this.fetchImpl(this.baseUrl + path, {
       headers: { "X-Api-Key": this.apiKey, "User-Agent": USER_AGENT },
       signal: AbortSignal.timeout(this.timeoutMs),
     });
@@ -230,7 +249,7 @@ export class OpenBankingClient {
   }
 
   private async postJson<T>(path: string, body: unknown): Promise<T> {
-    const res = await fetch(this.baseUrl + path, {
+    const res = await this.fetchImpl(this.baseUrl + path, {
       method: "POST",
       headers: {
         "X-Api-Key": this.apiKey,
