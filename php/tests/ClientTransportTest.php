@@ -109,15 +109,21 @@ final class ClientTransportTest extends TestCase
         );
 
         $start = microtime(true);
+        $message = null;
         try {
             $client->getAccounts();
-            self::fail('Expected the connect attempt to fail');
-        } catch (ApiException) {
-            // expected
+            self::fail('Expected the connect attempt to time out');
+        } catch (ApiException $e) {
+            $message = $e->getMessage();
         }
         $elapsed = microtime(true) - $start;
 
-        // A 1s connect timeout must abort well before the 10s SDK default would.
+        // The failure must be a *timeout* specifically (cURL CURLE_OPERATION_TIMEDOUT,
+        // "Connection timed out after N milliseconds") -- not merely any fast failure,
+        // which would still pass if connect_timeout were ignored.
+        self::assertMatchesRegularExpression('/timed out|timeout/i', $message);
+
+        // ...and it must abort near the 1s override, well before the 10s SDK default.
         self::assertLessThan(8.0, $elapsed);
     }
 }

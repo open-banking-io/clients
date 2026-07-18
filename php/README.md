@@ -50,7 +50,7 @@ Or construct it explicitly:
 $client = new Client($apiBaseUrl, $apiKey, $privateKeyPkcs8);
 ```
 
-### Custom transport & timeouts
+## Custom transport & timeouts
 
 Both the constructor and `Client::fromCredentials()` take an optional `array $options` for
 proxy, custom CA / mTLS, and timeout control. `curl_options` (a map of `CURLOPT_* => value`) is

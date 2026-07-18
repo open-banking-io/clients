@@ -88,8 +88,7 @@ final class Client
 
     /**
      * Builds a client from a credentials-bundle JSON string or a path to a bundle file.
-     */
-    /**
+     *
      * @param array{
      *     curl_options?: array<int, mixed>,
      *     timeout?: int,
