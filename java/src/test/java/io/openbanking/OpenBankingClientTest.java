@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -144,30 +145,83 @@ class OpenBankingClientTest {
     assertEquals(0, c.getAccounts().size());
   }
 
+  /** Starts a loopback server with the given handler; the caller is responsible for stopping it. */
+  private static HttpServer startServer(HttpHandler handler) throws IOException {
+    HttpServer s = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+    s.createContext("/", handler);
+    s.start();
+    return s;
+  }
+
+  private static void awaitQuietly(CountDownLatch latch) {
+    try {
+      latch.await();
+    } catch (InterruptedException ie) {
+      Thread.currentThread().interrupt();
+    }
+  }
+
+  private static final long TIMEOUT_UPPER_BOUND_NANOS = Duration.ofSeconds(2).toNanos();
+
   @Test
   void shortRequestTimeoutAgainstHungServerFails() throws Exception {
-    // A dedicated server whose handler blocks until the test releases it — far longer than the
-    // client's per-request timeout — so the client must abort with an OpenBankingException rather
-    // than wait it out. The latch lets teardown be immediate (no fixed sleep) so the test is fast.
+    // A server whose handler blocks until the test releases it — far longer than the client's
+    // per-request timeout — so the client must abort with an OpenBankingException. The latch lets
+    // teardown be immediate (no fixed sleep) so the test stays fast.
     CountDownLatch release = new CountDownLatch(1);
-    HttpServer slow = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-    slow.createContext(
-        "/",
-        ex -> {
-          try {
-            release.await();
-          } catch (InterruptedException ie) {
-            Thread.currentThread().interrupt();
-          }
-          respond(ex, 200, "[]".getBytes(StandardCharsets.UTF_8));
-        });
-    slow.start();
+    HttpServer slow =
+        startServer(
+            ex -> {
+              awaitQuietly(release);
+              respond(ex, 200, "[]".getBytes(StandardCharsets.UTF_8));
+            });
     try {
       String slowUrl = "http://127.0.0.1:" + slow.getAddress().getPort();
       OpenBankingClient c =
           new OpenBankingClient(slowUrl, apiKey, privateKey, null, Duration.ofMillis(150));
+      long started = System.nanoTime();
       OpenBankingException ex = assertThrows(OpenBankingException.class, c::getAccounts);
+      long elapsed = System.nanoTime() - started;
       assertTrue(ex.getMessage().contains("failed"));
+      // Would exceed the bound under the old fixed 30s timeout — proves the short one was applied.
+      assertTrue(
+          elapsed < TIMEOUT_UPPER_BOUND_NANOS, "configured request timeout was not applied");
+    } finally {
+      release.countDown();
+      slow.stop(0);
+    }
+  }
+
+  @Test
+  void shortRequestTimeoutAppliesToPost() throws Exception {
+    // sync() first GETs /api/accounts to resolve the account, then POSTs its decrypted uid. Serve
+    // the GET from the shared fixture (an account with an active session) so the flow reaches the
+    // POST, then hang the POST to prove the timeout applies to the POST path too.
+    byte[] accounts = Files.readAllBytes(FIXTURES.resolve("api/accounts.json"));
+    CountDownLatch release = new CountDownLatch(1);
+    HttpServer slow =
+        startServer(
+            ex -> {
+              if ("GET".equals(ex.getRequestMethod())) {
+                respond(ex, 200, accounts);
+                return;
+              }
+              awaitQuietly(release);
+              respond(ex, 200, "{}".getBytes(StandardCharsets.UTF_8));
+            });
+    try {
+      String slowUrl = "http://127.0.0.1:" + slow.getAddress().getPort();
+      OpenBankingClient c =
+          new OpenBankingClient(slowUrl, apiKey, privateKey, null, Duration.ofMillis(150));
+      long started = System.nanoTime();
+      OpenBankingException ex =
+          assertThrows(
+              OpenBankingException.class,
+              () -> c.sync("11111111-1111-4111-8111-111111111111"));
+      long elapsed = System.nanoTime() - started;
+      assertTrue(ex.getMessage().contains("failed"));
+      assertTrue(
+          elapsed < TIMEOUT_UPPER_BOUND_NANOS, "configured request timeout was not applied");
     } finally {
       release.countDown();
       slow.stop(0);
