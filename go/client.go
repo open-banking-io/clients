@@ -15,7 +15,7 @@ import (
 )
 
 // Version is the released version of this client. It should track the release tag.
-const Version = "0.2.1"
+const Version = "0.3.0"
 
 // Client is a decrypting client for the open-banking.io API. Authenticates with an API key
 // (X-Api-Key) and decrypts the zero-knowledge data envelopes locally with the exported private key.
@@ -51,6 +51,75 @@ func New(apiBaseURL, apiKey, privateKeyPKCS8B64 string, httpClient *http.Client)
 		privateKey: priv,
 		httpClient: httpClient,
 	}, nil
+}
+
+// clientConfig collects the options accepted by NewWithOptions before the client is built.
+type clientConfig struct {
+	httpClient *http.Client
+	transport  http.RoundTripper
+	timeout    time.Duration
+	timeoutSet bool
+}
+
+// Option configures a Client built via NewWithOptions. Options are applied in the order given.
+type Option func(*clientConfig)
+
+// WithHTTPClient supplies a fully-configured *http.Client for the SDK to use. This gives the
+// caller complete control over transport, timeout, redirects, and cookie handling. When set, it
+// is the base client that WithTransport and WithTimeout (if also given) further mutate.
+func WithHTTPClient(hc *http.Client) Option {
+	return func(cfg *clientConfig) {
+		cfg.httpClient = hc
+	}
+}
+
+// WithTransport sets the http.RoundTripper on the client's *http.Client — the default client
+// when no WithHTTPClient was given, otherwise the supplied one. Use this to plug in a proxy,
+// custom CA / mTLS, or connection-pooling transport without replacing the whole client.
+func WithTransport(rt http.RoundTripper) Option {
+	return func(cfg *clientConfig) {
+		cfg.transport = rt
+	}
+}
+
+// WithTimeout sets the Timeout on the client's *http.Client — the default client when no
+// WithHTTPClient was given, otherwise the supplied one.
+func WithTimeout(d time.Duration) Option {
+	return func(cfg *clientConfig) {
+		cfg.timeout = d
+		cfg.timeoutSet = true
+	}
+}
+
+// NewWithOptions builds a client like New, but accepts functional options for HTTP behavior.
+// It is additive to New: with no options it behaves identically, defaulting to an
+// &http.Client{Timeout: 30 * time.Second}.
+//
+// Precedence: WithHTTPClient supplies the base *http.Client (otherwise the 30s-timeout default
+// is used). WithTransport then sets the RoundTripper on that client, and WithTimeout sets its
+// Timeout — both mutate the base client (default or supplied), so a later WithTransport /
+// WithTimeout overrides the corresponding field of a WithHTTPClient-provided client. When
+// multiple options set the same thing, the last one applied wins.
+func NewWithOptions(apiBaseURL, apiKey, privateKeyPKCS8B64 string, opts ...Option) (*Client, error) {
+	var cfg clientConfig
+	for _, opt := range opts {
+		if opt != nil {
+			opt(&cfg)
+		}
+	}
+
+	httpClient := cfg.httpClient
+	if httpClient == nil {
+		httpClient = &http.Client{Timeout: 30 * time.Second}
+	}
+	if cfg.transport != nil {
+		httpClient.Transport = cfg.transport
+	}
+	if cfg.timeoutSet {
+		httpClient.Timeout = cfg.timeout
+	}
+
+	return New(apiBaseURL, apiKey, privateKeyPKCS8B64, httpClient)
 }
 
 // NewPublic builds a client for operations that do not decrypt data — listing banks
