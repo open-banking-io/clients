@@ -8,6 +8,7 @@ import type {
 } from 'n8n-workflow';
 
 import { decryptTo, importPrivateKey, type PrivateKey } from './envelope';
+import { USER_AGENT } from './version';
 import type {
 	Account,
 	AccountEnc,
@@ -94,6 +95,7 @@ export async function apiRequest<T>(
 		qs: stringQs,
 		body,
 		json: true,
+		headers: { 'User-Agent': USER_AGENT },
 	};
 	return ctx.helpers.httpRequestWithAuthentication.call(
 		ctx,
