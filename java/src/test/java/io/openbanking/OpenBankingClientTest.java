@@ -14,9 +14,11 @@ import java.net.http.HttpClient;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -140,6 +142,36 @@ class OpenBankingClientTest {
     OpenBankingClient c =
         new OpenBankingClient(baseUrl, apiKey, privateKey, HttpClient.newHttpClient());
     assertEquals(0, c.getAccounts().size());
+  }
+
+  @Test
+  void shortRequestTimeoutAgainstHungServerFails() throws Exception {
+    // A dedicated server whose handler blocks until the test releases it — far longer than the
+    // client's per-request timeout — so the client must abort with an OpenBankingException rather
+    // than wait it out. The latch lets teardown be immediate (no fixed sleep) so the test is fast.
+    CountDownLatch release = new CountDownLatch(1);
+    HttpServer slow = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+    slow.createContext(
+        "/",
+        ex -> {
+          try {
+            release.await();
+          } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+          }
+          respond(ex, 200, "[]".getBytes(StandardCharsets.UTF_8));
+        });
+    slow.start();
+    try {
+      String slowUrl = "http://127.0.0.1:" + slow.getAddress().getPort();
+      OpenBankingClient c =
+          new OpenBankingClient(slowUrl, apiKey, privateKey, null, Duration.ofMillis(150));
+      OpenBankingException ex = assertThrows(OpenBankingException.class, c::getAccounts);
+      assertTrue(ex.getMessage().contains("failed"));
+    } finally {
+      release.countDown();
+      slow.stop(0);
+    }
   }
 
   // ---- fromCredentials / fromBundle factories ----
