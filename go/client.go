@@ -53,41 +53,53 @@ func New(apiBaseURL, apiKey, privateKeyPKCS8B64 string, httpClient *http.Client)
 	}, nil
 }
 
-// clientConfig collects the options accepted by NewWithOptions before the client is built.
-type clientConfig struct {
-	httpClient *http.Client
-	transport  http.RoundTripper
-	timeout    time.Duration
-	timeoutSet bool
+// optionState holds the mutable HTTP client an Option chain builds up. Options are applied in
+// the order the caller passed them, each mutating this state, so last-applied wins across all
+// option types.
+type optionState struct {
+	client *http.Client
 }
 
-// Option configures a Client built via NewWithOptions. Options are applied in the order given.
-type Option func(*clientConfig)
+// ensure returns the current *http.Client, lazily creating the same 30s-timeout default as New
+// when no WithHTTPClient has been applied yet.
+func (s *optionState) ensure() *http.Client {
+	if s.client == nil {
+		s.client = &http.Client{Timeout: 30 * time.Second}
+	}
+	return s.client
+}
+
+// Option configures a Client built via NewWithOptions. Options are applied in the order given,
+// each mutating the in-progress HTTP client, so the last option to set a given field wins.
+type Option func(*optionState)
 
 // WithHTTPClient supplies a fully-configured *http.Client for the SDK to use. This gives the
-// caller complete control over transport, timeout, redirects, and cookie handling. When set, it
-// is the base client that WithTransport and WithTimeout (if also given) further mutate.
+// caller complete control over transport, timeout, redirects, and cookie handling. Applying it
+// replaces the in-progress client outright — so a WithTransport / WithTimeout that comes AFTER
+// it mutates this client, while one that came BEFORE it is discarded (last-wins). A nil client
+// is ignored.
 func WithHTTPClient(hc *http.Client) Option {
-	return func(cfg *clientConfig) {
-		cfg.httpClient = hc
+	return func(s *optionState) {
+		if hc != nil {
+			s.client = hc
+		}
 	}
 }
 
-// WithTransport sets the http.RoundTripper on the client's *http.Client — the default client
-// when no WithHTTPClient was given, otherwise the supplied one. Use this to plug in a proxy,
-// custom CA / mTLS, or connection-pooling transport without replacing the whole client.
+// WithTransport sets the http.RoundTripper on the in-progress *http.Client (the current
+// WithHTTPClient client, or the 30s-timeout default if none has been applied yet). Use this to
+// plug in a proxy, custom CA / mTLS, or connection-pooling transport.
 func WithTransport(rt http.RoundTripper) Option {
-	return func(cfg *clientConfig) {
-		cfg.transport = rt
+	return func(s *optionState) {
+		s.ensure().Transport = rt
 	}
 }
 
-// WithTimeout sets the Timeout on the client's *http.Client — the default client when no
-// WithHTTPClient was given, otherwise the supplied one.
+// WithTimeout sets the Timeout on the in-progress *http.Client (the current WithHTTPClient
+// client, or the 30s-timeout default if none has been applied yet).
 func WithTimeout(d time.Duration) Option {
-	return func(cfg *clientConfig) {
-		cfg.timeout = d
-		cfg.timeoutSet = true
+	return func(s *optionState) {
+		s.ensure().Timeout = d
 	}
 }
 
@@ -95,28 +107,21 @@ func WithTimeout(d time.Duration) Option {
 // It is additive to New: with no options it behaves identically, defaulting to an
 // &http.Client{Timeout: 30 * time.Second}.
 //
-// Precedence: WithHTTPClient supplies the base *http.Client (otherwise the 30s-timeout default
-// is used). WithTransport then sets the RoundTripper on that client, and WithTimeout sets its
-// Timeout — both mutate the base client (default or supplied), so a later WithTransport /
-// WithTimeout overrides the corresponding field of a WithHTTPClient-provided client. When
-// multiple options set the same thing, the last one applied wins.
+// Options are applied in the order given, each mutating the in-progress *http.Client, so the
+// last option to set a given field wins across all option types. For example
+// WithTransport(rt), WithHTTPClient(hc) yields hc unchanged (the later WithHTTPClient discards
+// the earlier transport), whereas WithHTTPClient(hc), WithTransport(rt) yields hc with rt.
 func NewWithOptions(apiBaseURL, apiKey, privateKeyPKCS8B64 string, opts ...Option) (*Client, error) {
-	var cfg clientConfig
+	var state optionState
 	for _, opt := range opts {
 		if opt != nil {
-			opt(&cfg)
+			opt(&state)
 		}
 	}
 
-	httpClient := cfg.httpClient
+	httpClient := state.client
 	if httpClient == nil {
 		httpClient = &http.Client{Timeout: 30 * time.Second}
-	}
-	if cfg.transport != nil {
-		httpClient.Transport = cfg.transport
-	}
-	if cfg.timeoutSet {
-		httpClient.Timeout = cfg.timeout
 	}
 
 	return New(apiBaseURL, apiKey, privateKeyPKCS8B64, httpClient)
