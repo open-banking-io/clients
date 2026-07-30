@@ -26,7 +26,9 @@ with OpenBankingClient.from_credentials("credentials.json") as client:
 
         page = client.get_transactions(account.id, limit=50)
         for t in page.items:
-            print(f"  {t.booking_date}  {t.creditor_name or t.debtor_name}  {t.amount} {t.currency}")
+            print(
+                f"  {t.booking_date}  {t.creditor_name or t.debtor_name}  {t.amount} {t.currency}"
+            )
 
     # Trigger an online sync (decrypts the account uid locally and posts it):
     client.sync(account.id)

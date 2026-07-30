@@ -3,8 +3,26 @@
     "description": "Server-to-server client for open-banking.io: API-key auth and local zero-knowledge envelope decryption.",
     "type": "library",
     "license": "MIT",
-    "keywords": ["open-banking", "psd2", "banking", "zero-knowledge", "ecdh"],
+    "keywords": [
+        "open-banking",
+        "psd2",
+        "banking",
+        "zero-knowledge",
+        "ecdh"
+    ],
     "homepage": "https://open-banking.io",
+    "authors": [
+        {
+            "name": "open-banking.io",
+            "homepage": "https://open-banking.io"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/open-banking-io/clients/issues",
+        "source": "https://github.com/open-banking-io/clients/tree/main/php",
+        "security": "https://github.com/open-banking-io/clients/blob/main/SECURITY.md",
+        "email": "security@open-banking.io"
+    },
     "require": {
         "php": ">=8.2",
         "ext-openssl": "*",
@@ -14,7 +32,8 @@
     "require-dev": {
         "friendsofphp/php-cs-fixer": "^3.95",
         "phpstan/phpstan": "^2.2",
-        "phpunit/phpunit": "^11 || ^12"
+        "phpunit/phpunit": "^11 || ^12",
+        "symfony/var-dumper": "^6.4 || ^7.0 || ^8.0"
     },
     "autoload": {
         "psr-4": {
