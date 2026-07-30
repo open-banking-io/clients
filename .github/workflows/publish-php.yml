@@ -22,6 +22,17 @@ jobs:
           php-version: '8.2'
           extensions: openssl, curl, json
           tools: composer:v2
+      - name: The tag is the released version, so the User-Agent const has to agree with it
+        if: startsWith(github.ref, 'refs/tags/php/v')
+        run: |
+          set -euo pipefail
+          TAG_VERSION="${GITHUB_REF_NAME#php/v}"
+          CONST_VERSION="$(grep -oE "VERSION = '[^']+'" src/Client.php | cut -d"'" -f2)"
+          if [ "$TAG_VERSION" != "$CONST_VERSION" ]; then
+            echo "tag php/v${TAG_VERSION} does not match Client::VERSION ${CONST_VERSION}" >&2
+            exit 1
+          fi
+
       - run: composer validate --strict --no-check-version
       - run: composer install --prefer-dist --no-interaction --no-progress
       - run: vendor/bin/phpunit
@@ -46,6 +57,15 @@ jobs:
           set -euo pipefail
           git config user.name  "open-banking-io-bot"
           git config user.email "bot@open-banking.io"
+
+          # git subtree split only carries what is committed under php/, and the tests read the
+          # shared fixtures from the monorepo root. Without this the mirror ships a suite that
+          # cannot run, which the test job above never sees because it runs in this checkout.
+          mkdir -p php/tests/fixtures
+          cp -R fixtures/. php/tests/fixtures/
+          git add php/tests/fixtures
+          git diff --cached --quiet || git commit -m "chore(php): vendor shared fixtures for the split package"
+
           SPLIT_SHA="$(git subtree split --prefix=php)"
           echo "split sha: $SPLIT_SHA"
           REMOTE="https://x-access-token:${MIRROR_TOKEN}@github.com/open-banking-io/client-php.git"

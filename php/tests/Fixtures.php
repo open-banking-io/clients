@@ -4,13 +4,18 @@ declare(strict_types=1);
 
 namespace OpenBankingIO\Tests;
 
-/** Locates and loads the shared fixtures at the repo-root fixtures/ directory. */
+/** Locates and loads the shared fixtures, in the monorepo or in the split-off package. */
 final class Fixtures
 {
-    /** php/tests/ -> php/ -> repo root -> fixtures/ */
+    /**
+     * The release pipeline subtree-splits php/ into its own repository, where the repo-root
+     * fixtures/ of this monorepo does not exist, so it vendors them in beside the tests first.
+     */
     public static function dir(): string
     {
-        return dirname(__DIR__, 2) . '/fixtures';
+        $vendored = __DIR__ . '/fixtures';
+
+        return is_dir($vendored) ? $vendored : dirname(__DIR__, 2) . '/fixtures';
     }
 
     /**

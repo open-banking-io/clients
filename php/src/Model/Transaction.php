@@ -4,7 +4,12 @@ declare(strict_types=1);
 
 namespace OpenBankingIO\Model;
 
-/** A statement transaction with its sensitive fields decrypted. Amounts are decimal strings. */
+/**
+ * A statement transaction with its sensitive fields decrypted. Amounts are decimal strings.
+ *
+ * A null $amount means the envelope could not be read, never that the transaction was for
+ * nothing -- $decryptError says which. Importing such a row books a zero-value entry.
+ */
 final class Transaction
 {
     public function __construct(
@@ -16,7 +21,7 @@ final class Transaction
         public readonly ?string $valueDate,
         public readonly ?string $transactionDate,
         public readonly ?string $bankTransactionCode,
-        public readonly string $amount,
+        public readonly ?string $amount,
         public readonly ?string $creditorName,
         public readonly ?string $creditorIban,
         public readonly ?string $creditorBban,
@@ -33,6 +38,12 @@ final class Transaction
         public readonly ?string $balanceAfter,
         public readonly ?string $balanceAfterCurrency,
         public readonly ?string $rawJson,
+        public readonly ?string $decryptError = null,
     ) {
+    }
+
+    public function isSealed(): bool
+    {
+        return $this->decryptError !== null;
     }
 }

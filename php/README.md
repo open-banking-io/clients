@@ -14,7 +14,7 @@ key** — the service only ever returns ciphertext it cannot read.
 composer require open-banking-io/client
 ```
 
-Requires PHP **8.1+** with `ext-openssl`, `ext-curl` and `ext-json` (no runtime Composer dependencies).
+Requires PHP **8.2+** with `ext-openssl`, `ext-curl` and `ext-json` (no runtime Composer dependencies).
 
 Every request carries a `User-Agent: open-banking-io/php/<version>` header (`Client::VERSION`) and uses a 30s total / 10s connect timeout.
 
@@ -77,10 +77,33 @@ $client = Client::fromCredentials('credentials.json', ['timeout' => 60]);
 - `getTransactions(string $accountId, array $opts = []): TransactionPage` — `$opts` keys: `from`, `to`, `limit`, `offset`.
 - `getConnections(): Connection[]`
 - `sync(string $accountId): SyncResult` — decrypts the account uid locally and posts it; throws if the account has no active session.
-- `syncAll(): SyncAllResult` — syncs every account that has an active session.
+- `syncAll(): SyncAllResult` — syncs every account whose session it can read; `$result->unreadable` lists the ones it could not, and `isComplete()` is the only proof the run covered everything.
 
 Money/amount fields are exposed as **decimal `string`s** (exact; never a float). Models are
 `final` classes with `readonly` public properties under `OpenBankingIO\Model`.
+
+### A null amount is not zero
+
+`$transaction->amount` and `$balance->amount` are `?string`. `null` means the envelope could not
+be read, never that the transaction was for nothing — `$transaction->isSealed()` is true and
+`$transaction->decryptError` says why. Casting a null amount to a number books a zero-value entry
+that looks like real data, so branch on `isSealed()` before you read it:
+
+```php
+foreach ($client->getTransactions($accountId)->items as $t) {
+    if ($t->amount === null) {
+        // isSealed() tells you whether the envelope failed; a null amount also covers a field
+        // the service simply did not send, so check the amount itself, not only isSealed().
+        fwrite(STDERR, "skipping {$t->id}: " . ($t->decryptError ?? 'no amount') . "\n");
+        continue;
+    }
+
+    // safe: $t->amount is a decimal string here
+}
+```
+
+The same holds for `Account::isSealed()`, which also reports a balance envelope it could not
+open.
 
 ## Encryption
 
@@ -96,7 +119,7 @@ composer install
 vendor/bin/phpunit
 ```
 
-The tests read the shared fixtures at the repo-root `fixtures/` directory. The integration test
+The tests read the shared `fixtures/` directory, which the release pipeline vendors into `tests/fixtures/` in the source mirror. The Packagist distribution archive omits `tests/` entirely. The integration test
 spins up a local mock API using PHP's built-in server (`php -S`) as a subprocess.
 
 ### Static analysis & formatting
