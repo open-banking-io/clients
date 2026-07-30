@@ -5,11 +5,10 @@ useDefault = true
 disabledRules = ["generic-api-key"]
 
 [allowlist]
-description = "Deterministic TEST vectors only: the fixtures bundle + the generator that emits it, the test API key (obk_test_*), and PEM-boundary string literals in the envelope crypto source. None are real secrets."
+description = "Deterministic TEST vectors only: the fixtures bundle + the generator that emits it, the test API key (obk_test_*), and the fixture generator. PEM framing in source and tests is annotated per line with gitleaks:allow rather than allowlisted by path, so a real credential added to any of those files is still caught. None are real secrets."
 paths = [
   '''fixtures/.*''',
   '''tools/.*''',
-  '''.*[Ee]nvelope\.[a-z]+$''',
 ]
 regexes = [
   '''obk_test_[0-9a-f]+''',

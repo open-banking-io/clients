@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace OpenBankingIO;
 
+use OpenBankingIO\Internal\EnvelopeResult;
+use OpenBankingIO\Internal\Secret;
 use OpenBankingIO\Model\Account;
 use OpenBankingIO\Model\Balance;
 use OpenBankingIO\Model\Connection;
@@ -25,7 +27,7 @@ final class Client
      * Client version, sent as the User-Agent. Tracks the published release tag
      * (PHP has no build manifest -- Packagist is tag-based), so bump this when tagging.
      */
-    public const VERSION = '0.3.0';
+    public const VERSION = '1.0.0';
 
     /** Total request timeout, in seconds. */
     private const TIMEOUT_SECONDS = 30;
@@ -34,7 +36,7 @@ final class Client
     private const CONNECT_TIMEOUT_SECONDS = 10;
 
     private readonly string $apiBaseUrl;
-    private readonly string $apiKey;
+    private readonly Secret $apiKey;
     private readonly Envelope $envelope;
 
     /** Effective total request timeout, in seconds (caller may override). */
@@ -44,11 +46,13 @@ final class Client
     private readonly int $connectTimeoutSeconds;
 
     /**
-     * Extra cURL options (CURLOPT_* => value) applied last, so callers win over SDK defaults.
+     * The README recommends curl_options for mTLS, so it can hold CURLOPT_SSLCERTPASSWD or
+     * CURLOPT_USERPWD. Kept out of reach for the same reason as the api key: __debugInfo() hides it
+     * from var_dump, but VarDumper reads real properties and crash reporters upload what it emits.
      *
-     * @var array<int, mixed>
+     * @var \WeakMap<self, array<int, mixed>>|null
      */
-    private readonly array $curlOptions;
+    private static ?\WeakMap $transportOptions = null;
 
     /**
      * @param array{
@@ -61,20 +65,24 @@ final class Client
      *   - `timeout`: total request timeout in seconds (overrides the SDK default).
      *   - `connect_timeout`: connection-establishment timeout in seconds (overrides the SDK default).
      */
-    public function __construct(string $apiBaseUrl, string $apiKey, string $privateKeyPkcs8, array $options = [])
-    {
+    public function __construct(
+        string $apiBaseUrl,
+        #[\SensitiveParameter] string $apiKey,
+        #[\SensitiveParameter] string $privateKeyPkcs8,
+        #[\SensitiveParameter] array $options = [],
+    ) {
         if (trim($apiBaseUrl) === '') {
-            throw new \InvalidArgumentException('apiBaseUrl is required');
+            throw new OpenBankingException('apiBaseUrl is required');
         }
         if (trim($apiKey) === '') {
-            throw new \InvalidArgumentException('apiKey is required');
+            throw new OpenBankingException('apiKey is required');
         }
         if (trim($privateKeyPkcs8) === '') {
-            throw new \InvalidArgumentException('privateKeyPkcs8 is required');
+            throw new OpenBankingException('privateKeyPkcs8 is required');
         }
 
         $this->apiBaseUrl = rtrim($apiBaseUrl, '/');
-        $this->apiKey = $apiKey;
+        $this->apiKey = new Secret($apiKey);
         $this->envelope = Envelope::fromPkcs8Base64($privateKeyPkcs8);
 
         $this->timeoutSeconds = isset($options['timeout']) ? (int) $options['timeout'] : self::TIMEOUT_SECONDS;
@@ -83,7 +91,8 @@ final class Client
             : self::CONNECT_TIMEOUT_SECONDS;
         /** @var array<int, mixed> $curlOptions */
         $curlOptions = is_array($options['curl_options'] ?? null) ? $options['curl_options'] : [];
-        $this->curlOptions = $curlOptions;
+        self::$transportOptions ??= new \WeakMap();
+        self::$transportOptions[$this] = $curlOptions;
     }
 
     /**
@@ -95,7 +104,7 @@ final class Client
      *     connect_timeout?: int,
      * } $options Optional transport overrides; see the constructor.
      */
-    public static function fromCredentials(string $pathOrJson, array $options = []): self
+    public static function fromCredentials(#[\SensitiveParameter] string $pathOrJson, #[\SensitiveParameter] array $options = []): self
     {
         $raw = $pathOrJson;
         if (str_ends_with(strtolower(trim($pathOrJson)), '.json') || @is_file($pathOrJson)) {
@@ -127,6 +136,32 @@ final class Client
         }
 
         return new self($apiBaseUrl, $apiKey, $privateKey, $options);
+    }
+
+    /**
+     * Transport options live in a WeakMap keyed on the instance, and __clone cannot reach the source
+     * object to copy them, so a clone would keep authenticating while quietly dropping the proxy, CA
+     * bundle or client certificate. Build a second client instead.
+     */
+    public function __clone(): void
+    {
+        throw new OpenBankingException('A Client must not be cloned; construct a new one instead');
+    }
+
+    /**
+     * Covers var_dump and print_r. var_export and an (array) cast read properties directly, which
+     * is why the credentials are held out of any property at all.
+     *
+     * @return array<string, string>
+     */
+    public function __debugInfo(): array
+    {
+        return [
+            'apiBaseUrl' => $this->apiBaseUrl,
+            'apiKey' => '[redacted]',
+            'envelope' => '[redacted]',
+            'curlOptions' => '[redacted]',
+        ];
     }
 
     // -- Public API ------------------------------------------------------------
@@ -163,15 +198,18 @@ final class Client
             $path .= '?' . http_build_query($query);
         }
 
-        /** @var array{items?: array<int, array<string, mixed>>, total?: int} $page */
         $page = $this->getJson($path);
+
+        if (!array_key_exists('total', $page) || !array_key_exists('items', $page)) {
+            throw new ApiException("Unexpected response from {$path}: expected items and total");
+        }
 
         $items = array_map(
             fn (array $t): Transaction => $this->mapTransaction($t),
-            $page['items'] ?? [],
+            self::rowList($page['items'], $path),
         );
 
-        return new TransactionPage($items, (int) ($page['total'] ?? 0));
+        return new TransactionPage($items, self::requiredInt($page['total'], 'total', $path));
     }
 
     /**
@@ -181,8 +219,7 @@ final class Client
      */
     public function getConnections(): array
     {
-        /** @var array<int, array<string, mixed>> $rows */
-        $rows = $this->getJson('api/connections');
+        $rows = self::rowList($this->getJson('api/connections'), 'api/connections');
 
         return array_map(
             fn (array $c): Connection => new Connection(
@@ -218,20 +255,26 @@ final class Client
             throw new OpenBankingException("Account {$accountId} not found");
         }
 
-        $uid = $this->decryptUid($account);
-        if ($uid === null) {
+        $session = $this->openEnvelope($account['uidEnc'] ?? null);
+        if ($session->error !== null) {
+            throw new OpenBankingException(
+                "Account {$accountId} session could not be decrypted: {$session->error}",
+            );
+        }
+
+        $uid = $session->get('uid');
+        if (!is_string($uid)) {
             throw new OpenBankingException(
                 'Account has no active session (reconnect required) -- cannot sync',
             );
         }
 
         $path = 'api/accounts/' . rawurlencode($accountId) . '/sync';
-        /** @var array{newTransactions?: int, totalFetched?: int} $result */
-        $result = $this->postJson($path, ['uid' => $uid]);
+        $result = self::counters($this->postJson($path, ['uid' => $uid]), ['newTransactions', 'totalFetched'], $path);
 
         return new SyncResult(
-            newTransactions: (int) ($result['newTransactions'] ?? 0),
-            totalFetched: (int) ($result['totalFetched'] ?? 0),
+            newTransactions: $result['newTransactions'],
+            totalFetched: $result['totalFetched'],
         );
     }
 
@@ -241,19 +284,50 @@ final class Client
     public function syncAll(): SyncAllResult
     {
         $items = [];
+        $sealed = [];
+
         foreach ($this->getAccountWires() as $wire) {
-            $uid = $this->decryptUid($wire);
-            if ($uid !== null) {
-                $items[] = ['accountId' => $wire['id'] ?? null, 'uid' => $uid];
+            $id = self::str($wire['id'] ?? null);
+            $session = $this->openEnvelope($wire['uidEnc'] ?? null);
+
+            if ($session->error !== null) {
+                $sealed[self::unreadableKey($sealed, $id)] = $session->error;
+
+                continue;
             }
+
+            if ($session->isAbsent()) {
+                // No session at all: the account is simply not connected, which is not a fault.
+                continue;
+            }
+
+            $uid = $session->get('uid');
+
+            if (is_string($uid)) {
+                $items[] = ['accountId' => $id, 'uid' => $uid];
+
+                continue;
+            }
+
+            $sealed[self::unreadableKey($sealed, $id)] = 'session envelope carries no usable uid';
         }
 
-        /** @var array{accounts?: int, newTransactions?: int} $result */
-        $result = $this->postJson('api/sync', ['items' => $items]);
+        if ($items === [] && $sealed !== []) {
+            throw new OpenBankingException(
+                'No account session could be used, so nothing was synced: ' . implode('; ', array_map(
+                    static fn (string $id, string $reason): string => "{$id}: {$reason}",
+                    array_keys($sealed),
+                    $sealed,
+                )),
+            );
+        }
+
+        $result = self::counters($this->postJson('api/sync', ['items' => $items]), ['accounts', 'newTransactions'], 'api/sync');
 
         return new SyncAllResult(
-            accounts: (int) ($result['accounts'] ?? 0),
-            newTransactions: (int) ($result['newTransactions'] ?? 0),
+            accounts: $result['accounts'],
+            newTransactions: $result['newTransactions'],
+            unreadable: $sealed,
         );
     }
 
@@ -264,20 +338,50 @@ final class Client
      */
     private function getAccountWires(): array
     {
-        /** @var array<int, array<string, mixed>> $wires */
-        $wires = $this->getJson('api/accounts');
-        return $wires;
+        return self::rowList($this->getJson('api/accounts'), 'api/accounts');
     }
 
     /**
-     * @param array<string, mixed> $account
+     * @param array<int|string, mixed> $decoded
+     * @param array<int, string> $keys
+     * @return array<string, int>
      */
-    private function decryptUid(array $account): ?string
+    private static function counters(array $decoded, array $keys, string $path): array
     {
-        $uidEnc = $account['uidEnc'] ?? null;
-        $payload = $this->envelope->decryptToArray(is_string($uidEnc) ? $uidEnc : null);
-        $uid = $payload['uid'] ?? null;
-        return is_string($uid) ? $uid : null;
+        $counters = [];
+
+        foreach ($keys as $key) {
+            if (!array_key_exists($key, $decoded)) {
+                throw new ApiException("Unexpected response from {$path}: expected {$key}");
+            }
+
+            $counters[$key] = self::requiredInt($decoded[$key], $key, $path);
+        }
+
+        return $counters;
+    }
+
+    /**
+     * @param mixed $decoded
+     * @return array<int, array<string, mixed>>
+     */
+    private static function rowList($decoded, string $path): array
+    {
+        if (!is_array($decoded) || ($decoded !== [] && !array_is_list($decoded))) {
+            throw new ApiException("Unexpected response from {$path}: expected a list of objects");
+        }
+
+        $rows = [];
+        foreach ($decoded as $row) {
+            if (!is_array($row)) {
+                throw new ApiException("Unexpected response from {$path}: expected a list of objects");
+            }
+
+            $rows[] = $row;
+        }
+
+        /** @var array<int, array<string, mixed>> $rows */
+        return $rows;
     }
 
     /**
@@ -285,20 +389,21 @@ final class Client
      */
     private function mapAccount(array $a): Account
     {
-        $acc = $this->decryptEnc($a['enc'] ?? null);
-        $name = $this->decryptEnc($a['displayNameEnc'] ?? null);
+        $acc = $this->openEnvelope($a['enc'] ?? null);
+        $name = $this->openEnvelope($a['displayNameEnc'] ?? null);
 
         $balances = [];
         $rawBalances = is_array($a['balances'] ?? null) ? $a['balances'] : [];
         foreach ($rawBalances as $b) {
             $b = is_array($b) ? $b : [];
-            $dec = $this->decryptEnc($b['enc'] ?? null);
+            $dec = $this->openEnvelope($b['enc'] ?? null);
             $balances[] = new Balance(
                 type: self::str($b['type'] ?? null),
-                name: self::nullableString($dec['name'] ?? null),
-                amount: self::decimalString($dec['amount'] ?? null),
+                name: self::nullableString($dec->get('name')),
+                amount: self::nullableString($dec->get('amount')),
                 currency: self::str($b['currency'] ?? null),
                 referenceDate: self::nullableString($b['referenceDate'] ?? null),
+                decryptError: $dec->error,
             );
         }
 
@@ -310,13 +415,21 @@ final class Client
             accountType: self::nullableString($a['accountType'] ?? null),
             bic: self::nullableString($a['bic'] ?? null),
             needsReconnect: (bool) ($a['needsReconnect'] ?? false),
-            iban: self::nullableString($acc['iban'] ?? null),
-            bban: self::nullableString($acc['bban'] ?? null),
-            ownerName: self::nullableString($acc['ownerName'] ?? null),
-            accountName: self::nullableString($acc['accountName'] ?? null),
-            product: self::nullableString($acc['product'] ?? null),
-            displayName: self::nullableString($name['displayName'] ?? null),
+            iban: self::nullableString($acc->get('iban')),
+            bban: self::nullableString($acc->get('bban')),
+            ownerName: self::nullableString($acc->get('ownerName')),
+            accountName: self::nullableString($acc->get('accountName')),
+            product: self::nullableString($acc->get('product')),
+            displayName: self::nullableString($name->get('displayName')),
             balances: $balances,
+            decryptError: self::describeErrors([
+                'account' => $acc->error,
+                'displayName' => $name->error,
+                'balances' => self::describeErrors(array_map(
+                    static fn (Balance $balance): ?string => $balance->decryptError,
+                    $balances,
+                )),
+            ]),
         );
     }
 
@@ -325,7 +438,7 @@ final class Client
      */
     private function mapTransaction(array $t): Transaction
     {
-        $d = $this->decryptEnc($t['enc'] ?? null);
+        $d = $this->openEnvelope($t['enc'] ?? null);
 
         return new Transaction(
             id: self::str($t['id'] ?? null),
@@ -336,33 +449,64 @@ final class Client
             valueDate: self::nullableString($t['valueDate'] ?? null),
             transactionDate: self::nullableString($t['transactionDate'] ?? null),
             bankTransactionCode: self::nullableString($t['bankTransactionCode'] ?? null),
-            amount: self::decimalString($d['amount'] ?? null),
-            creditorName: self::nullableString($d['creditorName'] ?? null),
-            creditorIban: self::nullableString($d['creditorIban'] ?? null),
-            creditorBban: self::nullableString($d['creditorBban'] ?? null),
-            creditorAgentBic: self::nullableString($d['creditorAgentBic'] ?? null),
-            debtorName: self::nullableString($d['debtorName'] ?? null),
-            debtorIban: self::nullableString($d['debtorIban'] ?? null),
-            debtorBban: self::nullableString($d['debtorBban'] ?? null),
-            debtorAgentBic: self::nullableString($d['debtorAgentBic'] ?? null),
-            remittanceInformation: self::nullableString($d['remittanceInformation'] ?? null),
-            note: self::nullableString($d['note'] ?? null),
-            referenceNumber: self::nullableString($d['referenceNumber'] ?? null),
-            exchangeRate: self::nullableString($d['exchangeRate'] ?? null),
-            merchantCategoryCode: self::nullableString($d['merchantCategoryCode'] ?? null),
-            balanceAfter: self::nullableDecimalString($d['balanceAfter'] ?? null),
-            balanceAfterCurrency: self::nullableString($d['balanceAfterCurrency'] ?? null),
-            rawJson: self::nullableString($d['rawJson'] ?? null),
+            amount: self::nullableString($d->get('amount')),
+            creditorName: self::nullableString($d->get('creditorName')),
+            creditorIban: self::nullableString($d->get('creditorIban')),
+            creditorBban: self::nullableString($d->get('creditorBban')),
+            creditorAgentBic: self::nullableString($d->get('creditorAgentBic')),
+            debtorName: self::nullableString($d->get('debtorName')),
+            debtorIban: self::nullableString($d->get('debtorIban')),
+            debtorBban: self::nullableString($d->get('debtorBban')),
+            debtorAgentBic: self::nullableString($d->get('debtorAgentBic')),
+            remittanceInformation: self::nullableString($d->get('remittanceInformation')),
+            note: self::nullableString($d->get('note')),
+            referenceNumber: self::nullableString($d->get('referenceNumber')),
+            exchangeRate: self::nullableString($d->get('exchangeRate')),
+            merchantCategoryCode: self::nullableString($d->get('merchantCategoryCode')),
+            balanceAfter: self::nullableString($d->get('balanceAfter')),
+            balanceAfterCurrency: self::nullableString($d->get('balanceAfterCurrency')),
+            rawJson: self::nullableString($d->get('rawJson')),
+            decryptError: $d->error,
         );
     }
 
     /**
-     * @param mixed $enc
-     * @return array<string, mixed>
+     * Names which envelope failed, so a display-name failure is not mistaken for the
+     * account's own fields being unreadable.
+     *
+     * @param array<array-key, string|null> $errors
      */
-    private function decryptEnc($enc): array
+    private static function describeErrors(array $errors): ?string
     {
-        return $this->envelope->decryptToArray(is_string($enc) ? $enc : null) ?? [];
+        $described = [];
+
+        foreach ($errors as $envelope => $error) {
+            if ($error !== null) {
+                $described[] = "{$envelope}: {$error}";
+            }
+        }
+
+        return $described === [] ? null : implode('; ', $described);
+    }
+
+    /**
+     * @param mixed $enc
+     */
+    private function openEnvelope($enc): EnvelopeResult
+    {
+        if ($enc === null || $enc === '') {
+            return EnvelopeResult::absent();
+        }
+
+        if (!is_string($enc)) {
+            return EnvelopeResult::sealed('Envelope field is ' . get_debug_type($enc) . ', not a string');
+        }
+
+        try {
+            return EnvelopeResult::opened($this->envelope->decryptToArray($enc) ?? []);
+        } catch (EnvelopeException | \JsonException $e) {
+            return EnvelopeResult::sealed($e->getMessage());
+        }
     }
 
     // -- HTTP ------------------------------------------------------------------
@@ -393,7 +537,7 @@ final class Client
     {
         $url = $this->apiBaseUrl . '/' . ltrim($path, '/');
 
-        $headers = ['X-Api-Key: ' . $this->apiKey, 'Accept: application/json'];
+        $headers = ['X-Api-Key: ' . $this->apiKey->reveal(), 'Accept: application/json'];
 
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, $url);
@@ -409,12 +553,33 @@ final class Client
             $headers[] = 'Content-Type: application/json';
         }
 
+        $curlOptions = self::$transportOptions[$this] ?? [];
+        $curlOptions = is_array($curlOptions) ? $curlOptions : [];
+
+        // curl_setopt_array replaces an array option rather than merging it, so a caller adding one
+        // header would drop X-Api-Key and authenticate as nobody.
+        $callerHeaders = $curlOptions[CURLOPT_HTTPHEADER] ?? null;
+
+        if (is_array($callerHeaders)) {
+            foreach ($callerHeaders as $header) {
+                if (is_string($header)) {
+                    $headers[] = $header;
+                }
+            }
+
+            unset($curlOptions[CURLOPT_HTTPHEADER]);
+        }
+
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
 
         // Caller-supplied cURL options are applied LAST so they win over the SDK defaults
         // (proxy, custom CA/CAINFO, mTLS client cert, keep-alive, etc.).
-        if ($this->curlOptions !== []) {
-            curl_setopt_array($ch, $this->curlOptions);
+        if ($curlOptions !== []) {
+            try {
+                curl_setopt_array($ch, $curlOptions);
+            } catch (\ValueError $e) {
+                throw new OpenBankingException('A curl_options entry was rejected: ' . $e->getMessage());
+            }
         }
 
         $responseBody = curl_exec($ch);
@@ -434,12 +599,20 @@ final class Client
         }
 
         try {
-            /** @var array<int|string, mixed> $decoded */
             $decoded = json_decode($responseBody, true, 512, JSON_THROW_ON_ERROR);
         } catch (\JsonException $e) {
             throw new ApiException("{$method} {$path} returned invalid JSON: " . $e->getMessage());
         }
 
+        // A captive portal or a gateway can answer 200 with a bare scalar. Returning it would
+        // trip this method's own return type, and a TypeError is not what callers catch.
+        if (!is_array($decoded)) {
+            throw new ApiException(
+                "{$method} {$path} returned " . get_debug_type($decoded) . ', expected an object or a list',
+            );
+        }
+
+        /** @var array<int|string, mixed> $decoded */
         return $decoded;
     }
 
@@ -453,6 +626,60 @@ final class Client
     private static function str($value): string
     {
         return self::nullableString($value) ?? '';
+    }
+
+    /**
+     * An account the caller can act on, and never one that silently replaces another: a provider
+     * repeating an id, or omitting it, must not make the unreadable set under-report.
+     *
+     * @param array<string, string> $taken
+     */
+    private static function unreadableKey(array $taken, string $id): string
+    {
+        $base = $id === '' ? '(account with no id)' : $id;
+
+        if (!array_key_exists($base, $taken)) {
+            return $base;
+        }
+
+        for ($n = 2; array_key_exists("{$base} (#{$n})", $taken); $n++) {
+            // find the first free suffix
+        }
+
+        return "{$base} (#{$n})";
+    }
+
+    /**
+     * A required counter, validated rather than coerced: a malformed total or newTransactions
+     * would otherwise read as a finished empty page or a successful no-op.
+     *
+     * @param mixed $value
+     */
+    private static function requiredInt($value, string $key, string $path): int
+    {
+        // /D anchors $ at the very end: without it PCRE also matches before a trailing newline, so
+        // "5\n" would pass a check whose whole job is to validate rather than coerce.
+        if (!is_int($value) && !(is_string($value) && preg_match('/^-?\d+$/D', $value) === 1)) {
+            throw new ApiException(
+                "Unexpected response from {$path}: {$key} is " . get_debug_type($value) . ', expected an integer',
+            );
+        }
+
+        // A digit string past the integer range saturates silently, which would report a plausible
+        // row count for a response that cannot be right. Equal-length digit strings compare the
+        // same lexicographically as numerically, so this needs no arbitrary-precision arithmetic.
+        // The negative range reaches one further than the positive one.
+        if (is_string($value)) {
+            $negative = str_starts_with($value, '-');
+            $digits = ltrim(ltrim($value, '-'), '0');
+            $ceiling = $negative ? ltrim((string) PHP_INT_MIN, '-') : (string) PHP_INT_MAX;
+
+            if (strlen($digits) > strlen($ceiling) || (strlen($digits) === strlen($ceiling) && $digits > $ceiling)) {
+                throw new ApiException("Unexpected response from {$path}: {$key} is out of range");
+            }
+        }
+
+        return (int) $value;
     }
 
     /**
@@ -480,21 +707,4 @@ final class Client
         return $str === '' ? null : $str;
     }
 
-    /**
-     * Amounts are kept as exact decimal strings; never a float.
-     *
-     * @param mixed $value
-     */
-    private static function decimalString($value): string
-    {
-        return self::nullableString($value) ?? '0';
-    }
-
-    /**
-     * @param mixed $value
-     */
-    private static function nullableDecimalString($value): ?string
-    {
-        return self::nullableString($value);
-    }
 }

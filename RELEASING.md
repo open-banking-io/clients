@@ -29,7 +29,7 @@ the Node package and nothing else.
 | `java`   | `java/pom.xml` (project `<version>`) | — |
 | `ruby`   | `ruby/lib/open_banking_io/version.rb` (`VERSION`) | gemspec |
 | `go`     | **none** — version *is* the tag; `Version` const in `go/client.go` is cosmetic (User-Agent) | — |
-| `php`    | **none** — Packagist derives version from the tag; `Client::VERSION` const is cosmetic | — |
+| `php`    | **none** — Packagist derives version from the tag, but `Client::VERSION` must match it: `publish-php.yml` refuses the tag otherwise | — |
 | `beancount` | `beancount/pyproject.toml` (`[project].version`) | — |
 | `erpnext` | `erpnext/pyproject.toml` (`[project].version`) | `erpnext/erpnext_open_banking/__init__.py` (`__version__`) |
 | `zapier` | `zapier/package.json` (`version`) | `zapier/package-lock.json` |
@@ -45,13 +45,15 @@ directly. A release is two steps:
 node tools/bump-version.mjs <package> <version>   # e.g. node 0.2.0  (updates manifest + lockfiles)
 ```
 
-For `go`/`php`, update the cosmetic `Version`/`VERSION` const to match. Open the PR, let CI pass, merge.
+For `go`, update the cosmetic `Version` const to match. For `php`, `Client::VERSION` is **not**
+cosmetic -- `publish-php.yml` refuses a tag that disagrees with it, so bump it here. Open the PR, let CI pass, merge.
 
 **2. Tag via the Release workflow.** Go to **Actions → Release → Run workflow**, pick the **package** and
 **version**. It will:
 - validate semver and **refuse if the tag already exists**;
 - for non-`go`/`php`: verify the manifest on `main` is **already** at that version (fails with a clear
-  message if you forgot step 1);
+  message if you forgot step 1). `php` is checked by `publish-php.yml` instead, after the tag is
+  pushed: it refuses to publish when the tag and `Client::VERSION` disagree;
 - create and push the tag `<pkg>/v<version>` and a **GitHub Release** with auto-generated notes.
 
 Pushing the tag triggers `publish-<pkg>.yml`, which re-checks `tag == manifest` and publishes to the

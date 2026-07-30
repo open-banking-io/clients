@@ -120,21 +120,61 @@ final class IntegrationTest extends TestCase
         $this->client('wrong-key')->getAccounts();
     }
 
-    public function testWrongPrivateKeyRaises(): void
+    public function testWrongPrivateKeySealsAccountsInsteadOfThrowing(): void
+    {
+        $accounts = $this->clientWithForeignKey()->getAccounts();
+
+        self::assertNotEmpty($accounts);
+        foreach ($accounts as $account) {
+            self::assertTrue($account->isSealed());
+            self::assertNull($account->iban);
+            self::assertNull($account->ownerName);
+
+            foreach ($account->balances as $balance) {
+                self::assertTrue($balance->isSealed());
+                self::assertNull($balance->amount);
+            }
+        }
+    }
+
+    public function testWrongPrivateKeyNeverReportsAZeroAmount(): void
+    {
+        $page = $this->clientWithForeignKey()->getTransactions(self::ACCOUNT_ID);
+
+        self::assertNotEmpty($page->items);
+        foreach ($page->items as $transaction) {
+            self::assertTrue($transaction->isSealed());
+            self::assertNull($transaction->amount);
+            self::assertNull($transaction->creditorName);
+            self::assertNull($transaction->remittanceInformation);
+        }
+    }
+
+    public function testSyncSaysTheSessionIsUnreadableRatherThanAbsent(): void
+    {
+        $this->expectException(\OpenBankingIO\OpenBankingException::class);
+        $this->expectExceptionMessage('session could not be decrypted');
+
+        $this->clientWithForeignKey()->sync(self::ACCOUNT_ID);
+    }
+
+    private function clientWithForeignKey(): Client
     {
         $other = openssl_pkey_new([
             'private_key_type' => OPENSSL_KEYTYPE_EC,
             'curve_name' => 'prime256v1',
         ]);
         self::assertNotFalse($other);
+
         $pem = '';
         openssl_pkey_export($other, $pem);
         self::assertIsString($pem);
-        $wrongB64 = preg_replace('/-----[^-]+-----|\s+/', '', $pem) ?? '';
 
-        $client = new Client($this->baseUrl, $this->credentials['apiKey'], $wrongB64);
-        $this->expectException(\OpenBankingIO\OpenBankingException::class);
-        $client->getAccounts();
+        return new Client(
+            $this->baseUrl,
+            $this->credentials['apiKey'],
+            preg_replace('/-----[^-]+-----|\s+/', '', $pem) ?? '',
+        );
     }
 
     // -- helpers ---------------------------------------------------------------

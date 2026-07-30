@@ -1,0 +1,9 @@
+# The fixtures bundle carries a test API key and a test PKCS#8 private key. They belong in the
+# repository so the suite runs, but export-ignore keeps them out of the Packagist dist archive
+# and therefore out of every consumer's vendor/ and their dependency scanners.
+/tests           export-ignore
+/phpunit.xml     export-ignore
+/phpstan.neon    export-ignore
+/.php-cs-fixer.dist.php export-ignore
+/.gitattributes  export-ignore
+/.gitignore      export-ignore

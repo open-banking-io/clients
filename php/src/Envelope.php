@@ -27,32 +27,73 @@ final class Envelope
      */
     private const SPKI_PREFIX_HEX = '3059301306072a8648ce3d020106082a8648ce3d030107034200';
 
-    /** @var \OpenSSLAsymmetricKey */
-    private $privateKey;
+    /**
+     * Symfony's VarDumper -- what Laravel's dd()/dump() and Ignition/Flare-style reporters use --
+     * expands an OpenSSLAsymmetricKey into its EC components, including the private scalar. Statics
+     * are not dumped, so the key lives in one keyed off the instance rather than in a property.
+     *
+     * @var \WeakMap<self, \OpenSSLAsymmetricKey>|null
+     */
+    private static ?\WeakMap $keys = null;
 
     private function __construct(\OpenSSLAsymmetricKey $privateKey)
     {
-        $this->privateKey = $privateKey;
+        self::$keys ??= new \WeakMap();
+        self::$keys[$this] = $privateKey;
+    }
+
+    private function privateKey(): \OpenSSLAsymmetricKey
+    {
+        $key = self::$keys[$this] ?? null;
+
+        if (!$key instanceof \OpenSSLAsymmetricKey) {
+            throw new EnvelopeException('This envelope was copied or restored and no longer holds a key');
+        }
+
+        return $key;
     }
 
     /**
      * Loads a base64 PKCS#8 EC (P-256) private key by wrapping the DER in PEM.
      */
-    public static function fromPkcs8Base64(string $privateKeyPkcs8B64): self
+    public static function fromPkcs8Base64(#[\SensitiveParameter] string $privateKeyPkcs8B64): self
     {
-        $pem = "-----BEGIN PRIVATE KEY-----\n"
-            . chunk_split(trim($privateKeyPkcs8B64), 64, "\n")
+        self::drainErrors();
+
+        $body = trim($privateKeyPkcs8B64);
+
+        if (preg_match('#^[A-Za-z0-9+/]+={0,2}$#', $body) !== 1) {
+            throw new EnvelopeException('Private key is not bare base64 -- strip any PEM armor and newlines');
+        }
+
+        $pem = "-----BEGIN PRIVATE KEY-----\n" // gitleaks:allow
+            . chunk_split($body, 64, "\n")
             . "-----END PRIVATE KEY-----\n";
 
         $key = openssl_pkey_get_private($pem);
         if ($key === false) {
+            self::drainErrors();
+
             throw new EnvelopeException('Invalid PKCS#8 private key');
         }
 
         $details = openssl_pkey_get_details($key);
         if ($details === false || ($details['type'] ?? -1) !== OPENSSL_KEYTYPE_EC) {
+            self::drainErrors();
+
             throw new EnvelopeException('Private key is not an EC key');
         }
+
+        $ec = $details['ec'] ?? null;
+
+        // OpenSSL and LibreSSL disagree on the name of the same curve.
+        if (!is_array($ec) || !in_array($ec['curve_name'] ?? null, ['prime256v1', 'secp256r1'], true)) {
+            self::drainErrors();
+
+            throw new EnvelopeException('Private key is not a P-256 key');
+        }
+
+        self::drainErrors();
 
         return new self($key);
     }
@@ -75,8 +116,13 @@ final class Envelope
 
         $plaintext = $this->decrypt($raw);
 
-        /** @var array<string, mixed> $payload */
         $payload = json_decode($plaintext, true, 512, JSON_THROW_ON_ERROR);
+
+        if (!is_array($payload) || ($payload !== [] && array_is_list($payload))) {
+            throw new EnvelopeException('Envelope payload is not a JSON object');
+        }
+
+        /** @var array<string, mixed> $payload */
         return $payload;
     }
 
@@ -85,8 +131,22 @@ final class Envelope
      */
     public function decrypt(string $envelope): string
     {
-        if (strlen($envelope) < self::HEADER_LEN || ord($envelope[0]) !== self::VERSION) {
-            throw new EnvelopeException('Invalid or unsupported envelope');
+        try {
+            return $this->decryptRaw($envelope);
+        } finally {
+            self::drainErrors();
+        }
+    }
+
+    private function decryptRaw(string $envelope): string
+    {
+        if (strlen($envelope) < self::HEADER_LEN) {
+            throw new EnvelopeException('Envelope is shorter than its header');
+        }
+
+        $version = ord($envelope[0]);
+        if ($version !== self::VERSION) {
+            throw new EnvelopeException(sprintf('Unsupported envelope version 0x%02x', $version));
         }
 
         $ephPubRaw = substr($envelope, 1, self::POINT_LEN);
@@ -96,7 +156,7 @@ final class Envelope
 
         $ephPub = self::publicKeyFromRawPoint($ephPubRaw);
 
-        $shared = openssl_pkey_derive($ephPub, $this->privateKey);
+        $shared = openssl_pkey_derive($ephPub, $this->privateKey());
         if ($shared === false) {
             throw new EnvelopeException('ECDH key agreement failed');
         }
@@ -120,6 +180,17 @@ final class Envelope
     }
 
     /**
+     * OpenSSL's error queue is global and per-process. Leaving entries behind makes a later,
+     * unrelated openssl call in the same worker report an error from a bank envelope.
+     */
+    private static function drainErrors(): void
+    {
+        while (openssl_error_string() !== false) {
+            // discard
+        }
+    }
+
+    /**
      * Builds an EC public key from a raw 65-byte (0x04 || X || Y) P-256 point.
      */
     private static function publicKeyFromRawPoint(string $rawPoint): \OpenSSLAsymmetricKey
@@ -129,12 +200,14 @@ final class Envelope
         }
 
         $der = hex2bin(self::SPKI_PREFIX_HEX) . $rawPoint;
-        $pem = "-----BEGIN PUBLIC KEY-----\n"
+        $pem = "-----BEGIN PUBLIC KEY-----\n" // gitleaks:allow
             . chunk_split(base64_encode($der), 64, "\n")
             . "-----END PUBLIC KEY-----\n";
 
         $key = openssl_pkey_get_public($pem);
         if ($key === false) {
+            self::drainErrors();
+
             throw new EnvelopeException('Invalid ephemeral public key');
         }
 
