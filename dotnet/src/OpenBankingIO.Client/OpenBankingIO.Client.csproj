@@ -17,7 +17,7 @@
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
 
     <PackageId>OpenBankingIO.Client</PackageId>
-    <Version>0.3.0</Version>
+    <Version>0.3.1</Version>
     <Authors>open-banking.io</Authors>
     <Description>Server-to-server client for open-banking.io: API-key auth + client-side decryption of the zero-knowledge data envelopes with your exported private key.</Description>
     <PackageTags>open-banking;psd2;zero-knowledge;encryption;fintech</PackageTags>
