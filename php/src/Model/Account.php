@@ -25,6 +25,12 @@ final class Account
         public readonly ?string $product,
         public readonly ?string $displayName,
         public readonly array $balances,
+        public readonly ?string $decryptError = null,
     ) {
+    }
+
+    public function isSealed(): bool
+    {
+        return $this->decryptError !== null;
     }
 }

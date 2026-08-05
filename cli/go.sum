@@ -1,5 +1,5 @@
-github.com/open-banking-io/clients/go v0.2.0 h1:+56DPZalo35KfYv58P747QALOU/0y+x7YuXEE7Ld/u8=
-github.com/open-banking-io/clients/go v0.2.0/go.mod h1:DOqVT2pmX1aHGLXG5t4E0uqRYedPJ8nXvW9UiGCObZI=
+github.com/open-banking-io/clients/go v0.3.0 h1:TKdpWDvPvUE99JTC39kv31AXc6yaIRP6hfYN7nldJ0k=
+github.com/open-banking-io/clients/go v0.3.0/go.mod h1:DOqVT2pmX1aHGLXG5t4E0uqRYedPJ8nXvW9UiGCObZI=
 golang.org/x/sys v0.47.0 h1:o7XGOvZQCADBQQ4Y7VNq2dRWQR7JmOUW8Kxx4ZsNgWs=
 golang.org/x/sys v0.47.0/go.mod h1:4GL1E5IUh+htKOUEOaiffhrAeqysfVGipDYzABqnCmw=
 golang.org/x/term v0.45.0 h1:NwWyBmoJCbfTHpxrWoZ9C6/VxOf7ic219I8xZZFdrf0=

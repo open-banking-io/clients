@@ -36,7 +36,7 @@ final class EnvelopeNegativeTest extends TestCase
         $raw = "\x01" . str_repeat("\x00", self::HEADER_LEN - 2); // one byte short of header
 
         $this->expectException(EnvelopeException::class);
-        $this->expectExceptionMessage('Invalid or unsupported envelope');
+        $this->expectExceptionMessage('shorter than its header');
         $this->envelope->decrypt($raw);
     }
 
@@ -44,7 +44,7 @@ final class EnvelopeNegativeTest extends TestCase
     public function testEmptyRawEnvelopeRejected(): void
     {
         $this->expectException(EnvelopeException::class);
-        $this->expectExceptionMessage('Invalid or unsupported envelope');
+        $this->expectExceptionMessage('shorter than its header');
         $this->envelope->decrypt('');
     }
 
@@ -55,7 +55,7 @@ final class EnvelopeNegativeTest extends TestCase
         $raw = "\x02" . str_repeat("\x00", self::HEADER_LEN); // header + 1 byte ciphertext
 
         $this->expectException(EnvelopeException::class);
-        $this->expectExceptionMessage('Invalid or unsupported envelope');
+        $this->expectExceptionMessage('Unsupported envelope version 0x02');
         $this->envelope->decrypt($raw);
     }
 

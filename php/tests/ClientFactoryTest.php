@@ -31,21 +31,21 @@ final class ClientFactoryTest extends TestCase
 
     public function testBlankBaseUrlRejected(): void
     {
-        $this->expectException(\InvalidArgumentException::class);
+        $this->expectException(OpenBankingException::class);
         $this->expectExceptionMessage('apiBaseUrl is required');
         new Client('   ', $this->credentials['apiKey'], $this->privateKey);
     }
 
     public function testBlankApiKeyRejected(): void
     {
-        $this->expectException(\InvalidArgumentException::class);
+        $this->expectException(OpenBankingException::class);
         $this->expectExceptionMessage('apiKey is required');
         new Client('https://api.example.com', '  ', $this->privateKey);
     }
 
     public function testBlankPrivateKeyRejected(): void
     {
-        $this->expectException(\InvalidArgumentException::class);
+        $this->expectException(OpenBankingException::class);
         $this->expectExceptionMessage('privateKeyPkcs8 is required');
         new Client('https://api.example.com', $this->credentials['apiKey'], '');
     }
