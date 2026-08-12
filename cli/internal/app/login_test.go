@@ -325,7 +325,7 @@ func TestCallbackGetRequiresTheStateNonce(t *testing.T) {
 	if res3.StatusCode != http.StatusOK {
 		t.Errorf("status = %d, want 200 for the matching state", res3.StatusCode)
 	}
-	if got := <-resultCh; got.code != "real" {
+	if got := recvCallback(t, resultCh); got.code != "real" {
 		t.Errorf("code = %q, want real", got.code)
 	}
 }

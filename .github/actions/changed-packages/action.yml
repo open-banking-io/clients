@@ -26,6 +26,9 @@ outputs:
   go:
     description: Whether the go package is affected
     value: ${{ steps.filter.outputs.go }}
+  cli:
+    description: Whether the CLI is affected
+    value: ${{ steps.filter.outputs.cli }}
   ruby:
     description: Whether the ruby package is affected
     value: ${{ steps.filter.outputs.ruby }}
@@ -56,6 +59,8 @@ runs:
           rust: ['rust/**', 'fixtures/**', '.github/workflows/**', '.github/actions/**']
           java: ['java/**', 'fixtures/**', '.github/workflows/**', '.github/actions/**']
           go: ['go/**', 'fixtures/**', '.github/workflows/**', '.github/actions/**']
+          # The CLI depends on the go SDK (via the workspace), so an SDK change must run it too.
+          cli: ['cli/**', 'go/**', 'fixtures/**', '.github/workflows/**', '.github/actions/**']
           ruby: ['ruby/**', 'fixtures/**', '.github/workflows/**', '.github/actions/**']
           php: ['php/**', 'fixtures/**', '.github/workflows/**', '.github/actions/**']
           beancount: ['beancount/**', 'fixtures/**', '.github/workflows/**', '.github/actions/**']

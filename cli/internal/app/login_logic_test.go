@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestTrimTrailingSlash(t *testing.T) {
@@ -45,7 +46,8 @@ func TestCallbackHandlerCapturesCode(t *testing.T) {
 	srv := httptest.NewServer(callbackHandler(ch, "st", "https://app.example"))
 	defer srv.Close()
 
-	resp, err := srv.Client().Get(srv.URL + "/callback?code=abc123")
+	// state is required on the GET fallback too, not just the POST relay.
+	resp, err := srv.Client().Get(srv.URL + "/callback?code=abc123&state=st")
 	if err != nil {
 		t.Fatalf("GET /callback: %v", err)
 	}
@@ -53,8 +55,24 @@ func TestCallbackHandlerCapturesCode(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("status = %d, want 200", resp.StatusCode)
 	}
-	if got := <-ch; got.code != "abc123" || got.privKeyB64 != "" {
+	got := recvCallback(t, ch)
+	if got.code != "abc123" || got.privKeyB64 != "" {
 		t.Errorf("captured = %+v, want code abc123 and no key", got)
+	}
+}
+
+// recvCallback takes a delivered result or fails. A bare `<-ch` turns "the handler rejected this
+// request" into a hang that only surfaces as `go test`'s timeout minutes later, with a panic trace
+// pointing at the receive rather than at the rejection — which is exactly how a stale expectation
+// in this file went unnoticed. Nothing in CI runs this package, so it has to fail loudly here.
+func recvCallback(t *testing.T, ch <-chan callbackResult) callbackResult {
+	t.Helper()
+	select {
+	case got := <-ch:
+		return got
+	case <-time.After(5 * time.Second):
+		t.Fatal("no callback was delivered — the handler rejected the request")
+		return callbackResult{}
 	}
 }
 
@@ -75,7 +93,7 @@ func TestCallbackHandlerRelaysEncryptionKey(t *testing.T) {
 	if got := resp.Header.Get("Access-Control-Allow-Origin"); got != "https://app.example" {
 		t.Errorf("CORS origin = %q, want the app origin", got)
 	}
-	res := <-ch
+	res := recvCallback(t, ch)
 	if res.code != "c1" || res.privKeyB64 != "PK" || res.pubKeyB64 != "PUB" {
 		t.Errorf("relayed result = %+v, want code c1 + key PK/PUB", res)
 	}
@@ -96,7 +114,7 @@ func TestCallbackHandlerAcceptsFormPost(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d, want 200", resp.StatusCode)
 	}
-	res := <-ch
+	res := recvCallback(t, ch)
 	if res.code != "c9" || res.privKeyB64 != "PK" || res.pubKeyB64 != "PUB" {
 		t.Errorf("form relay result = %+v, want code c9 + PK/PUB", res)
 	}
