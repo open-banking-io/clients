@@ -55,13 +55,19 @@ from the bank **without ever holding the uid in plaintext**. Sessions are time-l
 ## CLI onboarding (browser-relay)
 
 `openbanking login` sets the CLI up in one step without the private key ever reaching the server. The CLI
-starts a localhost loopback and opens the browser to the app's authorize page; you sign in and enter your
-passphrase **in the browser**, which unlocks the locally-held private key and POSTs the full credentials
-**directly to `http://127.0.0.1:<port>`** — browser → localhost only. The server never sees the private key
-(not even encrypted) or the passphrase. The relay is bound by three things: the random loopback port, the
-PKCE `verifier` (held only by the CLI, required to redeem the one-time code for the API key), and a `state`
-nonce echoed by the authenticated browser. CORS on the loopback is scoped to the app origin. The CLI writes
-`credentials.json` at `0600` and never logs the key or passphrase.
+starts a localhost loopback and opens the browser to the app's authorize page; you sign in — with an emailed
+6-digit code or GitHub — and enter your passphrase **in the browser**, which unlocks the locally-held private
+key and POSTs the full credentials **directly to `http://127.0.0.1:<port>`** — browser → localhost only. The
+server never sees the private key (not even encrypted) or the passphrase. The relay is bound by three things:
+the random loopback port, the PKCE `verifier` (held only by the CLI, required to redeem the one-time code for
+the API key), and a `state` nonce echoed by the authenticated browser. CORS on the loopback is scoped to the
+app origin. The CLI writes `credentials.json` at `0600` and never logs the key or passphrase.
+
+The one-time code is minted against **the browser session's tenant** — the authenticated `email` claim, never
+anything in the request — so the API key the CLI receives and the encryption key the browser relays always
+belong to the same account. An existing session mints without a further sign-in, so the authorize page names
+the account and offers a sign-out before anything is handed over. What crosses to the loopback is a
+full-tenant API key, revocable in Settings; the code itself is single-use and expires in five minutes.
 
 ## Assumptions & limitations
 
