@@ -60,15 +60,48 @@ var openBrowser = func(target string) error {
 	}
 }
 
+// loginFlags are the values `login` binds. Registration is split out of login() so the defaults can
+// be asserted on their own — the browser wait in particular is a real UX budget, not an arbitrary
+// number, and it is otherwise unreachable from a test without running a whole login.
+type loginFlags struct {
+	apiBaseURL *string
+	wait       *time.Duration
+	method     *string
+}
+
+func registerLoginFlags(fs *flag.FlagSet) loginFlags {
+	return loginFlags{
+		apiBaseURL: fs.String("api", defaultAPIBaseURL, "API base URL to log in to"),
+		// NOT --timeout: main.parseTimeout strips that one out of the argument list wherever it
+		// appears, subcommand or not, and spends it on the HTTP client. A --timeout here would never
+		// reach this FlagSet, so `login --timeout 2m` would silently keep the default wait and
+		// re-time every HTTP request instead. --wait is a name the global parser doesn't eat.
+		//
+		// Sized for the emailed-code path: delivery, then finding the mail, then typing six digits.
+		// GitHub used to be the only option and took seconds, which is what the old 3 minutes fit.
+		wait:   fs.Duration("wait", 10*time.Minute, "how long to wait for the browser sign-in to finish"),
+		method: fs.String("method", "", "sign-in method to go straight to: pin or github (default: pick in the browser)"),
+	}
+}
+
 func (a *App) login(args []string) error {
 	fs := flag.NewFlagSet("login", flag.ContinueOnError)
 	fs.SetOutput(a.Stderr)
-	apiBaseURL := fs.String("api", defaultAPIBaseURL, "API base URL to log in to")
-	timeout := fs.Duration("timeout", 3*time.Minute, "how long to wait for the browser login")
+	flags := registerLoginFlags(fs)
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	base := trimTrailingSlash(*apiBaseURL)
+	apiBaseURL, wait := *flags.apiBaseURL, *flags.wait
+
+	// The server treats an unrecognised method as absent — it is a UX hint, not a security control —
+	// so a typo would quietly give the default rather than failing. Catch it here, before a browser
+	// opens and a listener is left waiting on a login that isn't the one that was asked for.
+	method := *flags.method
+	if method != "" && method != "pin" && method != "github" {
+		return fmt.Errorf("unknown --method %q (use pin or github, or omit it to pick in the browser)", method)
+	}
+
+	base := trimTrailingSlash(apiBaseURL)
 
 	// PKCE binds this login to this process: the verifier never leaves the CLI; only its hash
 	// (the challenge) goes to the server, and only the verifier can later redeem the code.
@@ -92,25 +125,38 @@ func (a *App) login(args []string) error {
 
 	startURL := fmt.Sprintf("%s/auth/cli/start?port=%d&code_challenge=%s&state=%s",
 		base, port, url.QueryEscape(challenge), url.QueryEscape(state))
+	// Omitted unless asked for: with no method the server sends you to the login page, which offers
+	// the emailed code and GitHub side by side. Older servers ignore the parameter outright.
+	if method != "" {
+		startURL += "&method=" + url.QueryEscape(method)
+	}
 	fmt.Fprintf(a.Stderr, "Opening your browser to sign in...\nIf it doesn't open, visit:\n  %s\n\n", startURL)
 	if err := openBrowser(startURL); err != nil {
 		fmt.Fprintf(a.Stderr, "(could not open a browser automatically: %v)\n", err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), *timeout)
-	defer cancel()
+	waitCtx, cancelWait := context.WithTimeout(context.Background(), wait)
+	defer cancelWait()
 
 	stopSpinner := a.ui().Spinner("Waiting for you to finish signing in…")
 	var result callbackResult
 	select {
 	case result = <-resultCh:
-	case <-ctx.Done():
+	case <-waitCtx.Done():
 		stopSpinner()
-		return fmt.Errorf("timed out waiting for the browser login after %s", *timeout)
+		return fmt.Errorf("timed out waiting for the browser login after %s", wait)
 	}
 	stopSpinner()
 
-	token, err := a.exchangeToken(ctx, base, result.code, verifier)
+	// The exchange gets its OWN budget rather than whatever is left of the wait. Sharing one context
+	// was survivable at a 3-minute wait that a GitHub round-trip finished in seconds; at 10 minutes
+	// the wait is DESIGNED to be mostly consumed (email delivery, then typing), so a slow-but-
+	// successful sign-in would hand the exchange a near-zero deadline and fail at the worst possible
+	// moment — after the user has already finished in the browser.
+	exchangeCtx, cancelExchange := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancelExchange()
+
+	token, err := a.exchangeToken(exchangeCtx, base, result.code, verifier)
 	if err != nil {
 		return err
 	}
@@ -186,8 +232,8 @@ func (a *App) exchangeToken(ctx context.Context, apiBaseURL, code, verifier stri
 }
 
 // callbackHandler serves the loopback /callback. The browser authorize page POSTs {code,state,
-// encryptionKey} after unlocking the key (CORS-scoped to the app origin); the legacy GET ?code= path
-// remains as a key-less fallback.
+// encryptionKey} after unlocking the key (CORS-scoped to the app origin); the legacy GET path
+// remains as a key-less fallback. Both require the state nonce.
 func callbackHandler(resultCh chan<- callbackResult, state, allowOrigin string) http.Handler {
 	deliver := func(res callbackResult) {
 		select {
@@ -205,9 +251,19 @@ func callbackHandler(resultCh chan<- callbackResult, state, allowOrigin string) 
 			w.Header().Set("Access-Control-Allow-Headers", "content-type")
 			w.WriteHeader(http.StatusNoContent)
 		case http.MethodGet:
-			code := r.URL.Query().Get("code")
+			// Same state check as the POST path. This used to accept a bare ?code=, which meant any
+			// local process — or any page doing <img src="http://127.0.0.1:<port>/callback?code=x">,
+			// which needs no CORS preflight — could feed this listener a junk code by scanning ports.
+			// It could never mint one that satisfies our PKCE challenge, so the damage is a wasted
+			// login rather than a stolen key; but the listener now stays open for ten minutes instead
+			// of three, and THREAT_MODEL already claims the state nonce binds this relay.
+			code, gotState := r.URL.Query().Get("code"), r.URL.Query().Get("state")
 			if code == "" {
 				http.Error(w, "missing code", http.StatusBadRequest)
+				return
+			}
+			if subtle.ConstantTimeCompare([]byte(gotState), []byte(state)) != 1 {
+				http.Error(w, "state mismatch", http.StatusForbidden)
 				return
 			}
 			writeDoneHTML(w)
