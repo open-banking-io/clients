@@ -130,8 +130,12 @@ func TestLoginPreservesEncryptionKey(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/auth/cli/start":
-			port := r.URL.Query().Get("port")
-			http.Redirect(w, r, "http://127.0.0.1:"+port+"/callback?code=test-code", http.StatusFound)
+			// Echo state back on the redirect, as the real flow does — the loopback requires it on
+			// the GET fallback too, not just the POST relay.
+			port, state := r.URL.Query().Get("port"), r.URL.Query().Get("state")
+			http.Redirect(w, r,
+				"http://127.0.0.1:"+port+"/callback?code=test-code&state="+url.QueryEscape(state),
+				http.StatusFound)
 		case "/auth/cli/token":
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"apiKey":"ebk_minted","apiBaseUrl":"` + "" + `","user":"me@example.com","prefix":"ebk_minted12"}`))
@@ -151,7 +155,7 @@ func TestLoginPreservesEncryptionKey(t *testing.T) {
 
 	var out, errOut bytes.Buffer
 	app := &App{Stdout: &out, Stderr: &errOut, ConfigPath: cfgPath, HTTPClient: srv.Client()}
-	if err := app.login([]string{"--api", srv.URL, "--timeout", "10s"}); err != nil {
+	if err := app.login([]string{"--api", srv.URL, "--wait", "10s"}); err != nil {
 		t.Fatalf("login: %v\nstderr: %s", err, errOut.String())
 	}
 
@@ -210,7 +214,7 @@ func TestLoginRelaysEncryptionKeyFromBrowser(t *testing.T) {
 
 	var out, errOut bytes.Buffer
 	app := &App{Stdout: &out, Stderr: &errOut, ConfigPath: cfgPath, HTTPClient: srv.Client()}
-	if err := app.login([]string{"--api", srv.URL, "--timeout", "10s"}); err != nil {
+	if err := app.login([]string{"--api", srv.URL, "--wait", "10s"}); err != nil {
 		t.Fatalf("login: %v\nstderr: %s", err, errOut.String())
 	}
 
@@ -248,7 +252,7 @@ func captureStartURL(t *testing.T, args ...string) url.Values {
 		Stderr:     &errOut,
 		ConfigPath: filepath.Join(t.TempDir(), "credentials.json"),
 	}
-	_ = app.login(append([]string{"--api", "https://example.invalid", "--timeout", "1ms"}, args...))
+	_ = app.login(append([]string{"--api", "https://example.invalid", "--wait", "1ms"}, args...))
 
 	if got == "" {
 		t.Fatal("no start URL was opened")
@@ -272,6 +276,57 @@ func TestLoginOmitsMethodByDefault(t *testing.T) {
 		if q.Get(key) == "" {
 			t.Errorf("start URL is missing %s: %v", key, q)
 		}
+	}
+	// Exactly those three and nothing else — "backwards compatible" means the URL a released binary
+	// produces, not merely one that happens to contain the right keys.
+	if len(q) != 3 {
+		t.Errorf("unexpected extra query parameters: %v", q)
+	}
+}
+
+// The loopback is reachable by anything on this machine, and a cross-site <img src="…/callback?code=x">
+// needs no CORS preflight — so a bare code must not be accepted. It could never satisfy our PKCE
+// challenge, but it would burn the login, and the listener now stays open ten minutes rather than three.
+func TestCallbackGetRequiresTheStateNonce(t *testing.T) {
+	resultCh := make(chan callbackResult, 1)
+	srv := httptest.NewServer(callbackHandler(resultCh, "the-state", "https://example.invalid"))
+	defer srv.Close()
+
+	res, err := srv.Client().Get(srv.URL + "/callback?code=injected")
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusForbidden {
+		t.Errorf("status = %d, want 403 for a missing state", res.StatusCode)
+	}
+
+	res2, err := srv.Client().Get(srv.URL + "/callback?code=injected&state=wrong")
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	defer res2.Body.Close()
+	if res2.StatusCode != http.StatusForbidden {
+		t.Errorf("status = %d, want 403 for a wrong state", res2.StatusCode)
+	}
+
+	select {
+	case got := <-resultCh:
+		t.Fatalf("a code with no valid state was delivered to login(): %+v", got)
+	default:
+	}
+
+	// The genuine redirect still works.
+	res3, err := srv.Client().Get(srv.URL + "/callback?code=real&state=the-state")
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	defer res3.Body.Close()
+	if res3.StatusCode != http.StatusOK {
+		t.Errorf("status = %d, want 200 for the matching state", res3.StatusCode)
+	}
+	if got := <-resultCh; got.code != "real" {
+		t.Errorf("code = %q, want real", got.code)
 	}
 }
 
@@ -316,7 +371,13 @@ func TestLoginBrowserWaitDefaultsToTenMinutes(t *testing.T) {
 	fs.SetOutput(io.Discard)
 	registerLoginFlags(fs)
 
-	if got := fs.Lookup("timeout").DefValue; got != "10m0s" {
+	if got := fs.Lookup("wait").DefValue; got != "10m0s" {
 		t.Errorf("default browser wait = %s, want 10m0s", got)
+	}
+	// NOT "timeout": main.parseTimeout strips that name out of the arguments wherever it appears,
+	// subcommand or not, and spends it on the HTTP client — so a flag called "timeout" here could
+	// never be set by a real invocation. Naming it that again would silently break `login --timeout`.
+	if fs.Lookup("timeout") != nil {
+		t.Error("login must not bind --timeout; the global parser consumes it before dispatch")
 	}
 }

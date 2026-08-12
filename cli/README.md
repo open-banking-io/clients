@@ -124,5 +124,7 @@ signed in to the web app? The browser skips the sign-in entirely — the CLI is
 authorized for that account, which the authorize page names before you confirm.
 
 Because signing in can mean waiting on an email, `login` waits **10 minutes** for the
-browser by default; `login --timeout 2m` shortens it. Note this is the login command's
-own flag — the global `--timeout` is the per-request HTTP timeout, a different thing.
+browser by default; `login --wait 2m` shortens it. It is deliberately not called
+`--timeout`: that name is a *global* flag (the per-request HTTP timeout) and is stripped
+from the arguments before any subcommand sees it, so `login --timeout 2m` would re-time
+every HTTP request while leaving the browser wait untouched.
