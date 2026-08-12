@@ -60,14 +60,42 @@ var openBrowser = func(target string) error {
 	}
 }
 
+// loginFlags are the values `login` binds. Registration is split out of login() so the defaults can
+// be asserted on their own — the browser wait in particular is a real UX budget, not an arbitrary
+// number, and it is otherwise unreachable from a test without running a whole login.
+type loginFlags struct {
+	apiBaseURL *string
+	timeout    *time.Duration
+	method     *string
+}
+
+func registerLoginFlags(fs *flag.FlagSet) loginFlags {
+	return loginFlags{
+		apiBaseURL: fs.String("api", defaultAPIBaseURL, "API base URL to log in to"),
+		// Sized for the emailed-code path: delivery, then finding the mail, then typing six digits.
+		// GitHub used to be the only option and took seconds, which is what the old 3 minutes fit.
+		timeout: fs.Duration("timeout", 10*time.Minute, "how long to wait for the browser login"),
+		method:  fs.String("method", "", "sign-in method to go straight to: pin or github (default: pick in the browser)"),
+	}
+}
+
 func (a *App) login(args []string) error {
 	fs := flag.NewFlagSet("login", flag.ContinueOnError)
 	fs.SetOutput(a.Stderr)
-	apiBaseURL := fs.String("api", defaultAPIBaseURL, "API base URL to log in to")
-	timeout := fs.Duration("timeout", 3*time.Minute, "how long to wait for the browser login")
+	flags := registerLoginFlags(fs)
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
+	apiBaseURL, timeout := flags.apiBaseURL, flags.timeout
+
+	// The server treats an unrecognised method as absent — it is a UX hint, not a security control —
+	// so a typo would quietly give the default rather than failing. Catch it here, before a browser
+	// opens and a listener is left waiting on a login that isn't the one that was asked for.
+	method := *flags.method
+	if method != "" && method != "pin" && method != "github" {
+		return fmt.Errorf("unknown --method %q (use pin or github, or omit it to pick in the browser)", method)
+	}
+
 	base := trimTrailingSlash(*apiBaseURL)
 
 	// PKCE binds this login to this process: the verifier never leaves the CLI; only its hash
@@ -92,6 +120,11 @@ func (a *App) login(args []string) error {
 
 	startURL := fmt.Sprintf("%s/auth/cli/start?port=%d&code_challenge=%s&state=%s",
 		base, port, url.QueryEscape(challenge), url.QueryEscape(state))
+	// Omitted unless asked for: with no method the server sends you to the login page, which offers
+	// the emailed code and GitHub side by side. Older servers ignore the parameter outright.
+	if method != "" {
+		startURL += "&method=" + url.QueryEscape(method)
+	}
 	fmt.Fprintf(a.Stderr, "Opening your browser to sign in...\nIf it doesn't open, visit:\n  %s\n\n", startURL)
 	if err := openBrowser(startURL); err != nil {
 		fmt.Fprintf(a.Stderr, "(could not open a browser automatically: %v)\n", err)

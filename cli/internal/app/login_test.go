@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"flag"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -227,5 +229,94 @@ func TestLoginRelaysEncryptionKeyFromBrowser(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "encryption key set up") {
 		t.Errorf("expected the one-step success message, got: %q", out.String())
+	}
+}
+
+// captureStartURL runs `login` with args, stubbing the browser so it records the URL the CLI would
+// open and then lets the flow lapse. Returns that URL's query. The login error is discarded: with
+// nothing answering the loopback it always times out, and only the request matters here.
+func captureStartURL(t *testing.T, args ...string) url.Values {
+	t.Helper()
+	var got string
+	prev := openBrowser
+	openBrowser = func(target string) error { got = target; return nil }
+	defer func() { openBrowser = prev }()
+
+	var out, errOut bytes.Buffer
+	app := &App{
+		Stdout:     &out,
+		Stderr:     &errOut,
+		ConfigPath: filepath.Join(t.TempDir(), "credentials.json"),
+	}
+	_ = app.login(append([]string{"--api", "https://example.invalid", "--timeout", "1ms"}, args...))
+
+	if got == "" {
+		t.Fatal("no start URL was opened")
+	}
+	u, err := url.Parse(got)
+	if err != nil {
+		t.Fatalf("parse start URL %q: %v", got, err)
+	}
+	return u.Query()
+}
+
+// An absent `method` means "let the login page offer both". Released binaries send nothing at all,
+// so the default must stay exactly that — and the rest of the URL contract must not drift either.
+func TestLoginOmitsMethodByDefault(t *testing.T) {
+	q := captureStartURL(t)
+
+	if q.Has("method") {
+		t.Errorf("method should be absent by default, got %q", q.Get("method"))
+	}
+	for _, key := range []string{"port", "code_challenge", "state"} {
+		if q.Get(key) == "" {
+			t.Errorf("start URL is missing %s: %v", key, q)
+		}
+	}
+}
+
+func TestLoginThreadsMethodIntoTheStartURL(t *testing.T) {
+	for _, method := range []string{"pin", "github"} {
+		t.Run(method, func(t *testing.T) {
+			if got := captureStartURL(t, "--method", method).Get("method"); got != method {
+				t.Errorf("method = %q, want %q", got, method)
+			}
+		})
+	}
+}
+
+// The server silently drops an unrecognised method — it is a UX hint, not a security control — so a
+// typo would otherwise appear to work while quietly giving the default. Fail here instead, before
+// a browser is opened and before a listener is left waiting.
+func TestLoginRejectsUnknownMethodBeforeOpeningABrowser(t *testing.T) {
+	opened := false
+	prev := openBrowser
+	openBrowser = func(string) error { opened = true; return nil }
+	defer func() { openBrowser = prev }()
+
+	var out, errOut bytes.Buffer
+	app := &App{Stdout: &out, Stderr: &errOut, ConfigPath: filepath.Join(t.TempDir(), "credentials.json")}
+	err := app.login([]string{"--api", "https://example.invalid", "--method", "banana"})
+
+	if err == nil {
+		t.Fatal("expected an error for an unknown --method")
+	}
+	if !strings.Contains(err.Error(), "banana") {
+		t.Errorf("the error should name the bad value, got: %v", err)
+	}
+	if opened {
+		t.Error("no browser should be opened for an invalid --method")
+	}
+}
+
+// Signing in now routinely means waiting on an emailed 6-digit code — delivery, finding it, typing
+// it. The old 3-minute budget was sized for a GitHub round-trip that took seconds.
+func TestLoginBrowserWaitDefaultsToTenMinutes(t *testing.T) {
+	fs := flag.NewFlagSet("login", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	registerLoginFlags(fs)
+
+	if got := fs.Lookup("timeout").DefValue; got != "10m0s" {
+		t.Errorf("default browser wait = %s, want 10m0s", got)
 	}
 }
