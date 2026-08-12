@@ -176,6 +176,29 @@ jobs:
       # always run; -fuzztime adds a brief exploratory pass to catch panics on malformed input.
       - run: go test -run='^$' -fuzz='FuzzDecryptEnvelope$' -fuzztime=20s .
 
+  # The CLI is a separate module from the go SDK and was never covered: the `go` job above is pinned
+  # to working-directory `go`, so a cli/-only change ran no tests at all. A stale expectation in
+  # cli/internal/app then shipped in v0.2.14 as a test that HANGS rather than fails, which nothing
+  # caught until someone ran the package by hand. Hence also the explicit -timeout: a hang here must
+  # end as a red build in a couple of minutes, not occupy a runner for the job's maximum.
+  cli:
+    needs: changes
+    if: needs.changes.outputs.cli == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cli
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: '1.25'
+      - run: gofmt -l . | tee /dev/stderr | (! read)
+      - run: go vet ./...
+      - run: go test -race -timeout 120s ./...
+
   java:
     needs: changes
     if: needs.changes.outputs.java == 'true'
@@ -312,7 +335,7 @@ jobs:
   # actually failed or was cancelled (skipped/success both pass).
   ci-gate:
     if: always()
-    needs: [changes, dotnet, node, n8n, python, rust, go, java, ruby, php, beancount, erpnext, zapier]
+    needs: [changes, dotnet, node, n8n, python, rust, go, cli, java, ruby, php, beancount, erpnext, zapier]
     runs-on: ubuntu-latest
     steps:
       - name: Fail if any required job failed
