@@ -78,12 +78,9 @@ func TestKeyImportRejectsInvalidKey(t *testing.T) {
 	}
 }
 
-// A terminal never sends EOF on its own, so reading stdin with no prompt is indistinguishable from a
-// hang: the user gets a blank line and no idea the CLI is waiting on them.
 func TestKeyImportPromptsWhenStdinIsATerminal(t *testing.T) {
 	rawKey := fixtureBundle(t).EncryptionKey.PrivateKey
 
-	// "-" is the explicit spelling of the same thing, and blocks just as silently.
 	for _, args := range [][]string{{"key", "import"}, {"key", "import", "-"}} {
 		t.Run(strings.Join(args, " "), func(t *testing.T) {
 			cfg := filepath.Join(t.TempDir(), "credentials.json")
@@ -109,8 +106,6 @@ func TestKeyImportPromptsWhenStdinIsATerminal(t *testing.T) {
 	}
 }
 
-// Piped and scripted input must stay silent — nothing is waiting on a human, and the prompt would
-// otherwise land in every CI log that imports a key.
 func TestKeyImportDoesNotPromptWhenPiped(t *testing.T) {
 	rawKey := fixtureBundle(t).EncryptionKey.PrivateKey
 	cfg := filepath.Join(t.TempDir(), "credentials.json")
@@ -128,7 +123,6 @@ func TestKeyImportDoesNotPromptWhenPiped(t *testing.T) {
 	}
 }
 
-// A file argument never blocks on stdin, so there is nothing to prompt for even on a terminal.
 func TestKeyImportFromFileDoesNotPrompt(t *testing.T) {
 	bundle := fixtureBundle(t)
 	keyFile := filepath.Join(t.TempDir(), "key.txt")

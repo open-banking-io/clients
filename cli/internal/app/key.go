@@ -38,8 +38,7 @@ func (a *App) keyImport(args []string) error {
 	var raw []byte
 	var err error
 	if fs.NArg() == 0 || fs.Arg(0) == "-" {
-		// Stdin on a terminal never reaches EOF by itself, so say what we want and how to end it —
-		// an unannounced blocking read is indistinguishable from the CLI having hung.
+		// A terminal never reaches EOF on its own, so an unannounced read just looks like a hang.
 		if env := a.ui(); env.Interactive() {
 			fmt.Fprintln(a.stderr(), env.Color("Paste your encryption key or credentials bundle, then press Ctrl-D:", ui.StyleHeader))
 			fmt.Fprintln(a.stderr(), env.Color("(Ctrl-C to cancel, or re-run as `openbanking key import <file>`)", ui.StyleMuted))
