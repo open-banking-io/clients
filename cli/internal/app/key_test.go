@@ -108,18 +108,22 @@ func TestKeyImportPromptsWhenStdinIsATerminal(t *testing.T) {
 
 func TestKeyImportDoesNotPromptWhenPiped(t *testing.T) {
 	rawKey := fixtureBundle(t).EncryptionKey.PrivateKey
-	cfg := filepath.Join(t.TempDir(), "credentials.json")
 
-	var out, errOut bytes.Buffer
-	stdin := strings.NewReader(rawKey)
-	app := &App{Stdin: stdin, Stdout: &out, Stderr: &errOut, ConfigPath: cfg}
-	app.env = ui.Custom(stdin, &out, &errOut, ui.FormatTable, false, false)
+	for _, args := range [][]string{{"key", "import"}, {"key", "import", "-"}} {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			cfg := filepath.Join(t.TempDir(), "credentials.json")
+			var out, errOut bytes.Buffer
+			stdin := strings.NewReader(rawKey)
+			app := &App{Stdin: stdin, Stdout: &out, Stderr: &errOut, ConfigPath: cfg}
+			app.env = ui.Custom(stdin, &out, &errOut, ui.FormatTable, false, false)
 
-	if err := app.Run([]string{"key", "import"}); err != nil {
-		t.Fatalf("key import: %v\nstderr: %s", err, errOut.String())
-	}
-	if errOut.Len() != 0 {
-		t.Errorf("piped import wrote to stderr: %q", errOut.String())
+			if err := app.Run(args); err != nil {
+				t.Fatalf("key import: %v\nstderr: %s", err, errOut.String())
+			}
+			if errOut.Len() != 0 {
+				t.Errorf("piped import wrote to stderr: %q", errOut.String())
+			}
+		})
 	}
 }
 
