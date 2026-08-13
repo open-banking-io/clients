@@ -1,6 +1,6 @@
 [project]
 name = "erpnext-open-banking"
-version = "0.1.3"
+version = "1.0.0"
 description = "Connect your bank accounts to ERPNext via open-banking.io — no eIDAS certificates required."
 readme = "README.md"
 license = { text = "MIT" }
