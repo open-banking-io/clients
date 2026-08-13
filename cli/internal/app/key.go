@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/open-banking-io/clients/cli/internal/config"
+	"github.com/open-banking-io/clients/cli/internal/ui"
 	openbanking "github.com/open-banking-io/clients/go"
 )
 
@@ -37,6 +38,12 @@ func (a *App) keyImport(args []string) error {
 	var raw []byte
 	var err error
 	if fs.NArg() == 0 || fs.Arg(0) == "-" {
+		// Stdin on a terminal never reaches EOF by itself, so say what we want and how to end it —
+		// an unannounced blocking read is indistinguishable from the CLI having hung.
+		if env := a.ui(); env.Interactive() {
+			fmt.Fprintln(a.stderr(), env.Color("Paste your encryption key or credentials bundle, then press Ctrl-D:", ui.StyleHeader))
+			fmt.Fprintln(a.stderr(), env.Color("(Ctrl-C to cancel, or re-run as `openbanking key import <file>`)", ui.StyleMuted))
+		}
 		raw, err = io.ReadAll(a.stdin())
 	} else {
 		raw, err = os.ReadFile(fs.Arg(0))

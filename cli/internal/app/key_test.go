@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/open-banking-io/clients/cli/internal/config"
+	"github.com/open-banking-io/clients/cli/internal/ui"
 )
 
 func TestKeyImportFromRawPkcs8(t *testing.T) {
@@ -74,6 +75,77 @@ func TestKeyImportRejectsInvalidKey(t *testing.T) {
 	}
 	if _, statErr := os.Stat(cfg); statErr == nil {
 		t.Error("config should not be written when the key is invalid")
+	}
+}
+
+// A terminal never sends EOF on its own, so reading stdin with no prompt is indistinguishable from a
+// hang: the user gets a blank line and no idea the CLI is waiting on them.
+func TestKeyImportPromptsWhenStdinIsATerminal(t *testing.T) {
+	rawKey := fixtureBundle(t).EncryptionKey.PrivateKey
+
+	// "-" is the explicit spelling of the same thing, and blocks just as silently.
+	for _, args := range [][]string{{"key", "import"}, {"key", "import", "-"}} {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			cfg := filepath.Join(t.TempDir(), "credentials.json")
+			var out, errOut bytes.Buffer
+			stdin := strings.NewReader(rawKey)
+			app := &App{Stdin: stdin, Stdout: &out, Stderr: &errOut, ConfigPath: cfg}
+			app.env = ui.Custom(stdin, &out, &errOut, ui.FormatTable, false, true)
+
+			if err := app.Run(args); err != nil {
+				t.Fatalf("key import: %v\nstderr: %s", err, errOut.String())
+			}
+			if !strings.Contains(errOut.String(), "Ctrl-D") {
+				t.Errorf("prompt does not say how to end the input; stderr = %q", errOut.String())
+			}
+			got, err := config.Load(cfg)
+			if err != nil {
+				t.Fatalf("load: %v", err)
+			}
+			if got.EncryptionKey.PrivateKey != rawKey {
+				t.Error("prompting broke the import itself")
+			}
+		})
+	}
+}
+
+// Piped and scripted input must stay silent — nothing is waiting on a human, and the prompt would
+// otherwise land in every CI log that imports a key.
+func TestKeyImportDoesNotPromptWhenPiped(t *testing.T) {
+	rawKey := fixtureBundle(t).EncryptionKey.PrivateKey
+	cfg := filepath.Join(t.TempDir(), "credentials.json")
+
+	var out, errOut bytes.Buffer
+	stdin := strings.NewReader(rawKey)
+	app := &App{Stdin: stdin, Stdout: &out, Stderr: &errOut, ConfigPath: cfg}
+	app.env = ui.Custom(stdin, &out, &errOut, ui.FormatTable, false, false)
+
+	if err := app.Run([]string{"key", "import"}); err != nil {
+		t.Fatalf("key import: %v\nstderr: %s", err, errOut.String())
+	}
+	if errOut.Len() != 0 {
+		t.Errorf("piped import wrote to stderr: %q", errOut.String())
+	}
+}
+
+// A file argument never blocks on stdin, so there is nothing to prompt for even on a terminal.
+func TestKeyImportFromFileDoesNotPrompt(t *testing.T) {
+	bundle := fixtureBundle(t)
+	keyFile := filepath.Join(t.TempDir(), "key.txt")
+	if err := os.WriteFile(keyFile, []byte(bundle.EncryptionKey.PrivateKey), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg := filepath.Join(t.TempDir(), "credentials.json")
+
+	var out, errOut bytes.Buffer
+	app := &App{Stdout: &out, Stderr: &errOut, ConfigPath: cfg}
+	app.env = ui.Custom(nil, &out, &errOut, ui.FormatTable, false, true)
+
+	if err := app.Run([]string{"key", "import", keyFile}); err != nil {
+		t.Fatalf("key import: %v\nstderr: %s", err, errOut.String())
+	}
+	if errOut.Len() != 0 {
+		t.Errorf("prompted despite reading a file: %q", errOut.String())
 	}
 }
 
