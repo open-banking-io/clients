@@ -35,6 +35,7 @@ go install github.com/open-banking-io/clients/cli@latest
 
 ```sh
 openbanking login                       # sign in + unlock in the browser — sets up everything
+openbanking login --method github       # skip the picker (or --method pin for an emailed code)
 openbanking key import ./credentials.json   # (fallback) import a key file on a headless machine
 openbanking accounts                    # list accounts with balances        (alias: acc, ls)
 openbanking use                         # pick a current account (arrow keys) — or: use <account-id>
@@ -116,3 +117,14 @@ travels browser → localhost only — it never touches the server, not even enc
 (the server is zero-knowledge and only ever holds your public key). `key import`
 remains as a manual fallback for headless machines without a browser. Money amounts
 are kept as exact decimal strings; debits render negative at display time.
+
+Either sign-in method works: a 6-digit code emailed to you, or GitHub. By default the
+browser asks which; `--method pin` or `--method github` goes straight there. Already
+signed in to the web app? The browser skips the sign-in entirely — the CLI is
+authorized for that account, which the authorize page names before you confirm.
+
+Because signing in can mean waiting on an email, `login` waits **10 minutes** for the
+browser by default; `login --wait 2m` shortens it. It is deliberately not called
+`--timeout`: that name is a *global* flag (the per-request HTTP timeout) and is stripped
+from the arguments before any subcommand sees it, so `login --timeout 2m` would re-time
+every HTTP request while leaving the browser wait untouched.
