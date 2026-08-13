@@ -19,6 +19,7 @@ jobs:
       rust: ${{ steps.cp.outputs.rust }}
       java: ${{ steps.cp.outputs.java }}
       go: ${{ steps.cp.outputs.go }}
+      cli: ${{ steps.cp.outputs.cli }}
       ruby: ${{ steps.cp.outputs.ruby }}
       php: ${{ steps.cp.outputs.php }}
       beancount: ${{ steps.cp.outputs.beancount }}
