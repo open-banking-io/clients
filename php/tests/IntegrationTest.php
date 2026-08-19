@@ -103,6 +103,24 @@ final class IntegrationTest extends TestCase
         self::assertSame(['uid' => 'c5d93aa7-5e23-4da0-ba88-42b9a584492c'], $body);
     }
 
+    public function testSyncSendsTheRequestedBackfillWindow(): void
+    {
+        $result = $this->client()->sync(self::ACCOUNT_ID, ['fromDate' => '2026-08-01']);
+
+        self::assertSame(1, $result->totalFetched);
+        $body = $this->captured('sync');
+        self::assertSame(
+            ['uid' => 'c5d93aa7-5e23-4da0-ba88-42b9a584492c', 'fromDate' => '2026-08-01'],
+            $body,
+        );
+    }
+
+    /** No window asked for, no window served — the field stays null rather than guessing. */
+    public function testSyncWithoutBackfillHasNoServedWindow(): void
+    {
+        self::assertNull($this->client()->sync(self::ACCOUNT_ID)->servedFromDate);
+    }
+
     public function testSyncAllPostsDecryptedUids(): void
     {
         $result = $this->client()->syncAll();

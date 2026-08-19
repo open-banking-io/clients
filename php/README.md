@@ -76,11 +76,36 @@ $client = Client::fromCredentials('credentials.json', ['timeout' => 60]);
 - `getAccounts(): Account[]` — decrypts each account's envelope, display name and balances.
 - `getTransactions(string $accountId, array $opts = []): TransactionPage` — `$opts` keys: `from`, `to`, `limit`, `offset`.
 - `getConnections(): Connection[]`
-- `sync(string $accountId): SyncResult` — decrypts the account uid locally and posts it; throws if the account has no active session.
+- `sync(string $accountId, array $opts = []): SyncResult` — decrypts the account uid locally and posts it; throws if the account has no active session. `$opts` keys: `fromDate` (`YYYY-MM-DD`) to backfill from a given day instead of syncing incrementally. See [Backfilling from a date](#backfilling-from-a-date).
 - `syncAll(): SyncAllResult` — syncs every account whose session it can read; `$result->unreadable` lists the ones it could not, and `isComplete()` is the only proof the run covered everything.
 
 Money/amount fields are exposed as **decimal `string`s** (exact; never a float). Models are
 `final` classes with `readonly` public properties under `OpenBankingIO\Model`.
+
+### Backfilling from a date
+
+By default `sync()` fetches incrementally, continuing from what the service already holds. Pass
+`fromDate` to fetch from a specific day instead — the import is additive, so this only inserts rows
+that are missing, and re-running it is safe:
+
+```php
+$result = $client->sync($accountId, ['fromDate' => '2026-08-01']);
+```
+
+It is also the lever for a slow bank. A sync runs while your request is open, and some banks need
+minutes to serve a wide window — long enough that a proxy in front of the API can close the
+connection first (Cloudflare answers `524` after 100 seconds). A narrow window usually returns in
+seconds. A `524` does not mean the sync failed: the service owns the run once it has started and
+carries it to completion regardless of the caller, and retrying the same account joins the run in
+progress rather than starting a second fetch.
+
+The window you ask for is a request, not a guarantee. A bank caps how far into the past a request
+may reach, and the service negotiates a refused window down rather than failing — so read back what
+was actually served:
+
+```php
+$result->servedFromDate;  // e.g. '2026-05-19', or null when no fromDate was requested
+```
 
 ### A null amount is not zero
 
