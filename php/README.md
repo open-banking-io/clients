@@ -76,7 +76,7 @@ $client = Client::fromCredentials('credentials.json', ['timeout' => 60]);
 - `getAccounts(): Account[]` — decrypts each account's envelope, display name and balances.
 - `getTransactions(string $accountId, array $opts = []): TransactionPage` — `$opts` keys: `from`, `to`, `limit`, `offset`.
 - `getConnections(): Connection[]`
-- `sync(string $accountId): SyncResult` — decrypts the account uid locally and posts it; throws if the account has no active session.
+- `sync(string $accountId, array $opts = []): SyncResult` — decrypts the account uid locally and posts it; throws if the account has no active session. `$opts` keys: `fromDate` (`YYYY-MM-DD`) to backfill from a given day instead of syncing incrementally.
 - `syncAll(): SyncAllResult` — syncs every account whose session it can read; `$result->unreadable` lists the ones it could not, and `isComplete()` is the only proof the run covered everything.
 
 Money/amount fields are exposed as **decimal `string`s** (exact; never a float). Models are

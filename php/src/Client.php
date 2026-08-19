@@ -241,9 +241,24 @@ final class Client
      *
      * Decrypts that account's Enable Banking uid and posts it, so the service can
      * fetch fresh data without ever holding the uid in plaintext.
+     *
+     * By default the service fetches incrementally, from what it already holds. Pass a
+     * `fromDate` to backfill from a specific day instead: the import is additive, so this
+     * only ever inserts rows that are missing. It is also the lever for a bank that cannot
+     * serve a wide window inside one request -- a narrow window returns in seconds where the
+     * default may run for minutes and be cut off by a proxy long before it finishes.
+     *
+     * The window is a request, not a guarantee: read `SyncResult::$servedFromDate` for the one
+     * the service actually fetched.
+     *
+     * @param array{fromDate?: string} $opts `fromDate`: backfill start, YYYY-MM-DD.
      */
-    public function sync(string $accountId): SyncResult
+    public function sync(string $accountId, array $opts = []): SyncResult
     {
+        $fromDate = isset($opts['fromDate']) && $opts['fromDate'] !== ''
+            ? self::calendarDate($opts['fromDate'])
+            : null;
+
         $account = null;
         foreach ($this->getAccountWires() as $wire) {
             if (($wire['id'] ?? null) === $accountId) {
@@ -269,12 +284,19 @@ final class Client
             );
         }
 
+        $body = ['uid' => $uid];
+        if ($fromDate !== null) {
+            $body['fromDate'] = $fromDate;
+        }
+
         $path = 'api/accounts/' . rawurlencode($accountId) . '/sync';
-        $result = self::counters($this->postJson($path, ['uid' => $uid]), ['newTransactions', 'totalFetched'], $path);
+        $response = $this->postJson($path, $body);
+        $result = self::counters($response, ['newTransactions', 'totalFetched'], $path);
 
         return new SyncResult(
             newTransactions: $result['newTransactions'],
             totalFetched: $result['totalFetched'],
+            servedFromDate: self::nullableString($response['servedFromDate'] ?? null),
         );
     }
 
@@ -359,6 +381,33 @@ final class Client
         }
 
         return $counters;
+    }
+
+    /**
+     * Refuses anything that is not a plain YYYY-MM-DD calendar day, locally.
+     *
+     * The service answers a bad date with a 400 whose body does not name the offending argument,
+     * and on the sync endpoint that round trip is not free -- it queues behind the account's own
+     * work and can cost minutes at a slow bank. `checkdate` is what rejects 2026-02-31, which
+     * matches the pattern and is still not a day.
+     */
+    private static function calendarDate(mixed $value): string
+    {
+        if (!is_string($value)
+            || preg_match('/^(\d{4})-(\d{2})-(\d{2})$/D', $value, $m) !== 1
+            || !checkdate((int) $m[2], (int) $m[3], (int) $m[1])) {
+            throw new OpenBankingException(
+                'fromDate must be a calendar date as YYYY-MM-DD, got: ' . self::describe($value),
+            );
+        }
+
+        return $value;
+    }
+
+    /** Names a rejected argument without ever stringifying an array or an object. */
+    private static function describe(mixed $value): string
+    {
+        return is_string($value) ? $value : get_debug_type($value);
     }
 
     /**

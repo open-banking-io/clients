@@ -7,6 +7,7 @@ namespace OpenBankingIO\Tests;
 use OpenBankingIO\ApiException;
 use OpenBankingIO\Client;
 use OpenBankingIO\OpenBankingException;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -98,6 +99,50 @@ final class ClientNegativeTest extends TestCase
         $this->expectException(OpenBankingException::class);
         $this->expectExceptionMessage('no active session');
         $this->client()->sync(self::ACCOUNT_ID);
+    }
+
+    /**
+     * A malformed window is refused locally, before the account lookup and before any bank work:
+     * the service answers a bad fromDate with a 400 whose body says nothing about which argument
+     * was wrong, and on this endpoint a round trip can cost minutes at a slow bank.
+     */
+    #[DataProvider('malformedWindows')]
+    public function testSyncRefusesAMalformedBackfillWindow(string $fromDate): void
+    {
+        $this->startMockServer();
+
+        $this->expectException(OpenBankingException::class);
+        $this->expectExceptionMessage('fromDate must be a calendar date');
+        $this->client()->sync(self::ACCOUNT_ID, ['fromDate' => $fromDate]);
+    }
+
+    /**
+     * A non-string window has to arrive as an OpenBankingException too. `$opts` is a plain array,
+     * so nothing stops a caller passing a DateTime or an integer date, and a raw TypeError out of
+     * the SDK reaches their generic handler where it looks like a transport fault.
+     */
+    public function testSyncRefusesANonStringBackfillWindow(): void
+    {
+        $this->startMockServer();
+
+        $this->expectException(OpenBankingException::class);
+        $this->expectExceptionMessage('got: DateTimeImmutable');
+        /** @phpstan-ignore argument.type */
+        $this->client()->sync(self::ACCOUNT_ID, ['fromDate' => new \DateTimeImmutable('2026-08-01')]);
+    }
+
+    /** @return array<string, array{string}> */
+    public static function malformedWindows(): array
+    {
+        return [
+            'not a date' => ['last tuesday'],
+            'wrong order' => ['01-08-2026'],
+            'no zero padding' => ['2026-8-1'],
+            'day out of range' => ['2026-02-31'],
+            'month out of range' => ['2026-13-01'],
+            'timestamp' => ['2026-08-01T00:00:00Z'],
+            'trailing newline' => ["2026-08-01\n"],
+        ];
     }
 
     public function testSyncAllSkipsSessionlessAccounts(): void

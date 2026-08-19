@@ -57,6 +57,24 @@ final class ResponseShapeTest extends TestCase
         $this->client()->syncAll();
     }
 
+    /**
+     * The service negotiates a window the bank refuses DOWN rather than failing outright, so the
+     * served window is the only proof of what a backfill actually covered. A caller that asked for
+     * two years and silently received ninety days has to be able to see that.
+     */
+    public function testSyncSurfacesTheWindowTheServiceActuallyServed(): void
+    {
+        $this->serverEnvOverrides = ['OBK_ACCOUNTS_MODE' => 'sync-narrowed-window'];
+        $this->startMockServer();
+
+        $result = $this->client()->sync(
+            '11111111-1111-4111-8111-111111111111',
+            ['fromDate' => '2024-01-01'],
+        );
+
+        self::assertSame('2026-05-19', $result->servedFromDate);
+    }
+
     public function testAFleetWithOneTornSessionSyncsTheRestAndNamesTheCasualty(): void
     {
         $this->serverEnvOverrides = ['OBK_ACCOUNTS_MODE' => 'mixed-fleet'];
