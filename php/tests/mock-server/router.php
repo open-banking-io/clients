@@ -28,7 +28,9 @@ declare(strict_types=1);
  *   'edge-total'    -> total is exactly PHP_INT_MAX, 'over-edge-total' is one past it,
  *   'twin-sealed'  -> two accounts share an id and both have unreadable sessions,
  *   'sealed-display-name' -> only the account's displayNameEnc is unreadable,
- *   'sync-no-counters' -> POST /api/sync returns 200 without its counters.
+ *   'sync-no-counters' -> POST /api/sync returns 200 without its counters,
+ *   'sync-narrowed-window' -> the single-account sync answers with a servedFromDate
+ *                             narrower than any window a test would ask for.
  */
 
 $fixtures = getenv('OBK_FIXTURES') ?: '';
@@ -254,6 +256,10 @@ if ($method === 'GET' && $path === '/api/connections') {
 
 if ($method === 'POST' && $path === "/api/accounts/{$accountId}/sync") {
     $capture('sync');
+    if ($accountsMode === 'sync-narrowed-window') {
+        echo json_encode(['newTransactions' => 0, 'totalFetched' => 1, 'servedFromDate' => '2026-05-19']);
+        return true;
+    }
     $serve('sync.json');
     return true;
 }
