@@ -78,11 +78,7 @@ export interface ConnectRelay {
 }
 
 export type RelayErrorCode =
-  | "oauth_error"
-  | "state_mismatch"
-  | "issuer_mismatch"
-  | "missing_code"
-  | "missing_private_key";
+  "oauth_error" | "state_mismatch" | "issuer_mismatch" | "missing_code" | "missing_private_key";
 
 /** Thrown by {@link parseRelay}. `code` says why; for `oauth_error` the server's fields are attached. */
 export class RelayError extends Error {
