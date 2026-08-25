@@ -47,6 +47,70 @@ const client = new OpenBankingClient({ apiBaseUrl, apiKey, privateKeyPkcs8 });
 Every request carries a `User-Agent: open-banking-io/node/<version>` header and a default 30s timeout
 (override via the `timeoutMs` option) so a hung connection can't block forever.
 
+## Partner Connect (OAuth 2.0 + PKCE)
+
+Partners let their users connect banks through open-banking.io and receive a delegated key plus the
+user's private key — a standard authorization-code flow with PKCE and `form_post`, documented at
+[open-banking.io/en/docs/partners](https://open-banking.io/en/docs/partners). The `connect` helpers
+cover every step; keep the client secret and the verifier on your server.
+
+```ts
+import {
+  buildAuthorizeUrl,
+  createPkce,
+  createState,
+  discover,
+  exchangeCode,
+  parseRelay,
+  OpenBankingClient,
+} from "@open-banking-io/client";
+
+const ISSUER = "https://open-banking.io";
+
+// 1. Start: keep the verifier server-side, keyed by state, and send the browser to the URL.
+app.get("/connect", async (req, res) => {
+  const pkce = createPkce();
+  const state = createState();
+  await flows.put(state, { verifier: pkce.verifier, sessionId: req.session.id });
+  res.redirect(
+    buildAuthorizeUrl({
+      issuer: ISSUER,
+      clientId: CLIENT_ID,
+      redirectUri: `${SELF_URL}/callback`,
+      state,
+      codeChallenge: pkce.challenge,
+      challenge: "pin_code", // popup mode; omit for a redirect flow
+    }),
+  );
+});
+
+// 2. Callback: the consent page form-posts code, state, iss, privateKey and publicKey.
+app.post("/callback", async (req, res) => {
+  const { issuer } = await discover(ISSUER);
+  const flow = await flows.take(req.body.state);
+  const relay = parseRelay(req.body, { expectedState: flow?.state ?? "", issuer });
+  const token = await exchangeCode({
+    issuer,
+    clientId: CLIENT_ID,
+    clientSecret: CLIENT_SECRET,
+    code: relay.code,
+    codeVerifier: flow.verifier,
+    redirectUri: `${SELF_URL}/callback`,
+  });
+  await bundles.put(flow.sessionId, { token, privateKey: relay.privateKey });
+  res.render("close");
+});
+
+// 3. Read: the token plus the relayed private key is a complete credentials bundle.
+const client = OpenBankingClient.fromTokenResponse(token, privateKey);
+const accounts = await client.getAccounts();
+```
+
+`parseRelay` throws a `RelayError` (`oauth_error`, `state_mismatch`, `issuer_mismatch`,
+`missing_code`, `missing_private_key`) and compares `state` and `iss` in constant time;
+`exchangeCode`, `revokeToken` and `userinfo` throw an `OAuthError` carrying the RFC 6749 `error`
+and `error_description`. An `invalid_grant` is terminal for that code — restart the flow.
+
 ## Money
 
 Amounts (`balance.amount`, `transaction.amount`, `transaction.balanceAfterTransaction`) are exposed
