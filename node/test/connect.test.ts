@@ -179,6 +179,23 @@ describe("parseRelay", () => {
     ).toThrow(/private key/);
   });
 
+  it("names a cancel as access_denied, the normal outcome it is", () => {
+    try {
+      parseRelay(
+        {
+          error: "access_denied",
+          error_description: "the user declined the authorization",
+          state: "s123",
+        },
+        { expectedState: "s123" },
+      );
+      expect.unreachable();
+    } catch (e) {
+      expect((e as RelayError).code).toBe("access_denied");
+      expect((e as RelayError).error).toBe("access_denied");
+    }
+  });
+
   it("surfaces an OAuth error relay before anything else", () => {
     try {
       parseRelay(

@@ -78,9 +78,18 @@ export interface ConnectRelay {
 }
 
 export type RelayErrorCode =
-  "oauth_error" | "state_mismatch" | "issuer_mismatch" | "missing_code" | "missing_private_key";
+  | "access_denied"
+  | "oauth_error"
+  | "state_mismatch"
+  | "issuer_mismatch"
+  | "missing_code"
+  | "missing_private_key";
 
-/** Thrown by {@link parseRelay}. `code` says why; for `oauth_error` the server's fields are attached. */
+/**
+ * Thrown by {@link parseRelay}. `code` says why: `access_denied` is the user pressing "Back to the
+ * partner" or declining (a normal outcome), `oauth_error` any other error the server relayed (the
+ * fields are attached), the rest are validation failures on your side.
+ */
 export class RelayError extends Error {
   readonly code: RelayErrorCode;
   readonly error?: string;
@@ -125,10 +134,14 @@ export function parseRelay(input: RelayInput, options: ParseRelayOptions): Conne
   const error = read("error");
   if (error) {
     const description = read("error_description");
-    throw new RelayError("oauth_error", description ? `${error}: ${description}` : error, {
-      error,
-      errorDescription: description || undefined,
-    });
+    throw new RelayError(
+      error === "access_denied" ? "access_denied" : "oauth_error",
+      description ? `${error}: ${description}` : error,
+      {
+        error,
+        errorDescription: description || undefined,
+      },
+    );
   }
 
   if (!options.expectedState || !constantTimeEqual(read("state"), options.expectedState)) {

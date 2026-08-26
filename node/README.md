@@ -63,6 +63,7 @@ import {
   exchangeCode,
   parseRelay,
   OpenBankingClient,
+  RelayError,
 } from "@open-banking-io/client";
 
 const ISSUER = "https://open-banking.io";
@@ -71,7 +72,7 @@ const ISSUER = "https://open-banking.io";
 app.get("/connect", async (req, res) => {
   const pkce = createPkce();
   const state = createState();
-  await flows.put(state, { verifier: pkce.verifier, sessionId: req.session.id });
+  await flows.put(state, { state, verifier: pkce.verifier, sessionId: req.session.id });
   res.redirect(
     buildAuthorizeUrl({
       issuer: ISSUER,
@@ -84,11 +85,20 @@ app.get("/connect", async (req, res) => {
   );
 });
 
-// 2. Callback: the consent page form-posts code, state, iss, privateKey and publicKey.
-app.post("/callback", async (req, res) => {
+// 2. Callback: the consent page form-posts code, state, iss, privateKey and publicKey — or
+//    error=access_denied when the user went back to you. Consume the flow by state first, so a
+//    cancel consumes it too; the lookup is what binds the POST to the session that started it.
+app.post("/callback", express.urlencoded({ extended: false }), async (req, res) => {
   const { issuer } = await discover(ISSUER);
   const flow = await flows.take(req.body.state);
-  const relay = parseRelay(req.body, { expectedState: flow?.state ?? "", issuer });
+  if (!flow) return res.status(400).send("unknown or expired state");
+  let relay;
+  try {
+    relay = parseRelay(req.body, { expectedState: flow.state, issuer });
+  } catch (e) {
+    if (e instanceof RelayError && e.code === "access_denied") return res.render("cancelled");
+    throw e;
+  }
   const token = await exchangeCode({
     issuer,
     clientId: CLIENT_ID,
@@ -106,8 +116,8 @@ const client = OpenBankingClient.fromTokenResponse(token, privateKey);
 const accounts = await client.getAccounts();
 ```
 
-`parseRelay` throws a `RelayError` (`oauth_error`, `state_mismatch`, `issuer_mismatch`,
-`missing_code`, `missing_private_key`) and compares `state` and `iss` in constant time;
+`parseRelay` throws a `RelayError` (`access_denied` — the user cancelled, a normal outcome —
+`oauth_error`, `state_mismatch`, `issuer_mismatch`, `missing_code`, `missing_private_key`) and compares `state` and `iss` in constant time;
 `exchangeCode`, `revokeToken` and `userinfo` throw an `OAuthError` carrying the RFC 6749 `error`
 and `error_description`. An `invalid_grant` is terminal for that code — restart the flow.
 
