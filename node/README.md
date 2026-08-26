@@ -72,7 +72,14 @@ const ISSUER = "https://open-banking.io";
 app.get("/connect", async (req, res) => {
   const pkce = createPkce();
   const state = createState();
-  await flows.put(state, { state, verifier: pkce.verifier, sessionId: req.session.id });
+  const mode = req.query.mode === "redirect" ? "redirect" : "popup";
+  await flows.put(state, {
+    state,
+    verifier: pkce.verifier,
+    sessionId: req.session.id,
+    mode,
+    expiresAt: Date.now() + 600_000,
+  });
   res.redirect(
     buildAuthorizeUrl({
       issuer: ISSUER,
@@ -80,7 +87,7 @@ app.get("/connect", async (req, res) => {
       redirectUri: `${SELF_URL}/callback`,
       state,
       codeChallenge: pkce.challenge,
-      challenge: "pin_code", // popup mode; omit for a redirect flow
+      ...(mode === "popup" && { challenge: "pin_code" }),
     }),
   );
 });
@@ -96,7 +103,8 @@ app.post("/callback", express.urlencoded({ extended: false }), async (req, res) 
   try {
     relay = parseRelay(req.body, { expectedState: flow.state, issuer });
   } catch (e) {
-    if (e instanceof RelayError && e.code === "access_denied") return res.render("cancelled");
+    if (e instanceof RelayError && e.code === "access_denied")
+      return finish(res, flow, "cancelled");
     throw e;
   }
   const token = await exchangeCode({
@@ -108,10 +116,22 @@ app.post("/callback", express.urlencoded({ extended: false }), async (req, res) 
     redirectUri: `${SELF_URL}/callback`,
   });
   await bundles.put(flow.sessionId, { token, privateKey: relay.privateKey });
-  res.render("close");
+  finish(res, flow, "connected");
 });
 
-// 3. Read: the token plus the relayed private key is a complete credentials bundle.
+// A redirect-mode flow lands back on your page; a popup signals its opener and closes.
+const finish = (res, flow, outcome) =>
+  flow.mode === "redirect"
+    ? res.redirect(302, `/?connect=${outcome}`)
+    : res.send(closePage(outcome));
+const closePage = (
+  outcome,
+) => `<!doctype html><p>${outcome === "connected" ? "Connected — you can close this window." : "Cancelled."}</p>
+<script>try{new BroadcastChannel("bank-connect").postMessage(${JSON.stringify(outcome)})}catch{}setTimeout(()=>window.close(),300)</script>`;
+
+// 3. Read (inside any handler that has the stored pair): the token plus the relayed private key
+//    is a complete credentials bundle.
+const { token, privateKey } = await bundles.get(req.session.id);
 const client = OpenBankingClient.fromTokenResponse(token, privateKey);
 const accounts = await client.getAccounts();
 ```
