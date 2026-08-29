@@ -200,6 +200,18 @@ describe("parseRelay", () => {
     }
   });
 
+  it("checks state and iss before honouring a relayed error", () => {
+    expect(() =>
+      parseRelay({ error: "access_denied", state: "other" }, { expectedState: "s123" }),
+    ).toThrow(/state does not match/);
+    expect(() =>
+      parseRelay(
+        { error: "access_denied", state: "s123", iss: "https://evil.example" },
+        { expectedState: "s123", issuer: ISSUER },
+      ),
+    ).toThrow(/not the expected issuer/);
+  });
+
   it("surfaces an OAuth error relay before anything else", () => {
     try {
       parseRelay(
@@ -324,6 +336,31 @@ describe("exchangeCode", () => {
       }),
     ).rejects.toThrow(/aborted/);
   });
+
+  it("keeps the timeout armed while the body is read", async () => {
+    const stalled = vi.fn((_url: string, init?: RequestInit) => {
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          init?.signal?.addEventListener("abort", () => controller.error(new Error("aborted")));
+        },
+      });
+      return Promise.resolve(
+        new Response(body, { status: 200, headers: { "Content-Type": "application/json" } }),
+      );
+    });
+
+    await expect(
+      exchangeCode({
+        issuer: ISSUER,
+        clientId: "c",
+        clientSecret: "s",
+        code: "x",
+        codeVerifier: "v",
+        fetch: stalled as unknown as typeof fetch,
+        timeoutMs: 5,
+      }),
+    ).rejects.toThrow(/aborted/);
+  });
 });
 
 describe("revokeToken and userinfo", () => {
@@ -435,6 +472,14 @@ describe("discover", () => {
 
     await expect(discover("https://mismatch.example", { fetch })).rejects.toThrow(
       /Issuer mismatch/,
+    );
+  });
+
+  it("rejects a document without an issuer as an OAuthError", async () => {
+    const { fetch } = fakeFetch(() => jsonResponse(200, { ...metadata, issuer: undefined }));
+
+    await expect(discover("https://noissuer.example", { fetch })).rejects.toBeInstanceOf(
+      OAuthError,
     );
   });
 });

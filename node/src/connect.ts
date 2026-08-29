@@ -125,8 +125,9 @@ export interface ParseRelayOptions {
 export type RelayInput = string | URLSearchParams | FormData | Record<string, unknown>;
 
 /**
- * Validates the form_post relay: an OAuth error becomes a {@link RelayError} (`oauth_error`); then
- * `state` (constant time), `iss`, `code` and `privateKey` are checked in that order.
+ * Validates the form_post relay: `state` (constant time) and `iss` first, so a relayed error is only
+ * honoured for this flow from this issuer; then an OAuth error becomes a {@link RelayError}, and
+ * `code` and `privateKey` are checked.
  */
 export function parseRelay(input: RelayInput, options: ParseRelayOptions): ConnectRelay {
   const fields = toRecord(input);
@@ -134,19 +135,6 @@ export function parseRelay(input: RelayInput, options: ParseRelayOptions): Conne
     const value = fields[name];
     return typeof value === "string" ? value : "";
   };
-
-  const error = read("error");
-  if (error) {
-    const description = read("error_description");
-    throw new RelayError(
-      error === "access_denied" ? "access_denied" : "oauth_error",
-      description ? `${error}: ${description}` : error,
-      {
-        error,
-        errorDescription: description || undefined,
-      },
-    );
-  }
 
   if (!options.expectedState || !constantTimeEqual(read("state"), options.expectedState)) {
     throw new RelayError("state_mismatch", "The relayed state does not match this flow");
@@ -160,6 +148,19 @@ export function parseRelay(input: RelayInput, options: ParseRelayOptions): Conne
     !constantTimeEqual(trimSlash(iss), trimSlash(options.issuer))
   ) {
     throw new RelayError("issuer_mismatch", "The relayed iss is not the expected issuer");
+  }
+
+  const error = read("error");
+  if (error) {
+    const description = read("error_description");
+    throw new RelayError(
+      error === "access_denied" ? "access_denied" : "oauth_error",
+      description ? `${error}: ${description}` : error,
+      {
+        error,
+        errorDescription: description || undefined,
+      },
+    );
   }
 
   const code = read("code");
@@ -185,7 +186,7 @@ export class OAuthError extends Error {
   }
 }
 
-interface HttpOptions {
+export interface HttpOptions {
   /** Custom `fetch`, e.g. for tests. Defaults to the global. */
   fetch?: typeof globalThis.fetch;
   /** Per-request timeout; defaults to 30s. */
@@ -382,11 +383,11 @@ export async function discover(issuer: string, options: HttpOptions = {}): Promi
   if (!response.ok)
     throw new OAuthError(response.status, "discovery_failed", `HTTP ${response.status}`);
   const metadata = (await response.json()) as ServerMetadata;
-  if (trimSlash(metadata.issuer) !== key) {
+  if (typeof metadata.issuer !== "string" || trimSlash(metadata.issuer) !== key) {
     throw new OAuthError(
       response.status,
       "discovery_failed",
-      `Issuer mismatch: ${metadata.issuer}`,
+      `Issuer mismatch: ${String(metadata.issuer)}`,
     );
   }
   discoveryCache.set(key, { metadata, expiresAt: Date.now() + DISCOVERY_TTL_MS });
@@ -465,13 +466,10 @@ async function post(
 
 async function request(url: string, init: RequestInit, options: HttpOptions): Promise<Response> {
   const fetchImpl = options.fetch ?? fetch;
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), options.timeoutMs ?? DEFAULT_TIMEOUT_MS);
-  try {
-    return await fetchImpl(url, { ...init, signal: controller.signal });
-  } finally {
-    clearTimeout(timer);
-  }
+  return fetchImpl(url, {
+    ...init,
+    signal: AbortSignal.timeout(options.timeoutMs ?? DEFAULT_TIMEOUT_MS),
+  });
 }
 
 async function throwIfOAuthError(response: Response): Promise<void> {

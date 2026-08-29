@@ -19,6 +19,7 @@ export type {
   AuthorizeUrlOptions,
   ConnectRelay,
   ExchangeCodeOptions,
+  HttpOptions,
   ParseRelayOptions,
   Pkce,
   RelayErrorCode,
