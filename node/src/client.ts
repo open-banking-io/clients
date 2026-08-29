@@ -1,3 +1,4 @@
+import { bundleFromToken, type TokenResponse } from "./connect.js";
 import { readFileSync } from "node:fs";
 import { decryptTo, importPrivateKey, type CryptoKey } from "./envelope.js";
 import { USER_AGENT } from "./version.js";
@@ -86,6 +87,18 @@ export class OpenBankingClient {
       timeoutMs: overrides.timeoutMs,
       fetch: overrides.fetch,
     });
+  }
+
+  /**
+   * Builds a client from a Partner Connect token response and the private key the consent page
+   * relayed — see {@link exchangeCode} and {@link parseRelay}.
+   */
+  static fromTokenResponse(
+    token: TokenResponse,
+    privateKey: string,
+    overrides: Partial<Pick<OpenBankingClientOptions, "fetch" | "timeoutMs">> = {},
+  ): OpenBankingClient {
+    return OpenBankingClient.fromBundle(bundleFromToken(token, privateKey), overrides);
   }
 
   /** Lists the user's accounts with all sensitive fields decrypted. */

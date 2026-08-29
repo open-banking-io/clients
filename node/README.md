@@ -47,6 +47,100 @@ const client = new OpenBankingClient({ apiBaseUrl, apiKey, privateKeyPkcs8 });
 Every request carries a `User-Agent: open-banking-io/node/<version>` header and a default 30s timeout
 (override via the `timeoutMs` option) so a hung connection can't block forever.
 
+## Partner Connect (OAuth 2.0 + PKCE)
+
+Partners let their users connect banks through open-banking.io and receive a delegated key plus the
+user's private key — a standard authorization-code flow with PKCE and `form_post`, documented at
+[open-banking.io/en/docs/partners](https://open-banking.io/en/docs/partners). The `connect` helpers
+cover every step; keep the client secret and the verifier on your server.
+
+```ts
+import {
+  buildAuthorizeUrl,
+  createPkce,
+  createState,
+  discover,
+  exchangeCode,
+  parseRelay,
+  OpenBankingClient,
+  RelayError,
+} from "@open-banking-io/client";
+
+const ISSUER = "https://open-banking.io";
+
+// 1. Start: keep the verifier server-side, keyed by state, and send the browser to the URL.
+app.get("/connect", async (req, res) => {
+  const pkce = createPkce();
+  const state = createState();
+  const mode = req.query.mode === "redirect" ? "redirect" : "popup";
+  await flows.put(state, {
+    state,
+    verifier: pkce.verifier,
+    sessionId: req.session.id,
+    mode,
+    expiresAt: Date.now() + 600_000,
+  });
+  res.redirect(
+    buildAuthorizeUrl({
+      issuer: ISSUER,
+      clientId: CLIENT_ID,
+      redirectUri: `${SELF_URL}/callback`,
+      state,
+      codeChallenge: pkce.challenge,
+      ...(mode === "popup" && { challenge: "pin_code" }),
+    }),
+  );
+});
+
+// 2. Callback: the consent page form-posts code, state, iss, privateKey and publicKey — or
+//    error=access_denied when the user went back to you. Consume the flow by state first, so a
+//    cancel consumes it too; the lookup is what binds the POST to the session that started it.
+app.post("/callback", express.urlencoded({ extended: false }), async (req, res) => {
+  const { issuer } = await discover(ISSUER);
+  const flow = await flows.take(req.body.state);
+  if (!flow || flow.expiresAt < Date.now()) return res.status(400).send("unknown or expired state");
+  let relay;
+  try {
+    relay = parseRelay(req.body, { expectedState: flow.state, issuer });
+  } catch (e) {
+    if (e instanceof RelayError && e.code === "access_denied")
+      return finish(res, flow, "cancelled");
+    throw e;
+  }
+  const token = await exchangeCode({
+    issuer,
+    clientId: CLIENT_ID,
+    clientSecret: CLIENT_SECRET,
+    code: relay.code,
+    codeVerifier: flow.verifier,
+    redirectUri: `${SELF_URL}/callback`,
+  });
+  await bundles.put(flow.sessionId, { token, privateKey: relay.privateKey });
+  finish(res, flow, "connected");
+});
+
+// A redirect-mode flow lands back on your page; a popup signals its opener and closes.
+const finish = (res, flow, outcome) =>
+  flow.mode === "redirect"
+    ? res.redirect(302, `/?connect=${outcome}`)
+    : res.send(closePage(outcome));
+const closePage = (
+  outcome,
+) => `<!doctype html><p>${outcome === "connected" ? "Connected — you can close this window." : "Cancelled."}</p>
+<script>try{new BroadcastChannel("bank-connect").postMessage(${JSON.stringify(outcome)})}catch{}setTimeout(()=>window.close(),300)</script>`;
+
+// 3. Read (inside any handler that has the stored pair): the token plus the relayed private key
+//    is a complete credentials bundle.
+const { token, privateKey } = await bundles.get(req.session.id);
+const client = OpenBankingClient.fromTokenResponse(token, privateKey);
+const accounts = await client.getAccounts();
+```
+
+`parseRelay` throws a `RelayError` (`access_denied` — the user cancelled, a normal outcome —
+`oauth_error`, `state_mismatch`, `issuer_mismatch`, `missing_code`, `missing_private_key`) and compares `state` and `iss` in constant time;
+`exchangeCode`, `revokeToken` and `userinfo` throw an `OAuthError` carrying the RFC 6749 `error`
+and `error_description`. An `invalid_grant` is terminal for that code — restart the flow.
+
 ## Money
 
 Amounts (`balance.amount`, `transaction.amount`, `transaction.balanceAfterTransaction`) are exposed
