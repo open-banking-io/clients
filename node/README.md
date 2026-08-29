@@ -98,7 +98,7 @@ app.get("/connect", async (req, res) => {
 app.post("/callback", express.urlencoded({ extended: false }), async (req, res) => {
   const { issuer } = await discover(ISSUER);
   const flow = await flows.take(req.body.state);
-  if (!flow) return res.status(400).send("unknown or expired state");
+  if (!flow || flow.expiresAt < Date.now()) return res.status(400).send("unknown or expired state");
   let relay;
   try {
     relay = parseRelay(req.body, { expectedState: flow.state, issuer });

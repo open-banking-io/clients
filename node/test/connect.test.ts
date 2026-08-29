@@ -90,6 +90,7 @@ describe("buildAuthorizeUrl", () => {
         codeChallenge: "c456",
         loginHint: "alice@example.com",
         challenge: "pin_code",
+        uiLocales: "da-DK en",
       }),
     );
     expect(url.origin + url.pathname).toBe(ISSUER + "/oauth/authorize");
@@ -101,8 +102,10 @@ describe("buildAuthorizeUrl", () => {
       state: "s123",
       code_challenge: "c456",
       code_challenge_method: "S256",
+      response_mode: "form_post",
       login_hint: "alice@example.com",
       challenge: "pin_code",
+      ui_locales: "da-DK en",
     });
   });
 
@@ -118,6 +121,7 @@ describe("buildAuthorizeUrl", () => {
     );
     expect(url.searchParams.has("login_hint")).toBe(false);
     expect(url.searchParams.has("challenge")).toBe(false);
+    expect(url.searchParams.has("ui_locales")).toBe(false);
   });
 });
 
@@ -398,12 +402,15 @@ describe("discover", () => {
     response_modes_supported: ["form_post"],
     grant_types_supported: ["authorization_code"],
     token_endpoint_auth_methods_supported: ["client_secret_post", "client_secret_basic"],
+    revocation_endpoint_auth_methods_supported: ["client_secret_post", "client_secret_basic"],
     code_challenge_methods_supported: ["S256"],
+    authorization_response_iss_parameter_supported: true,
     open_banking_io: {
       userinfo_endpoint: ISSUER + "/oauth/userinfo",
       api_base_url: ISSUER,
       api_key_header: "X-Api-Key",
       bearer_supported: true,
+      login_challenges_supported: ["pin_code"],
       key_relay: { response_mode: "form_post", fields: [...CONNECT_RELAY_FIELDS] },
       documentation: "https://open-banking.io/en/docs/partners",
     },

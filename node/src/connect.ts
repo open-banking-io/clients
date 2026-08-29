@@ -48,6 +48,8 @@ export interface AuthorizeUrlOptions {
   loginHint?: string;
   /** `pin_code` keeps a popup journey inside the popup (typed emailed code instead of a magic link). */
   challenge?: "pin_code";
+  /** Space-separated locales; the first one the server publishes forces the language of every screen. */
+  uiLocales?: string;
 }
 
 /** The `/oauth/authorize` URL for a top-level browser navigation. */
@@ -60,9 +62,11 @@ export function buildAuthorizeUrl(options: AuthorizeUrlOptions): string {
     state: options.state,
     code_challenge: options.codeChallenge,
     code_challenge_method: "S256",
+    response_mode: "form_post",
   });
   if (options.loginHint) params.set("login_hint", options.loginHint);
   if (options.challenge) params.set("challenge", options.challenge);
+  if (options.uiLocales) params.set("ui_locales", options.uiLocales);
   return `${endpoint(options.issuer, "/oauth/authorize")}?${params.toString()}`;
 }
 
@@ -343,13 +347,16 @@ export interface ServerMetadata {
   response_modes_supported: string[];
   grant_types_supported: string[];
   token_endpoint_auth_methods_supported: string[];
+  revocation_endpoint_auth_methods_supported?: string[];
   code_challenge_methods_supported: string[];
+  authorization_response_iss_parameter_supported?: boolean;
   service_documentation?: string;
   open_banking_io: {
     userinfo_endpoint: string;
     api_base_url: string;
     api_key_header: string;
     bearer_supported: boolean;
+    login_challenges_supported?: string[];
     key_relay: { response_mode: string; fields: string[] };
     documentation: string;
   };
