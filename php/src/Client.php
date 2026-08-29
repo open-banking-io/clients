@@ -27,7 +27,7 @@ final class Client
      * Client version, sent as the User-Agent. Tracks the published release tag
      * (PHP has no build manifest -- Packagist is tag-based), so bump this when tagging.
      */
-    public const VERSION = '1.0.0';
+    public const VERSION = '1.1.0';
 
     /** Total request timeout, in seconds. */
     private const TIMEOUT_SECONDS = 30;
