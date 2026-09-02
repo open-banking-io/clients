@@ -37,7 +37,7 @@ jobs:
           [ "$TAG_VERSION" = "$GEM_VERSION" ] || { echo "::error::tag $TAG_VERSION != gem $GEM_VERSION"; exit 1; }
 
       - name: Configure RubyGems credentials (OIDC trusted publishing)
-        uses: rubygems/configure-rubygems-credentials@abfabee9aa68f1c2c95a6f58c91d826e5fac33da # main
+        uses: rubygems/configure-rubygems-credentials@364689245c2940ff9edb3bc2eea73acc8c033e44 # main
 
       - run: gem build open-banking-io.gemspec
       - run: gem push open-banking-io-*.gem
