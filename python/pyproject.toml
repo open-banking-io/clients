@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "open-banking-io"
-version = "1.1.0"
+version = "1.2.0"
 description = "Server-to-server client for open-banking.io with local zero-knowledge envelope decryption."
 readme = "README.md"
 requires-python = ">=3.10"
