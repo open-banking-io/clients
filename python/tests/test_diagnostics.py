@@ -3,6 +3,7 @@
 import json
 import logging
 
+import httpx
 import pytest
 
 from open_banking_io import OpenBankingClient
@@ -315,3 +316,23 @@ def test_the_log_records_the_path_only_never_the_full_url(httpserver, credential
     assert "/api/accounts" in joined
     assert "hunter2" not in joined
     assert "alice" not in joined
+
+
+def test_an_unparseable_base_url_fails_instead_of_raising(credentials):
+    """urlsplit itself raises on some malformed input, so it must run behind the guard."""
+    from open_banking_io import diagnostics
+
+    diag = diagnostics.run(httpx.Client(), "https://[", "k")
+
+    assert [c.name for c in diag.checks] == CHECK_NAMES
+    assert diag.checks[0].ok is False
+    assert diag.ok is False
+
+
+def test_an_explicit_port_zero_is_rejected_not_silently_replaced(credentials):
+    """`or` would swallow port 0 and report the scheme default, hiding the real target."""
+    with _client("https://127.0.0.1:0", credentials) as client:
+        base = client.diagnose().checks[0]
+
+    assert base.ok is False
+    assert "443" not in base.detail

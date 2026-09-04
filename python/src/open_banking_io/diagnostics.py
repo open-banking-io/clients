@@ -124,14 +124,19 @@ def _port(parts: SplitResult) -> int | None:
 
 def _port_is_invalid(parts: SplitResult) -> bool:
     try:
-        _ = parts.port
+        return parts.port == 0  # a real port is 1-65535
     except ValueError:
         return True
-    return False
 
 
 def _default_port(scheme: str) -> int:
     return 443 if scheme == "https" else 80
+
+
+def _effective_port(port_value: int | None, scheme: str) -> int:
+    """An explicit port wins, including one the scheme would otherwise imply. Only an absent
+    port falls back to the scheme default -- `or` would swallow an explicit 0."""
+    return _default_port(scheme) if port_value is None else port_value
 
 
 def _safe_url(url: str) -> str:
@@ -208,22 +213,31 @@ def run(http: httpx.Client, base_url: str, api_key: str) -> Diagnostics:
         results[name] = Check(name, False, f"not attempted ({why})", skipped=True)
 
     # -- base url --------------------------------------------------------------
-    parts = urlsplit(base_url)
+    # urlsplit itself raises on some malformed input (e.g. "https://["), so it runs behind
+    # the same guard as everything else rather than ahead of it.
+    try:
+        parts = urlsplit(base_url)
+        parse_error: str | None = None
+    except ValueError as e:
+        parts, parse_error = SplitResult("", "", "", "", ""), f"{type(e).__name__}: {e}"
+
     scheme = (parts.scheme or "").lower()
     host = parts.hostname or ""
     port_value = _port(parts)
 
     def check_base_url() -> tuple[bool, str]:
+        if parse_error is not None:
+            return False, f"could not parse the base url -- {parse_error}"
         shown = _safe_url(base_url)
         if not host:
             return False, f"{shown!r} has no host"
         if _port_is_invalid(parts):
             return False, f"{shown!r} has a port outside 1-65535"
-        shown_port = port_value or _default_port(scheme)
+        shown_port = _effective_port(port_value, scheme)
         return True, f"{shown!r} -> host={host!r} port={shown_port} scheme={scheme}"
 
     results["base_url"] = _guard("base_url", check_base_url)
-    port = port_value or _default_port(scheme)
+    port = _effective_port(port_value, scheme)
 
     if not results["base_url"].ok:
         skip("dns", "the base url is unusable")
