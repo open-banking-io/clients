@@ -62,7 +62,7 @@ with OpenBankingClient.from_credentials("credentials.json") as client:
     print(client.diagnose().report())
 ```
 
-```
+```text
 [PASS] base_url       'https://open-banking.io' -> host='open-banking.io' port=443 scheme=https  (0 ms)
 [PASS] dns            open-banking.io -> 104.21.78.242, 172.67.138.186  (24 ms)
 [PASS] tcp_connect    connected to open-banking.io:443  (10 ms)
@@ -72,8 +72,13 @@ with OpenBankingClient.from_credentials("credentials.json") as client:
 
 It never raises: a failing stage is recorded and the stages that depend on it are skipped, so
 a DNS problem reads differently from a TLS problem or a rejected API key. The report carries
-no API key (only a one-way fingerprint), no private key, no decrypted data and no response
-bodies; proxy and CA environment variables are listed by name with their values withheld.
+no API key, no private key, no decrypted data and no response bodies; any credentials in the
+base URL are stripped, and proxy and CA environment variables are listed by name with their
+values withheld.
+
+The `api_preflight` stage always runs, even when the direct probes fail: those open their own
+sockets and so bypass a proxy or a custom TLS setup, which can make them report a fault on a
+connection that works. The verdict comes from the request the SDK actually makes.
 `as_dict()` returns the same data as JSON-serialisable structures.
 
 Request logging is opt-in through the standard `logging` module and records only the method,
@@ -81,6 +86,7 @@ path, status and duration — never headers or bodies:
 
 ```python
 import logging
+
 logging.basicConfig()
 logging.getLogger("open_banking_io").setLevel(logging.DEBUG)
 ```

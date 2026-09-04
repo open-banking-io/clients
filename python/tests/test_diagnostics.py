@@ -64,15 +64,25 @@ def test_report_never_contains_the_api_key_or_private_key(httpserver, credential
     assert credentials["encryptionKey"]["privateKey"] not in json.dumps(diag.as_dict())
 
 
-def test_report_identifies_the_key_by_fingerprint_only(httpserver, credentials):
+def test_the_api_key_is_described_never_shown(httpserver, credentials):
     httpserver.expect_request("/api/accounts", method="GET").respond_with_json([])
 
     with _client(httpserver.url_for("").rstrip("/"), credentials) as client:
         diag = client.diagnose()
 
-    fp = diag.environment["api_key_fingerprint"]
-    assert len(fp) == 16
-    assert fp not in credentials["apiKey"]
+    assert diag.environment["api_key"] == f"set ({len(credentials['apiKey'])} chars)"
+
+
+def test_credentials_in_the_base_url_are_stripped_from_the_report(httpserver, credentials):
+    """A base url may carry basic-auth userinfo; it must not reach a pasteable report."""
+    host = httpserver.url_for("").rstrip("/").split("://", 1)[1]
+    with _client(f"http://alice:hunter2@{host}", credentials) as client:
+        diag = client.diagnose()
+        report = diag.report()
+
+    assert "hunter2" not in report
+    assert "alice" not in report
+    assert "hunter2" not in json.dumps(diag.as_dict())
 
 
 def test_proxy_env_vars_are_reported_by_name_with_values_redacted(
@@ -100,8 +110,12 @@ def test_dns_failure_is_reported_not_raised(credentials):
     assert diag.ok is False
     dns = next(c for c in diag.checks if c.name == "dns")
     assert dns.ok is False
-    # Stages after the first failure are not attempted.
+    # A probe that depends on a failed one is skipped ...
     assert next(c for c in diag.checks if c.name == "tcp_connect").skipped is True
+    # ... but the preflight always runs, since it is the authoritative check.
+    preflight = next(c for c in diag.checks if c.name == "api_preflight")
+    assert preflight.skipped is False
+    assert preflight.ok is False
 
 
 def test_connection_refused_is_reported_not_raised(credentials):
@@ -180,3 +194,23 @@ def test_an_injected_http_client_is_not_instrumented(httpserver, credentials):
         client.get_accounts()
 
     assert {k: list(v) for k, v in injected.event_hooks.items()} == hooks_before
+
+
+def test_preflight_runs_even_when_the_direct_probes_fail(httpserver, credentials):
+    """A proxy or custom TLS setup can make the direct probes fail on a working connection,
+    so the verdict comes from the request the SDK actually makes."""
+    import httpx
+
+    # Stands in for a proxy: the host never resolves directly, but the configured
+    # transport delivers the request anyway.
+    transport = httpx.MockTransport(lambda request: httpx.Response(200, json=[]))
+    proxied = httpx.Client(transport=transport)
+
+    with _client("https://nonexistent.invalid", credentials, http_client=proxied) as client:
+        diag = client.diagnose()
+
+    assert next(c for c in diag.checks if c.name == "dns").ok is False
+    preflight = next(c for c in diag.checks if c.name == "api_preflight")
+    assert preflight.ok is True
+    assert "proxy" in preflight.detail
+    assert diag.ok is True

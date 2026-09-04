@@ -8,7 +8,6 @@ TLS problem from an authentication problem.
 
 from __future__ import annotations
 
-import hashlib
 import os
 import platform
 import socket
@@ -18,7 +17,7 @@ import time
 from dataclasses import dataclass, field
 from importlib.metadata import PackageNotFoundError, version
 from typing import Any
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, urlunsplit
 
 import httpx
 
@@ -69,7 +68,11 @@ class Diagnostics:
 
     @property
     def ok(self) -> bool:
-        return all(c.ok for c in self.checks)
+        """Whether the SDK can actually talk to the API. Decided by the preflight through the
+        configured transport, not by the direct probes -- those bypass proxies and custom TLS,
+        so they can fail on a setup that works perfectly well."""
+        preflight = next((c for c in self.checks if c.name == "api_preflight"), None)
+        return preflight.ok if preflight is not None else False
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -94,11 +97,6 @@ class Diagnostics:
         return self.report()
 
 
-def _fingerprint(secret: str) -> str:
-    """A one-way, non-reversible handle support can correlate against, never the value."""
-    return hashlib.sha256(secret.encode("utf-8")).hexdigest()[:16]
-
-
 def _sdk_version() -> str:
     try:
         return version("open-banking-io")
@@ -113,6 +111,16 @@ def _package_version(name: str) -> str:
         return "unknown"
 
 
+def _safe_url(url: str) -> str:
+    """The base url with any userinfo, query and fragment removed -- a base url may carry
+    proxy or basic-auth credentials, and this string is written into the report."""
+    parts = urlsplit(url)
+    host = parts.hostname or ""
+    if parts.port:
+        host = f"{host}:{parts.port}"
+    return urlunsplit((parts.scheme, host, parts.path, "", ""))
+
+
 def _environment(api_key: str, base_url: str) -> dict[str, str]:
     env: dict[str, str] = {
         "sdk_version": _sdk_version(),
@@ -121,8 +129,8 @@ def _environment(api_key: str, base_url: str) -> dict[str, str]:
         "httpcore_version": _package_version("httpcore"),
         "openssl_version": ssl.OPENSSL_VERSION,
         "platform": platform.platform(),
-        "api_base_url": base_url,
-        "api_key_fingerprint": _fingerprint(api_key),
+        "api_base_url": _safe_url(base_url),
+        "api_key": f"set ({len(api_key)} chars)" if api_key else "MISSING",
     }
     present = [name for name in _ENV_VARS_OF_INTEREST if os.environ.get(name)]
     env["env_vars_set"] = ", ".join(present) if present else "(none)"
@@ -150,16 +158,19 @@ def run(http: httpx.Client, base_url: str, api_key: str) -> Diagnostics:
     port = parts.port or (443 if scheme == "https" else 80)
 
     diag.checks.append(
-        Check("base_url", True, f"{base_url!r} -> host={host!r} port={port} scheme={scheme}")
+        Check(
+            "base_url",
+            True,
+            f"{_safe_url(base_url)!r} -> host={host!r} port={port} scheme={scheme}",
+        )
     )
 
-    def skip(name: str) -> None:
-        diag.checks.append(
-            Check(name, False, "not attempted (an earlier stage failed)", skipped=True)
-        )
+    def skip(name: str, why: str = "an earlier stage failed") -> None:
+        diag.checks.append(Check(name, False, f"not attempted ({why})", skipped=True))
 
-    # DNS
-    addresses: list[str] = []
+    # The probes below open their own sockets, so they bypass any proxy and any custom TLS
+    # configuration on the caller's httpx client. They localise a fault; they do not decide
+    # the verdict -- the preflight through the configured transport does.
     with _Timer() as t:
         try:
             infos = socket.getaddrinfo(host, port, proto=socket.IPPROTO_TCP)
@@ -168,32 +179,29 @@ def run(http: httpx.Client, base_url: str, api_key: str) -> Diagnostics:
         except OSError as e:
             dns_ok, dns_detail = False, f"could not resolve {host!r}: {e}"
     diag.checks.append(Check("dns", dns_ok, dns_detail, t.ms))
+
+    tcp_ok = False
     if not dns_ok:
         skip("tcp_connect")
-        skip("tls_handshake")
-        skip("api_preflight")
-        return diag
+    else:
+        with _Timer() as t:
+            try:
+                with socket.create_connection((host, port), timeout=10.0):
+                    tcp_ok, tcp_detail = True, f"connected to {host}:{port}"
+            except OSError as e:
+                tcp_ok, tcp_detail = False, f"could not connect to {host}:{port}: {e}"
+        diag.checks.append(Check("tcp_connect", tcp_ok, tcp_detail, t.ms))
 
-    # TCP
-    with _Timer() as t:
-        try:
-            with socket.create_connection((host, port), timeout=10.0):
-                tcp_ok, tcp_detail = True, f"connected to {host}:{port}"
-        except OSError as e:
-            tcp_ok, tcp_detail = False, f"could not connect to {host}:{port}: {e}"
-    diag.checks.append(Check("tcp_connect", tcp_ok, tcp_detail, t.ms))
     if not tcp_ok:
         skip("tls_handshake")
-        skip("api_preflight")
-        return diag
-
-    # TLS
-    with _Timer() as t:
-        if scheme != "https":
-            tls_ok, tls_detail = True, "skipped (plain http)"
-        else:
+    elif scheme != "https":
+        diag.checks.append(Check("tls_handshake", True, "skipped (plain http)"))
+    else:
+        with _Timer() as t:
             try:
                 ctx = ssl.create_default_context()
+                # CodeQL: pin the floor so TLS 1.0/1.1 are never negotiated by the probe.
+                ctx.minimum_version = ssl.TLSVersion.TLSv1_2
                 with (
                     socket.create_connection((host, port), timeout=10.0) as raw,
                     ctx.wrap_socket(raw, server_hostname=host) as tls,
@@ -212,12 +220,10 @@ def run(http: httpx.Client, base_url: str, api_key: str) -> Diagnostics:
                     )
             except (OSError, ssl.SSLError) as e:
                 tls_ok, tls_detail = False, f"TLS handshake failed: {e}"
-    diag.checks.append(Check("tls_handshake", tls_ok, tls_detail, t.ms))
-    if not tls_ok:
-        skip("api_preflight")
-        return diag
+        diag.checks.append(Check("tls_handshake", tls_ok, tls_detail, t.ms))
 
-    # An authenticated request. Only the status is reported -- never the body.
+    # Always attempted, whatever the probes said: this is the request the SDK actually makes,
+    # through the caller's configured transport. Only the status is reported, never the body.
     with _Timer() as t:
         try:
             resp = http.get("api/accounts")
@@ -227,6 +233,9 @@ def run(http: httpx.Client, base_url: str, api_key: str) -> Diagnostics:
                 pre_detail += " (the API key was rejected)"
         except httpx.HTTPError as e:
             pre_ok, pre_detail = False, f"GET api/accounts failed: {type(e).__name__}: {e}"
+    if pre_ok and not all(c.ok for c in diag.checks):
+        pre_detail += " -- the request succeeded, so the failing probes above are most likely "
+        pre_detail += "a proxy or custom TLS setup they bypass, not a real fault"
     diag.checks.append(Check("api_preflight", pre_ok, pre_detail, t.ms))
 
     return diag
