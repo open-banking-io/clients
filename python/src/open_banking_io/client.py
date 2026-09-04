@@ -74,8 +74,13 @@ class OpenBankingClient:
         http_client: httpx.Client | None = None,
         timeout: float | None = None,
     ) -> None:
-        if not api_base_url or not api_base_url.strip():
+        api_base_url = (api_base_url or "").strip()
+        if not api_base_url:
             raise ValueError("api_base_url is required")
+        if not api_base_url.lower().startswith(("http://", "https://")):
+            raise ValueError(
+                f"api_base_url must start with http:// or https:// (got {api_base_url!r})"
+            )
         if not api_key or not api_key.strip():
             raise ValueError("api_key is required")
         if not private_key_pkcs8 or not private_key_pkcs8.strip():
