@@ -63,6 +63,41 @@ def _parse_decimal_nullable(value: str | None) -> Decimal | None:
     return Decimal(value)
 
 
+_LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "::1", "[::1]"})
+
+
+def _normalize_base_url(api_base_url: object) -> str:
+    """Strips, validates and returns the base URL, rejecting anything that would only
+    surface later as an opaque httpx transport error."""
+    if not isinstance(api_base_url, str):
+        if api_base_url is None:
+            raise ValueError("api_base_url is required")
+        raise ValueError(f"api_base_url must be a string (got {type(api_base_url).__name__})")
+
+    url = api_base_url.strip()
+    if not url:
+        raise ValueError("api_base_url is required")
+
+    scheme, _, rest = url.partition("://")
+    scheme = scheme.lower()
+    if not rest or scheme not in ("http", "https"):
+        raise ValueError(f"api_base_url must start with http:// or https:// (got {url!r})")
+
+    if scheme == "http":
+        host = rest.split("/", 1)[0].rsplit("@", 1)[-1]
+        if not host.startswith("["):
+            host = host.split(":", 1)[0]
+        elif "]" in host:
+            host = host[: host.index("]") + 1]
+        if host.lower() not in _LOOPBACK_HOSTS:
+            raise ValueError(
+                "api_base_url must use https:// -- cleartext http:// would send the API key "
+                f"and decrypted session uids over the network (got {url!r})"
+            )
+
+    return url
+
+
 class OpenBankingClient:
     """Decrypting client for the open-banking.io API."""
 
@@ -74,8 +109,7 @@ class OpenBankingClient:
         http_client: httpx.Client | None = None,
         timeout: float | None = None,
     ) -> None:
-        if not api_base_url or not api_base_url.strip():
-            raise ValueError("api_base_url is required")
+        api_base_url = _normalize_base_url(api_base_url)
         if not api_key or not api_key.strip():
             raise ValueError("api_key is required")
         if not private_key_pkcs8 or not private_key_pkcs8.strip():
