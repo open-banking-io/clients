@@ -183,26 +183,26 @@ describe("integration against a mock API", () => {
 
     // One trailing slash is stripped exactly as before.
     const single = new OpenBankingClient({
-      apiBaseUrl: "http://example.test/",
+      apiBaseUrl: "https://example.test/",
       apiKey: API_KEY,
       privateKeyPkcs8: PRIVATE_KEY,
       fetch: spyFetch,
     });
     await single.getAccounts();
-    expect(seen.at(-1)).toBe("http://example.test/api/accounts");
+    expect(seen.at(-1)).toBe("https://example.test/api/accounts");
 
     // Pathological input: 10k trailing slashes. The old /\/+$/ regex backtracks O(n²); the
     // char-scan trim must return quickly and strip every trailing slash.
     const start = performance.now();
     const many = new OpenBankingClient({
-      apiBaseUrl: "http://example.test" + "/".repeat(10_000),
+      apiBaseUrl: "https://example.test" + "/".repeat(10_000),
       apiKey: API_KEY,
       privateKeyPkcs8: PRIVATE_KEY,
       fetch: spyFetch,
     });
     await many.getAccounts();
     const elapsed = performance.now() - start;
-    expect(seen.at(-1)).toBe("http://example.test/api/accounts");
+    expect(seen.at(-1)).toBe("https://example.test/api/accounts");
     expect(elapsed).toBeLessThan(1000);
   });
 
