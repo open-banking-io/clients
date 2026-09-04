@@ -52,6 +52,45 @@ Amounts are exposed as `decimal.Decimal`. Models are plain `@dataclass`es.
 
 When the client constructs its own `httpx.Client` it applies a default 30s timeout and sends a `User-Agent: open-banking-io/python/<version>` header on every request (a caller-supplied client is left untouched).
 
+## Diagnostics
+
+When a call fails before any HTTP response, `diagnose()` probes each stage in turn and
+returns a report that is safe to paste into a support ticket:
+
+```python
+with OpenBankingClient.from_credentials("credentials.json") as client:
+    print(client.diagnose().report())
+```
+
+```text
+[PASS] base_url       'https://open-banking.io' -> host='open-banking.io' port=443 scheme=https  (0 ms)
+[PASS] dns            open-banking.io -> 104.21.78.242, 172.67.138.186  (24 ms)
+[PASS] tcp_connect    connected to open-banking.io:443  (10 ms)
+[PASS] tls_handshake  TLSv1.3 TLS_AES_256_GCM_SHA384 issuer='Google Trust Services' notAfter=Nov  5 13:47:21 2026 GMT  (40 ms)
+[PASS] api_preflight  GET api/accounts -> HTTP 200  (159 ms)
+```
+
+It never raises: a failing stage is recorded and the stages that depend on it are skipped, so
+a DNS problem reads differently from a TLS problem or a rejected API key. The report carries
+no API key, no private key, no decrypted data and no response bodies; any credentials in the
+base URL are stripped, and proxy and CA environment variables are listed by name with their
+values withheld.
+
+The `api_preflight` stage always runs, even when the direct probes fail: those open their own
+sockets and so bypass a proxy or a custom TLS setup, which can make them report a fault on a
+connection that works. The verdict comes from the request the SDK actually makes.
+`as_dict()` returns the same data as JSON-serialisable structures.
+
+Request logging is opt-in through the standard `logging` module and records only the method,
+path, status and duration — never headers or bodies:
+
+```python
+import logging
+
+logging.basicConfig()
+logging.getLogger("open_banking_io").setLevel(logging.DEBUG)
+```
+
 ## Encryption
 
 Envelopes use **ECDH P-256 → HKDF-SHA256 → AES-256-GCM**. Decryption requires the private key from
