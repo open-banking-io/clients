@@ -8,7 +8,9 @@ ciphertext it cannot read.
 from __future__ import annotations
 
 import json
+import logging
 import os
+import time
 from datetime import date, datetime
 from decimal import Decimal
 from importlib.metadata import PackageNotFoundError, version
@@ -16,7 +18,8 @@ from typing import Any
 
 import httpx
 
-from . import envelope
+from . import diagnostics, envelope
+from .diagnostics import Diagnostics
 from .models import (
     Account,
     Balance,
@@ -61,6 +64,28 @@ def _parse_decimal_nullable(value: str | None) -> Decimal | None:
     if value is None or value == "":
         return None
     return Decimal(value)
+
+
+# Opt-in request logging. Nothing is emitted unless the caller enables this logger, and
+# only the method, path, status and duration are recorded -- never headers (which carry
+# the API key) and never bodies (which carry ciphertext and decrypted data).
+logger = logging.getLogger("open_banking_io")
+
+
+def _log_request(request: httpx.Request) -> None:
+    request.extensions["ob_started_at"] = time.perf_counter()
+
+
+def _log_response(response: httpx.Response) -> None:
+    started = response.request.extensions.get("ob_started_at")
+    elapsed = f"{(time.perf_counter() - started) * 1000:.0f}ms" if started else "?"
+    logger.debug(
+        "%s %s -> %s in %s",
+        response.request.method,
+        response.request.url.path,
+        response.status_code,
+        elapsed,
+    )
 
 
 _LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "::1", "[::1]"})
@@ -120,7 +145,11 @@ class OpenBankingClient:
         # A caller-injected client is used as-is; only the default client honors `timeout`.
         default_timeout = httpx.Timeout(30.0 if timeout is None else timeout)
         self._http = http_client or httpx.Client(timeout=default_timeout)
+        if self._owns_http:
+            self._http.event_hooks["request"].append(_log_request)
+            self._http.event_hooks["response"].append(_log_response)
         self._http.base_url = httpx.URL(api_base_url.rstrip("/") + "/")
+        self._api_key = api_key
         self._http.headers["X-Api-Key"] = api_key
         self._http.headers["User-Agent"] = _user_agent()
 
@@ -318,6 +347,17 @@ class OpenBankingClient:
             balance_after_transaction=_parse_decimal_nullable(d.get("balanceAfter")),
             balance_after_currency=d.get("balanceAfterCurrency"),
         )
+
+    # -- Diagnostics -----------------------------------------------------------
+
+    def diagnose(self) -> Diagnostics:
+        """Probes DNS, TCP, TLS and an authenticated request, and returns a report that is
+        safe to paste into a support ticket.
+
+        Never raises: each stage records its own failure and the stages that depend on it
+        are skipped. The report carries no API key, no private key and no response bodies.
+        """
+        return diagnostics.run(self._http, str(self._http.base_url).rstrip("/"), self._api_key)
 
     # -- Lifecycle -------------------------------------------------------------
 

@@ -8,6 +8,7 @@ from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as _pkg_version
 
 from .client import OpenBankingClient
+from .diagnostics import Check, Diagnostics
 from .models import (
     Account,
     Balance,
@@ -21,7 +22,9 @@ from .models import (
 __all__ = [
     "Account",
     "Balance",
+    "Check",
     "Connection",
+    "Diagnostics",
     "OpenBankingClient",
     "SyncAllResult",
     "SyncResult",
