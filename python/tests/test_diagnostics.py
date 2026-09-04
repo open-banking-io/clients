@@ -3,6 +3,8 @@
 import json
 import logging
 
+import pytest
+
 from open_banking_io import OpenBankingClient
 
 ACCOUNT_ID = "11111111-1111-4111-8111-111111111111"
@@ -29,10 +31,11 @@ def test_diagnose_against_a_live_server_passes_every_check(httpserver, credentia
     assert diag.ok is True
     names = [c.name for c in diag.checks]
     assert names == ["base_url", "dns", "tcp_connect", "tls_handshake", "api_preflight"]
-    # Plain http to loopback: the TLS stage is skipped, not failed.
+    # Plain http to loopback: the TLS stage is skipped, not failed -- and says so in the
+    # `skipped` field, not just in prose.
     tls = next(c for c in diag.checks if c.name == "tls_handshake")
     assert tls.ok is True
-    assert "skipped" in tls.detail.lower()
+    assert tls.skipped is True
     preflight = next(c for c in diag.checks if c.name == "api_preflight")
     assert "200" in preflight.detail
 
@@ -214,3 +217,101 @@ def test_preflight_runs_even_when_the_direct_probes_fail(httpserver, credentials
     assert preflight.ok is True
     assert "proxy" in preflight.detail
     assert diag.ok is True
+
+
+# -- Never raises, and always returns all five checks ------------------------
+
+CHECK_NAMES = ["base_url", "dns", "tcp_connect", "tls_handshake", "api_preflight"]
+
+
+@pytest.mark.parametrize(
+    "hostile",
+    [
+        "https://example.com:99999",  # SplitResult.port raises ValueError
+        "https://" + "a" * 64 + ".example.com",  # getaddrinfo raises UnicodeError
+        "https://[2001:db8::1]:8443",  # IPv6 literal
+        "https://127.0.0.1:1",  # nothing listening
+    ],
+)
+def test_diagnose_never_raises_and_always_returns_five_checks(credentials, hostile):
+    with _client(hostile, credentials) as client:
+        diag = client.diagnose()
+
+    assert [c.name for c in diag.checks] == CHECK_NAMES
+    assert diag.ok is False
+
+
+def test_diagnose_survives_a_transport_that_raises_a_non_http_error(credentials):
+    import httpx
+
+    def explode(request):
+        raise ValueError("transport exploded")
+
+    hostile = httpx.Client(transport=httpx.MockTransport(explode))
+    with _client("https://example.test", credentials, http_client=hostile) as client:
+        diag = client.diagnose()
+
+    preflight = next(c for c in diag.checks if c.name == "api_preflight")
+    assert preflight.ok is False
+    assert "ValueError" in preflight.detail
+
+
+def test_diagnose_survives_a_closed_client(httpserver, credentials):
+    httpserver.expect_request("/api/accounts", method="GET").respond_with_json([])
+    client = _client(httpserver.url_for("").rstrip("/"), credentials)
+    client.close()
+
+    diag = client.diagnose()
+
+    assert [c.name for c in diag.checks] == CHECK_NAMES
+    assert next(c for c in diag.checks if c.name == "api_preflight").ok is False
+
+
+def test_a_base_url_with_no_host_fails_the_base_url_check(credentials):
+    """`getaddrinfo("", 443)` resolves to loopback, so DNS must not be allowed to 'pass'."""
+    with _client("https:///v1", credentials) as client:
+        diag = client.diagnose()
+
+    base = next(c for c in diag.checks if c.name == "base_url")
+    assert base.ok is False
+    assert next(c for c in diag.checks if c.name == "dns").skipped is True
+
+
+def test_ipv6_literals_keep_their_brackets_in_the_report(credentials):
+    with _client("https://[2001:db8::1]:8443/v1", credentials) as client:
+        report = client.diagnose().report()
+
+    assert "https://[2001:db8::1]:8443/v1" in report
+
+
+# -- Response bodies and full URLs must never reach the report or the log ----
+
+
+def test_response_bodies_are_never_captured(httpserver, credentials):
+    secret = "SUPER-SECRET-BODY-abc123"
+    httpserver.expect_request("/api/accounts", method="GET").respond_with_json(
+        {"leak": secret}, status=500
+    )
+
+    with _client(httpserver.url_for("").rstrip("/"), credentials) as client:
+        diag = client.diagnose()
+
+    assert secret not in diag.report()
+    assert secret not in json.dumps(diag.as_dict())
+
+
+def test_the_log_records_the_path_only_never_the_full_url(httpserver, credentials, caplog):
+    """A base url can carry userinfo, and httpx.URL.__str__ preserves it."""
+    host = httpserver.url_for("").rstrip("/").split("://", 1)[1]
+    httpserver.expect_request("/api/accounts", method="GET").respond_with_json([])
+
+    with (
+        caplog.at_level(logging.DEBUG, logger="open_banking_io"),
+        _client(f"http://alice:hunter2@{host}", credentials) as client,
+    ):
+        client.get_accounts()
+
+    joined = " ".join(r.getMessage() for r in caplog.records if r.name == "open_banking_io")
+    assert "/api/accounts" in joined
+    assert "hunter2" not in joined
+    assert "alice" not in joined

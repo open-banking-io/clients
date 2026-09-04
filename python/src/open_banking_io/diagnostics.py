@@ -17,7 +17,7 @@ import time
 from dataclasses import dataclass, field
 from importlib.metadata import PackageNotFoundError, version
 from typing import Any
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import SplitResult, urlsplit, urlunsplit
 
 import httpx
 
@@ -111,14 +111,43 @@ def _package_version(name: str) -> str:
         return "unknown"
 
 
+_PROBE_TIMEOUT = 10.0
+
+
+def _port(parts: SplitResult) -> int | None:
+    """``SplitResult.port`` is a property that raises on an out-of-range value."""
+    try:
+        return parts.port
+    except ValueError:
+        return None
+
+
+def _port_is_invalid(parts: SplitResult) -> bool:
+    try:
+        _ = parts.port
+    except ValueError:
+        return True
+    return False
+
+
+def _default_port(scheme: str) -> int:
+    return 443 if scheme == "https" else 80
+
+
 def _safe_url(url: str) -> str:
     """The base url with any userinfo, query and fragment removed -- a base url may carry
     proxy or basic-auth credentials, and this string is written into the report."""
-    parts = urlsplit(url)
-    host = parts.hostname or ""
-    if parts.port:
-        host = f"{host}:{parts.port}"
-    return urlunsplit((parts.scheme, host, parts.path, "", ""))
+    try:
+        parts = urlsplit(url)
+        host = parts.hostname or ""
+        if ":" in host:  # an IPv6 literal keeps its brackets or the result is unparseable
+            host = f"[{host}]"
+        port = _port(parts)
+        if port is not None:
+            host = f"{host}:{port}"
+        return urlunsplit((parts.scheme, host, parts.path, "", ""))
+    except Exception:
+        return "<unparseable base url>"
 
 
 def _environment(api_key: str, base_url: str) -> dict[str, str]:
@@ -148,94 +177,131 @@ class _Timer:
     ms: float = 0.0
 
 
-def run(http: httpx.Client, base_url: str, api_key: str) -> Diagnostics:
-    """Probes each stage of the connection in order and collects the results."""
-    diag = Diagnostics(environment=_environment(api_key, base_url))
+_CHECK_NAMES = ("base_url", "dns", "tcp_connect", "tls_handshake", "api_preflight")
 
+
+def _guard(name: str, fn: Any) -> Check:
+    """Runs one stage. Any exception becomes a failed check -- a diagnostic that raises is
+    useless, and it is fed exactly the malformed input a caller could not debug themselves."""
+    with _Timer() as t:
+        try:
+            ok, detail = fn()
+        except Exception as e:  # deliberate: never propagate out of diagnose()
+            ok, detail = False, f"{type(e).__name__}: {e}"
+    return Check(name, ok, detail, t.ms)
+
+
+def run(http: httpx.Client, base_url: str, api_key: str) -> Diagnostics:
+    """Probes each stage of the connection in order and collects the results.
+
+    Never raises. Every stage is guarded, and the returned report always carries all five
+    checks so a caller can index them unconditionally.
+    """
+    try:
+        env = _environment(api_key, base_url)
+    except Exception as e:
+        env = {"error": f"could not collect environment: {type(e).__name__}: {e}"}
+
+    results: dict[str, Check] = {}
+
+    def skip(name: str, why: str = "an earlier stage failed") -> None:
+        results[name] = Check(name, False, f"not attempted ({why})", skipped=True)
+
+    # -- base url --------------------------------------------------------------
     parts = urlsplit(base_url)
     scheme = (parts.scheme or "").lower()
     host = parts.hostname or ""
-    port = parts.port or (443 if scheme == "https" else 80)
+    port_value = _port(parts)
 
-    diag.checks.append(
-        Check(
-            "base_url",
-            True,
-            f"{_safe_url(base_url)!r} -> host={host!r} port={port} scheme={scheme}",
-        )
-    )
+    def check_base_url() -> tuple[bool, str]:
+        shown = _safe_url(base_url)
+        if not host:
+            return False, f"{shown!r} has no host"
+        if _port_is_invalid(parts):
+            return False, f"{shown!r} has a port outside 1-65535"
+        shown_port = port_value or _default_port(scheme)
+        return True, f"{shown!r} -> host={host!r} port={shown_port} scheme={scheme}"
 
-    def skip(name: str, why: str = "an earlier stage failed") -> None:
-        diag.checks.append(Check(name, False, f"not attempted ({why})", skipped=True))
+    results["base_url"] = _guard("base_url", check_base_url)
+    port = port_value or _default_port(scheme)
 
-    # The probes below open their own sockets, so they bypass any proxy and any custom TLS
-    # configuration on the caller's httpx client. They localise a fault; they do not decide
-    # the verdict -- the preflight through the configured transport does.
-    with _Timer() as t:
-        try:
+    if not results["base_url"].ok:
+        skip("dns", "the base url is unusable")
+        skip("tcp_connect", "the base url is unusable")
+        skip("tls_handshake", "the base url is unusable")
+    else:
+        # The probes below open their own sockets, so they bypass any proxy and any custom
+        # TLS configuration on the caller's httpx client. They localise a fault; they do not
+        # decide the verdict -- the preflight through the configured transport does.
+        def check_dns() -> tuple[bool, str]:
             infos = socket.getaddrinfo(host, port, proto=socket.IPPROTO_TCP)
             addresses = sorted({str(info[4][0]) for info in infos})
-            dns_ok, dns_detail = True, f"{host} -> {', '.join(addresses)}"
-        except OSError as e:
-            dns_ok, dns_detail = False, f"could not resolve {host!r}: {e}"
-    diag.checks.append(Check("dns", dns_ok, dns_detail, t.ms))
+            return True, f"{host} -> {', '.join(addresses)}"
 
-    tcp_ok = False
-    if not dns_ok:
-        skip("tcp_connect")
-    else:
-        with _Timer() as t:
-            try:
-                with socket.create_connection((host, port), timeout=10.0):
-                    tcp_ok, tcp_detail = True, f"connected to {host}:{port}"
-            except OSError as e:
-                tcp_ok, tcp_detail = False, f"could not connect to {host}:{port}: {e}"
-        diag.checks.append(Check("tcp_connect", tcp_ok, tcp_detail, t.ms))
+        results["dns"] = _guard("dns", check_dns)
 
-    if not tcp_ok:
-        skip("tls_handshake")
-    elif scheme != "https":
-        diag.checks.append(Check("tls_handshake", True, "skipped (plain http)"))
-    else:
-        with _Timer() as t:
-            try:
-                ctx = ssl.create_default_context()
-                # CodeQL: pin the floor so TLS 1.0/1.1 are never negotiated by the probe.
-                ctx.minimum_version = ssl.TLSVersion.TLSv1_2
-                with (
-                    socket.create_connection((host, port), timeout=10.0) as raw,
-                    ctx.wrap_socket(raw, server_hostname=host) as tls,
-                ):
-                    cert: Any = tls.getpeercert() or {}
-                    issuer = "unknown"
-                    for rdn in cert.get("issuer", ()):
-                        for key, value in rdn:
-                            if key == "organizationName":
-                                issuer = value
-                    cipher = tls.cipher()
-                    tls_ok = True
-                    tls_detail = (
-                        f"{tls.version()} {cipher[0] if cipher else ''} "
-                        f"issuer={issuer!r} notAfter={cert.get('notAfter', 'unknown')}"
-                    )
-            except (OSError, ssl.SSLError) as e:
-                tls_ok, tls_detail = False, f"TLS handshake failed: {e}"
-        diag.checks.append(Check("tls_handshake", tls_ok, tls_detail, t.ms))
+        if not results["dns"].ok:
+            skip("tcp_connect")
+            skip("tls_handshake")
+        else:
 
+            def check_tcp() -> tuple[bool, str]:
+                with socket.create_connection((host, port), timeout=_PROBE_TIMEOUT):
+                    return True, f"connected to {host}:{port}"
+
+            results["tcp_connect"] = _guard("tcp_connect", check_tcp)
+
+            if not results["tcp_connect"].ok:
+                skip("tls_handshake")
+            elif scheme != "https":
+                results["tls_handshake"] = Check(
+                    "tls_handshake", True, "not applicable (plain http)", skipped=True
+                )
+            else:
+
+                def check_tls() -> tuple[bool, str]:
+                    ctx = ssl.create_default_context()
+                    # Pin the floor so the probe can never negotiate TLS 1.0/1.1.
+                    ctx.minimum_version = ssl.TLSVersion.TLSv1_2
+                    with (
+                        socket.create_connection((host, port), timeout=_PROBE_TIMEOUT) as raw,
+                        ctx.wrap_socket(raw, server_hostname=host) as tls,
+                    ):
+                        cert: Any = tls.getpeercert() or {}
+                        issuer = "unknown"
+                        for rdn in cert.get("issuer", ()):
+                            for pair in rdn:
+                                if len(pair) == 2 and pair[0] == "organizationName":
+                                    issuer = pair[1]
+                        cipher = tls.cipher()
+                        return True, (
+                            f"{tls.version()} {cipher[0] if cipher else ''} "
+                            f"issuer={issuer!r} notAfter={cert.get('notAfter', 'unknown')}"
+                        )
+
+                results["tls_handshake"] = _guard("tls_handshake", check_tls)
+
+    # -- preflight -------------------------------------------------------------
     # Always attempted, whatever the probes said: this is the request the SDK actually makes,
     # through the caller's configured transport. Only the status is reported, never the body.
-    with _Timer() as t:
-        try:
-            resp = http.get("api/accounts")
-            pre_ok = resp.status_code == 200
-            pre_detail = f"GET api/accounts -> HTTP {resp.status_code}"
-            if resp.status_code == 401:
-                pre_detail += " (the API key was rejected)"
-        except httpx.HTTPError as e:
-            pre_ok, pre_detail = False, f"GET api/accounts failed: {type(e).__name__}: {e}"
-    if pre_ok and not all(c.ok for c in diag.checks):
-        pre_detail += " -- the request succeeded, so the failing probes above are most likely "
-        pre_detail += "a proxy or custom TLS setup they bypass, not a real fault"
-    diag.checks.append(Check("api_preflight", pre_ok, pre_detail, t.ms))
+    def check_preflight() -> tuple[bool, str]:
+        resp = http.get("api/accounts")
+        detail = f"GET api/accounts -> HTTP {resp.status_code}"
+        if resp.status_code == 401:
+            detail += " (the API key was rejected)"
+        return resp.status_code == 200, detail
 
-    return diag
+    preflight = _guard("api_preflight", check_preflight)
+    if preflight.ok and not all(results[n].ok for n in results):
+        preflight.detail += (
+            " -- the request succeeded, so the failing probes above are most likely "
+            "a proxy or custom TLS setup they bypass, not a real fault"
+        )
+    results["api_preflight"] = preflight
+
+    return Diagnostics(
+        checks=[
+            results.get(n) or Check(n, False, "not attempted", skipped=True) for n in _CHECK_NAMES
+        ],
+        environment=env,
+    )
