@@ -163,7 +163,7 @@ const finish = (res, flow, outcome) =>
     : res.send(closePage(outcome));
 const closePage = (
   outcome,
-) => `<!doctype html><p>${outcome === "connected" ? "Connected — you can close this window." : "Cancelled."}</p>
+) => `<!doctype html><p>${outcome === "connected" ? "Connected — you can close this window." : outcome === "unavailable" ? "Unavailable right now — try again later." : "Cancelled."}</p>
 <script>try{new BroadcastChannel("bank-connect").postMessage(${JSON.stringify(outcome)})}catch{}setTimeout(()=>window.close(),300)</script>`;
 
 // 3. Read (inside any handler that has the stored token): the token plus your decryption key —
