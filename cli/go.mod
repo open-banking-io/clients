@@ -3,7 +3,7 @@ module github.com/open-banking-io/clients/cli
 go 1.25.0
 
 require (
-	github.com/open-banking-io/clients/go v0.3.0
+	github.com/open-banking-io/clients/go v0.4.1
 	golang.org/x/term v0.45.0
 )
 

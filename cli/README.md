@@ -37,6 +37,9 @@ go install github.com/open-banking-io/clients/cli@latest
 openbanking login                       # sign in + unlock in the browser — sets up everything
 openbanking login --method github       # skip the picker (or --method pin for an emailed code)
 openbanking key import ./credentials.json   # (fallback) import a key file on a headless machine
+openbanking partner key generate        # partners: make your decryption key pair (recipient-key.json, 0600)
+openbanking partner key fingerprint -   # …print the fingerprint of a key (file, pkcs8 or raw point on stdin)
+openbanking partner key answer --key recipient-key.json <envelope>   # …answer the install challenge
 openbanking accounts                    # list accounts with balances        (alias: acc, ls)
 openbanking use                         # pick a current account (arrow keys) — or: use <account-id>
 openbanking transactions                # the current account's statement     (alias: tx)
