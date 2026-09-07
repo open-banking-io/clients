@@ -17,10 +17,16 @@ export interface RecipientKeyPair {
  * where your deployment can read it — the service never sees it and cannot recover it.
  */
 export async function generateRecipientKeyPair(): Promise<RecipientKeyPair> {
-  const pair = await subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, true, ["deriveBits"]);
+  const pair = await subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, true, [
+    "deriveBits",
+  ]);
   return {
-    privateKeyPkcs8Base64: Buffer.from(await subtle.exportKey("pkcs8", pair.privateKey)).toString("base64"),
-    publicKeyRawBase64: Buffer.from(await subtle.exportKey("raw", pair.publicKey)).toString("base64"),
+    privateKeyPkcs8Base64: Buffer.from(await subtle.exportKey("pkcs8", pair.privateKey)).toString(
+      "base64",
+    ),
+    publicKeyRawBase64: Buffer.from(await subtle.exportKey("raw", pair.publicKey)).toString(
+      "base64",
+    ),
   };
 }
 
@@ -29,7 +35,10 @@ export async function generateRecipientKeyPair(): Promise<RecipientKeyPair> {
  * point, lowercase hex, first 16 characters. Print it at boot and compare after every deploy.
  */
 export function recipientKeyFingerprint(publicKeyRawBase64: string): string {
-  return createHash("sha256").update(Buffer.from(publicKeyRawBase64, "base64")).digest("hex").slice(0, 16);
+  return createHash("sha256")
+    .update(Buffer.from(publicKeyRawBase64, "base64"))
+    .digest("hex")
+    .slice(0, 16);
 }
 
 /** The raw public point of a PKCS#8 private key — to fingerprint or re-install the key you hold. */
@@ -43,9 +52,11 @@ export async function recipientPublicKey(privateKeyPkcs8Base64: string): Promise
   );
   const jwk = await subtle.exportKey("jwk", key);
   if (!jwk.x || !jwk.y) throw new Error("The private key carries no public point");
-  return Buffer.concat([Buffer.from([0x04]), Buffer.from(jwk.x, "base64url"), Buffer.from(jwk.y, "base64url")]).toString(
-    "base64",
-  );
+  return Buffer.concat([
+    Buffer.from([0x04]),
+    Buffer.from(jwk.x, "base64url"),
+    Buffer.from(jwk.y, "base64url"),
+  ]).toString("base64");
 }
 
 /**
@@ -56,8 +67,12 @@ export async function answerRecipientKeyChallenge(
   privateKeyPkcs8Base64: string,
   envelopeBase64: string,
 ): Promise<string> {
-  const payload = await decryptTo<{ nonce?: unknown }>(await importPrivateKey(privateKeyPkcs8Base64), envelopeBase64);
+  const payload = await decryptTo<{ nonce?: unknown }>(
+    await importPrivateKey(privateKeyPkcs8Base64),
+    envelopeBase64,
+  );
   const nonce = payload?.nonce;
-  if (typeof nonce !== "string" || nonce.length === 0) throw new Error("The challenge envelope carries no nonce");
+  if (typeof nonce !== "string" || nonce.length === 0)
+    throw new Error("The challenge envelope carries no nonce");
   return nonce;
 }
