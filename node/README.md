@@ -134,9 +134,10 @@ app.post("/callback", express.urlencoded({ extended: false }), async (req, res) 
   } catch (e) {
     if (e instanceof RelayError && e.code === "access_denied")
       return finish(res, flow, "cancelled");
-    if (e instanceof RelayError && e.reason === "partner_key_missing") {
-      // Your side, not the bank's: install the key on your partner page.
-      console.error("decryption key not installed");
+    if (e instanceof RelayError && e.reason) {
+      // partner_key_missing or partner_suspended: your side, not the bank's — install the key on
+      // your partner page, or write to us. The user only sees "unavailable".
+      console.error("connect refused:", e.reason);
       return finish(res, flow, "unavailable");
     }
     throw e;
