@@ -49,10 +49,33 @@ Every request carries a `User-Agent: open-banking-io/node/<version>` header and 
 
 ## Partner Connect (OAuth 2.0 + PKCE)
 
-Partners let their users connect banks through open-banking.io and receive a delegated key plus the
-user's private key — a standard authorization-code flow with PKCE and `form_post`, documented at
-[open-banking.io/en/docs/partners](https://open-banking.io/en/docs/partners). The `connect` helpers
-cover every step; keep the client secret and the verifier on your server.
+Partners let their users connect banks through open-banking.io — a standard authorization-code
+flow with PKCE and `form_post`, documented at
+[open-banking.io/en/docs/partners](https://open-banking.io/en/docs/partners). You hold your own
+**decryption key**: every user who connects through your client is encrypted to it, and you
+decrypt their data with the one private half your deployment loads. The service keeps only the
+public half and cannot recover the private one. Install it first — until you do, a Connect
+client cannot be registered and every authorization answers `temporarily_unavailable`.
+
+```ts
+import {
+  answerRecipientKeyChallenge,
+  generateRecipientKeyPair,
+  recipientKeyFingerprint,
+  recipientPublicKey,
+} from "@open-banking-io/client";
+
+// 0. Once: generate the pair, keep privateKeyPkcs8Base64 in your secret store, and install
+//    publicKeyRawBase64 on your partner page (https://open-banking.io/app/partner#decryption-key
+//    does all of this in the browser, if you prefer). Print the fingerprint at boot and compare it
+//    with the one the partner page shows after every deploy.
+const pair = await generateRecipientKeyPair();
+console.log(recipientKeyFingerprint(pair.publicKeyRawBase64));
+// Bringing a key generated elsewhere? The partner page hands you an envelope to prove you hold it:
+const answer = await answerRecipientKeyChallenge(RECIPIENT_PRIVATE_KEY, envelope);
+```
+
+The flow itself: keep the client secret and the verifier on your server.
 
 ```ts
 import {
@@ -69,6 +92,8 @@ import {
 const ISSUER = "https://open-banking.io";
 
 // 1. Start: keep the verifier server-side, keyed by state, and send the browser to the URL.
+//    challenge: "pin_code" gives the user a typed code instead of a magic link — recommended for
+//    every journey, and required for a popup.
 app.get("/connect", async (req, res) => {
   const pkce = createPkce();
   const state = createState();
@@ -78,7 +103,7 @@ app.get("/connect", async (req, res) => {
     verifier: pkce.verifier,
     sessionId: req.session.id,
     mode,
-    expiresAt: Date.now() + 600_000,
+    expiresAt: Date.now() + 45 * 60_000,
   });
   res.redirect(
     buildAuthorizeUrl({
@@ -87,12 +112,12 @@ app.get("/connect", async (req, res) => {
       redirectUri: `${SELF_URL}/callback`,
       state,
       codeChallenge: pkce.challenge,
-      ...(mode === "popup" && { challenge: "pin_code" }),
+      challenge: "pin_code",
     }),
   );
 });
 
-// 2. Callback: the consent page form-posts code, state, iss, privateKey and publicKey — or
+// 2. Callback: the consent page form-posts code, state, iss and (empty) privateKey/publicKey — or
 //    error=access_denied when the user went back to you. Consume the flow by state first, so a
 //    cancel consumes it too; the lookup is what binds the POST to the session that started it.
 app.post("/callback", express.urlencoded({ extended: false }), async (req, res) => {
@@ -101,10 +126,20 @@ app.post("/callback", express.urlencoded({ extended: false }), async (req, res) 
   if (!flow || flow.expiresAt < Date.now()) return res.status(400).send("unknown or expired state");
   let relay;
   try {
-    relay = parseRelay(req.body, { expectedState: flow.state, issuer });
+    relay = parseRelay(req.body, {
+      expectedState: flow.state,
+      issuer,
+      expectPrivateKey: "optional",
+    });
   } catch (e) {
     if (e instanceof RelayError && e.code === "access_denied")
       return finish(res, flow, "cancelled");
+    if (e instanceof RelayError && e.reason) {
+      // partner_key_missing or partner_suspended: your side, not the bank's — install the key on
+      // your partner page, or write to us. The user only sees "unavailable".
+      console.error("connect refused:", e.reason);
+      return finish(res, flow, "unavailable");
+    }
     throw e;
   }
   const token = await exchangeCode({
@@ -115,7 +150,9 @@ app.post("/callback", express.urlencoded({ extended: false }), async (req, res) 
     codeVerifier: flow.verifier,
     redirectUri: `${SELF_URL}/callback`,
   });
-  await bundles.put(flow.sessionId, { token, privateKey: relay.privateKey });
+  // One key per deployment, so store the token alone. A user who connected before your key was
+  // installed still relays their own private key — keep it with their token when present.
+  await bundles.put(flow.sessionId, { token, legacyPrivateKey: relay.privateKey || undefined });
   finish(res, flow, "connected");
 });
 
@@ -126,20 +163,26 @@ const finish = (res, flow, outcome) =>
     : res.send(closePage(outcome));
 const closePage = (
   outcome,
-) => `<!doctype html><p>${outcome === "connected" ? "Connected — you can close this window." : "Cancelled."}</p>
+) => `<!doctype html><p>${outcome === "connected" ? "Connected — you can close this window." : outcome === "unavailable" ? "Unavailable right now — try again later." : "Cancelled."}</p>
 <script>try{new BroadcastChannel("bank-connect").postMessage(${JSON.stringify(outcome)})}catch{}setTimeout(()=>window.close(),300)</script>`;
 
-// 3. Read (inside any handler that has the stored pair): the token plus the relayed private key
-//    is a complete credentials bundle.
-const { token, privateKey } = await bundles.get(req.session.id);
-const client = OpenBankingClient.fromTokenResponse(token, privateKey);
+// 3. Read (inside any handler that has the stored token): the token plus your decryption key —
+//    or the user's own key, for the few who connected before you had one — is a complete bundle.
+const { token, legacyPrivateKey } = await bundles.get(req.session.id);
+const client = OpenBankingClient.fromTokenResponse(
+  token,
+  legacyPrivateKey ?? RECIPIENT_PRIVATE_KEY,
+);
 const accounts = await client.getAccounts();
 ```
 
 `parseRelay` throws a `RelayError` (`access_denied` — the user cancelled, a normal outcome —
-`oauth_error`, `state_mismatch`, `issuer_mismatch`, `missing_code`, `missing_private_key`) and compares `state` and `iss` in constant time;
-`exchangeCode`, `revokeToken` and `userinfo` throw an `OAuthError` carrying the RFC 6749 `error`
-and `error_description`. An `invalid_grant` is terminal for that code — restart the flow.
+`oauth_error`, `state_mismatch`, `issuer_mismatch`, `missing_code`, `missing_private_key`) and
+compares `state` and `iss` in constant time. On an `oauth_error`, `reason` is `partner_key_missing`
+or `partner_suspended` when the server said so in as many words. `exchangeCode`, `revokeToken` and
+`userinfo` throw an `OAuthError` carrying the RFC 6749 `error` and `error_description`. An
+`invalid_grant` is terminal for that code — restart the flow. A flow is valid for 45 minutes on the
+server; keep your own `state` at least that long.
 
 ## Money
 

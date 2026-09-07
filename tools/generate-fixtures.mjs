@@ -9,7 +9,7 @@
 // Note: crypto uses randomness, so re-running produces new (equally valid) fixtures.
 // The SDKs verify by decrypting to the committed `expected.json`, not by byte-equality.
 
-import { webcrypto as crypto } from 'node:crypto';
+import { createHash, webcrypto as crypto } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -84,6 +84,14 @@ const main = async () => {
     transaction: await encryptEnvelope(publicRaw, expected.transaction),
   };
 
+  // --- partner recipient-key possession challenge (what /api/partners/mine/recipient-key/challenge seals) ---
+  const challengeNonce = b64(crypto.getRandomValues(new Uint8Array(32)));
+  const recipientKeyChallenge = {
+    fingerprint: createHash('sha256').update(publicRaw).digest('hex').slice(0, 16),
+    nonce: challengeNonce,
+    envelope: await encryptEnvelope(publicRaw, { nonce: challengeNonce }),
+  };
+
   // --- credentials bundle (what the app exports) ---
   const credentials = {
     service: 'open-banking.io',
@@ -148,6 +156,7 @@ const main = async () => {
   // --- write everything ---
   mkdirSync(join(FIX, 'api'), { recursive: true });
   const w = (p, o) => writeFileSync(join(FIX, p), JSON.stringify(o, null, 2) + '\n');
+  w('recipient-key-challenge.json', recipientKeyChallenge);
   w('keypair.json', { privateKeyPkcs8B64: privatePkcs8, publicKeyRawB64: publicRawB64 });
   w('credentials.json', credentials);
   w('envelopes.json', envelopes);
