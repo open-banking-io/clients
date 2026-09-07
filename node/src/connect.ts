@@ -93,7 +93,8 @@ export type RelayErrorCode =
 export const PARTNER_KEY_MISSING_DESCRIPTION =
   "this partner has not installed its decryption key; no authorizations can be started until it does";
 /** The `error_description` the server relays while the partner is suspended. */
-export const PARTNER_SUSPENDED_DESCRIPTION = "this partner is suspended; no authorizations can be started";
+export const PARTNER_SUSPENDED_DESCRIPTION =
+  "this partner is suspended; no authorizations can be started";
 
 /**
  * Why a `temporarily_unavailable` was relayed, when the server said so in the pinned words. Both

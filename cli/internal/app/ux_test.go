@@ -172,7 +172,7 @@ func TestCompletionScripts(t *testing.T) {
 		if err := app.Run([]string{"completion", shell}); err != nil {
 			t.Fatalf("completion %s: %v", shell, err)
 		}
-		for _, want := range []string{"openbanking", "accounts", "tx", "partner"} {
+		for _, want := range []string{"openbanking", "accounts", "tx"} {
 			if !strings.Contains(out.String(), want) {
 				t.Errorf("completion %s missing %q:\n%s", shell, want, out.String())
 			}

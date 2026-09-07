@@ -24,7 +24,6 @@ func (a *App) commands() []command {
 		{name: "connections", aliases: []string{"conn"}, short: "List your bank connections", run: (*App).connections},
 		{name: "banks", short: "List banks available to connect (--country)", run: (*App).banks},
 		{name: "key", short: "Import your encryption key (key import [<file>])", run: (*App).key},
-		{name: "partner", short: "Partner tooling: your decryption key (partner key generate|fingerprint|answer)", run: (*App).partner},
 		{name: "completion", short: "Output a shell completion script (bash|zsh|fish)", run: (*App).completion},
 		{name: "version", aliases: []string{"--version", "-v"}, short: "Print the openbanking version", run: (*App).versionCmd, hidden: true},
 		{name: "help", aliases: []string{"-h", "--help"}, short: "Show this help", run: (*App).helpCmd, hidden: true},

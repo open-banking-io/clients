@@ -198,17 +198,22 @@ describe("parseRelay", () => {
       publicKey: "",
     });
     expect(() => parseRelay(keyMode, { expectedState: "s123" })).toThrow(/private key/);
-    expect(() => parseRelay(keyMode, { expectedState: "s123", expectPrivateKey: "required" })).toThrow(
-      /private key/,
-    );
+    expect(() =>
+      parseRelay(keyMode, { expectedState: "s123", expectPrivateKey: "required" }),
+    ).toThrow(/private key/);
     // A relayed key is still returned when present.
-    expect(parseRelay(relay, { expectedState: "s123", expectPrivateKey: "optional" }).privateKey).toBe("pk");
+    expect(
+      parseRelay(relay, { expectedState: "s123", expectPrivateKey: "optional" }).privateKey,
+    ).toBe("pk");
   });
 
   it("names the partner-side refusals by reason, so a handler can tell 'install your key' from an outage", () => {
     const refused = (error_description: string) => {
       try {
-        parseRelay({ error: "temporarily_unavailable", error_description, state: "s123" }, { expectedState: "s123" });
+        parseRelay(
+          { error: "temporarily_unavailable", error_description, state: "s123" },
+          { expectedState: "s123" },
+        );
         expect.unreachable();
       } catch (e) {
         return e as RelayError;
@@ -218,7 +223,9 @@ describe("parseRelay", () => {
     expect(PARTNER_KEY_MISSING_DESCRIPTION).toBe(
       "this partner has not installed its decryption key; no authorizations can be started until it does",
     );
-    expect(PARTNER_SUSPENDED_DESCRIPTION).toBe("this partner is suspended; no authorizations can be started");
+    expect(PARTNER_SUSPENDED_DESCRIPTION).toBe(
+      "this partner is suspended; no authorizations can be started",
+    );
 
     const missing = refused(PARTNER_KEY_MISSING_DESCRIPTION);
     expect(missing.code).toBe("oauth_error");
