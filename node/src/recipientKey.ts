@@ -13,7 +13,7 @@ export interface RecipientKeyPair {
 
 /**
  * Generates the P-256 pair a partner installs on open-banking.io. The public half goes into
- * `PUT /api/partners/mine/recipient-key` (or the partner page's paste box); keep the private half
+ * `PUT /api/partner/recipient-key` (or the partner page's paste box); keep the private half
  * where your deployment can read it — the service never sees it and cannot recover it.
  */
 export async function generateRecipientKeyPair(): Promise<RecipientKeyPair> {
@@ -49,7 +49,7 @@ export async function recipientPublicKey(privateKeyPkcs8Base64: string): Promise
 }
 
 /**
- * Answers the possession challenge from `POST /api/partners/mine/recipient-key/challenge`: opens
+ * Answers the possession challenge from `POST /api/partner/recipient-key/challenge`: opens
  * the envelope with the private half and returns the nonce — the `challengeAnswer` for the install.
  */
 export async function answerRecipientKeyChallenge(
