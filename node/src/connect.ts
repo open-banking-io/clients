@@ -89,6 +89,25 @@ export type RelayErrorCode =
   | "missing_code"
   | "missing_private_key";
 
+/** The `error_description` the server relays when the partner has not installed its decryption key. */
+export const PARTNER_KEY_MISSING_DESCRIPTION =
+  "this partner has not installed its decryption key; no authorizations can be started until it does";
+/** The `error_description` the server relays while the partner is suspended. */
+export const PARTNER_SUSPENDED_DESCRIPTION = "this partner is suspended; no authorizations can be started";
+
+/**
+ * Why a `temporarily_unavailable` was relayed, when the server said so in the pinned words. Both
+ * are on your side, not the bank's: install the key on your partner page, or write to us.
+ */
+export type RelayRefusalReason = "partner_key_missing" | "partner_suspended";
+
+function refusalReason(error: string, description: string): RelayRefusalReason | undefined {
+  if (error !== "temporarily_unavailable") return undefined;
+  if (description === PARTNER_KEY_MISSING_DESCRIPTION) return "partner_key_missing";
+  if (description === PARTNER_SUSPENDED_DESCRIPTION) return "partner_suspended";
+  return undefined;
+}
+
 /**
  * Thrown by {@link parseRelay}. `code` says why: `access_denied` is the user pressing "Back to the
  * partner" or declining (a normal outcome), `oauth_error` any other error the server relayed (the
@@ -98,6 +117,8 @@ export class RelayError extends Error {
   readonly code: RelayErrorCode;
   readonly error?: string;
   readonly errorDescription?: string;
+  /** Set on an `oauth_error` whose description names a partner-side refusal. */
+  readonly reason?: RelayRefusalReason;
 
   constructor(
     code: RelayErrorCode,
@@ -109,6 +130,7 @@ export class RelayError extends Error {
     this.code = code;
     this.error = oauth?.error;
     this.errorDescription = oauth?.errorDescription;
+    this.reason = oauth ? refusalReason(oauth.error, oauth.errorDescription ?? "") : undefined;
   }
 }
 
@@ -119,6 +141,12 @@ export interface ParseRelayOptions {
   issuer?: string;
   /** Require `iss` to be present even when `issuer` is not checked. Default: only when `issuer` is set. */
   requireIss?: boolean;
+  /**
+   * Whether the relay must carry the user's private key. A partner that installed its own
+   * decryption key receives `privateKey=""` for every user who connected under it and decrypts
+   * with that key instead — pass `"optional"`. Default `"required"`, the 1.1.0 behaviour.
+   */
+  expectPrivateKey?: "required" | "optional";
 }
 
 /** A form body, `URLSearchParams`, parsed body object, or JSON string. */
@@ -166,7 +194,9 @@ export function parseRelay(input: RelayInput, options: ParseRelayOptions): Conne
   const code = read("code");
   if (!code) throw new RelayError("missing_code", "The relay carries no authorization code");
   const privateKey = read("privateKey");
-  if (!privateKey) throw new RelayError("missing_private_key", "The relay carries no private key");
+  if (!privateKey && (options.expectPrivateKey ?? "required") === "required") {
+    throw new RelayError("missing_private_key", "The relay carries no private key");
+  }
 
   return { code, state: read("state"), iss, privateKey, publicKey: read("publicKey") };
 }
@@ -359,6 +389,10 @@ export interface ServerMetadata {
     bearer_supported: boolean;
     login_challenges_supported?: string[];
     key_relay: { response_mode: string; fields: string[] };
+    /** The server accepts a partner-held decryption key (always true on current servers). */
+    recipient_key_supported?: boolean;
+    /** Every partner must hold one before it can register a client or start an authorization. */
+    recipient_key_required?: boolean;
     documentation: string;
   };
 }

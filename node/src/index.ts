@@ -1,6 +1,13 @@
 export { OpenBankingClient } from "./client.js";
 export { decryptEnvelope, decryptTo, importPrivateKey } from "./envelope.js";
 export {
+  answerRecipientKeyChallenge,
+  generateRecipientKeyPair,
+  recipientKeyFingerprint,
+  recipientPublicKey,
+} from "./recipientKey.js";
+export type { RecipientKeyPair } from "./recipientKey.js";
+export {
   buildAuthorizeUrl,
   bundleFromToken,
   CONNECT_RELAY_FIELDS,
@@ -10,6 +17,8 @@ export {
   exchangeCode,
   OAuthError,
   parseRelay,
+  PARTNER_KEY_MISSING_DESCRIPTION,
+  PARTNER_SUSPENDED_DESCRIPTION,
   pkceChallenge,
   RelayError,
   revokeToken,
@@ -24,6 +33,7 @@ export type {
   Pkce,
   RelayErrorCode,
   RelayInput,
+  RelayRefusalReason,
   RevokeTokenOptions,
   ServerMetadata,
   TokenResponse,

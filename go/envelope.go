@@ -120,3 +120,29 @@ func decryptTo(privateKey *ecdh.PrivateKey, envelopeB64 string, out any) (bool, 
 	}
 	return true, nil
 }
+
+// DecryptEnvelope opens a base64 zero-knowledge envelope with a base64 PKCS#8 P-256 private key
+// and returns the plaintext. The client does this for you on every read; it is exported for
+// tooling that holds a key without an API session — the CLI's `partner key answer`, which opens
+// the possession challenge a partner receives when installing its decryption key.
+func DecryptEnvelope(privateKeyPKCS8B64, envelopeB64 string) ([]byte, error) {
+	priv, err := loadPrivateKey(privateKeyPKCS8B64)
+	if err != nil {
+		return nil, err
+	}
+	raw, err := base64.StdEncoding.DecodeString(envelopeB64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid base64 envelope: %w", err)
+	}
+	return decryptEnvelope(priv, raw)
+}
+
+// DecryptTo opens a base64 envelope with a base64 PKCS#8 P-256 private key and unmarshals its
+// JSON payload into out. An empty envelope leaves out untouched and reports false.
+func DecryptTo(privateKeyPKCS8B64, envelopeB64 string, out any) (bool, error) {
+	priv, err := loadPrivateKey(privateKeyPKCS8B64)
+	if err != nil {
+		return false, err
+	}
+	return decryptTo(priv, envelopeB64, out)
+}

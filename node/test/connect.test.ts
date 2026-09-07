@@ -13,6 +13,8 @@ import {
   OAuthError,
   OpenBankingClient,
   parseRelay,
+  PARTNER_KEY_MISSING_DESCRIPTION,
+  PARTNER_SUSPENDED_DESCRIPTION,
   pkceChallenge,
   RelayError,
   revokeToken,
@@ -181,6 +183,49 @@ describe("parseRelay", () => {
     expect(() =>
       parseRelay({ ...relay, privateKey: undefined }, { expectedState: "s123" }),
     ).toThrow(/private key/);
+  });
+
+  it("returns an empty private key when the partner holds its own key and the caller says so", () => {
+    // Key-mode servers relay privateKey="" and publicKey="" for every user of a partner that
+    // installed a recipient key. The caller opts in; the 1.1.0 behaviour stays the default so a
+    // caller who still expects the key does not get a later unhandled rejection instead.
+    const keyMode = { code: "code1", state: "s123", iss: ISSUER, privateKey: "", publicKey: "" };
+    expect(parseRelay(keyMode, { expectedState: "s123", expectPrivateKey: "optional" })).toEqual({
+      code: "code1",
+      state: "s123",
+      iss: ISSUER,
+      privateKey: "",
+      publicKey: "",
+    });
+    expect(() => parseRelay(keyMode, { expectedState: "s123" })).toThrow(/private key/);
+    expect(() => parseRelay(keyMode, { expectedState: "s123", expectPrivateKey: "required" })).toThrow(
+      /private key/,
+    );
+    // A relayed key is still returned when present.
+    expect(parseRelay(relay, { expectedState: "s123", expectPrivateKey: "optional" }).privateKey).toBe("pk");
+  });
+
+  it("names the partner-side refusals by reason, so a handler can tell 'install your key' from an outage", () => {
+    const refused = (error_description: string) => {
+      try {
+        parseRelay({ error: "temporarily_unavailable", error_description, state: "s123" }, { expectedState: "s123" });
+        expect.unreachable();
+      } catch (e) {
+        return e as RelayError;
+      }
+    };
+    // The exact sentences the server pins; written out, not imported, so a drift on either side fails here.
+    expect(PARTNER_KEY_MISSING_DESCRIPTION).toBe(
+      "this partner has not installed its decryption key; no authorizations can be started until it does",
+    );
+    expect(PARTNER_SUSPENDED_DESCRIPTION).toBe("this partner is suspended; no authorizations can be started");
+
+    const missing = refused(PARTNER_KEY_MISSING_DESCRIPTION);
+    expect(missing.code).toBe("oauth_error");
+    expect(missing.reason).toBe("partner_key_missing");
+    expect(refused(PARTNER_SUSPENDED_DESCRIPTION).reason).toBe("partner_suspended");
+    expect(refused("the bank is down").reason).toBeUndefined();
+    expect(refused("").reason).toBeUndefined();
   });
 
   it("names a cancel as access_denied, the normal outcome it is", () => {

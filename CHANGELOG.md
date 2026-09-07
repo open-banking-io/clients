@@ -27,6 +27,17 @@ Detailed, auto-generated notes for every release live on the
 
 ## Notable cross-cutting changes
 
+### 2026-09
+
+- Node 1.2.0, Go 0.4.0, CLI: every partner now holds its own decryption key on open-banking.io,
+  and the relay carries an empty `privateKey` for its users. `parseRelay` takes
+  `expectPrivateKey: "optional"` (the default stays `"required"`), `RelayError.reason` names the
+  two partner-side refusals (`partner_key_missing`, `partner_suspended`), and
+  `generateRecipientKeyPair`, `recipientKeyFingerprint`, `recipientPublicKey` and
+  `answerRecipientKeyChallenge` cover the key itself. Go exports `DecryptEnvelope`/`DecryptTo`;
+  the CLI gains `openbanking partner key generate|fingerprint|answer`. A new fixture,
+  `recipient-key-challenge.json`, pins the possession challenge for every SDK.
+
 ### 2026-08
 
 - Node 1.1.0: a `connect` module for Partner Connect — PKCE and state helpers, `buildAuthorizeUrl`,
