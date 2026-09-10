@@ -30,6 +30,42 @@ import type {
  * decrypts the zero-knowledge data envelopes locally with the exported private key — the service
  * only ever returns ciphertext it cannot read.
  */
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
+
+/**
+ * Trims and validates the API base url. Rejects up front what would otherwise only surface
+ * as an opaque fetch/network error on the first request, and refuses cleartext http:// to a
+ * non-loopback host, which would put the API key and decrypted session uids on the wire.
+ */
+function normalizeBaseUrl(apiBaseUrl: unknown): string {
+  if (typeof apiBaseUrl !== "string" || !apiBaseUrl.trim()) {
+    throw new Error("apiBaseUrl is required");
+  }
+  const trimmed = apiBaseUrl.trim();
+  const shown = JSON.stringify(trimmed);
+
+  let url: URL;
+  try {
+    url = new URL(trimmed);
+  } catch {
+    throw new Error("apiBaseUrl must start with http:// or https:// (got " + shown + ")");
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new Error("apiBaseUrl must start with http:// or https:// (got " + shown + ")");
+  }
+  if (url.protocol === "http:" && !LOOPBACK_HOSTS.has(url.hostname.toLowerCase())) {
+    throw new Error(
+      "apiBaseUrl must use https:// -- cleartext http:// would send the API key and " +
+        "decrypted session uids over the network (got " + shown + ")",
+    );
+  }
+
+  // Strip all trailing "/" without a backtracking regex (avoids ReDoS on long inputs).
+  let end = trimmed.length;
+  while (end > 0 && trimmed.charCodeAt(end - 1) === 47 /* "/" */) end--;
+  return trimmed.slice(0, end);
+}
+
 export class OpenBankingClient {
   /** Default per-request timeout (30s) when {@link OpenBankingClientOptions.timeoutMs} is unset. */
   static readonly DEFAULT_TIMEOUT_MS = 30_000;
@@ -42,14 +78,9 @@ export class OpenBankingClient {
 
   constructor(options: OpenBankingClientOptions) {
     const { apiBaseUrl, apiKey, privateKeyPkcs8, timeoutMs } = options;
-    if (!apiBaseUrl?.trim()) throw new Error("apiBaseUrl is required");
+    this.baseUrl = normalizeBaseUrl(apiBaseUrl);
     if (!apiKey?.trim()) throw new Error("apiKey is required");
     if (!privateKeyPkcs8?.trim()) throw new Error("privateKeyPkcs8 is required");
-
-    // Strip all trailing "/" without a backtracking regex (avoids ReDoS on long inputs).
-    let end = apiBaseUrl.length;
-    while (end > 0 && apiBaseUrl.charCodeAt(end - 1) === 47 /* "/" */) end--;
-    this.baseUrl = apiBaseUrl.slice(0, end);
     this.apiKey = apiKey;
     this.timeoutMs = timeoutMs ?? OpenBankingClient.DEFAULT_TIMEOUT_MS;
     this.fetchImpl = options.fetch ?? fetch;
