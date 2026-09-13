@@ -18,7 +18,7 @@ func TestSyncSingleAccount(t *testing.T) {
 
 	var out, errOut bytes.Buffer
 	app := &App{Stdout: &out, Stderr: &errOut, ConfigPath: cfg}
-	if err := app.Run([]string{"sync", "11111111-1111-4111-8111-111111111111"}); err != nil {
+	if err := app.Run([]string{"-o", "table", "sync", "11111111-1111-4111-8111-111111111111"}); err != nil {
 		t.Fatalf("sync: %v\nstderr: %s", err, errOut.String())
 	}
 	// The fixture reports 0 new, 1 fetched.
@@ -74,12 +74,18 @@ func failingSyncServer(t *testing.T) *httptest.Server {
 }
 
 func TestSyncAllAsJSON_CarriesTheFailures_AndStillExitsNonZero(t *testing.T) {
+	for _, format := range []string{"json", "csv"} {
+		t.Run(format, func(t *testing.T) { syncAllAsDocument(t, format) })
+	}
+}
+
+func syncAllAsDocument(t *testing.T, format string) {
 	bundle := fixtureBundle(t)
 	cfg := writeConfig(t, bundle, failingSyncServer(t).URL)
 
 	var out, errOut bytes.Buffer
 	app := &App{Stdout: &out, Stderr: &errOut, ConfigPath: cfg}
-	err := app.Run([]string{"-o", "json", "sync", "--all"})
+	err := app.Run([]string{"-o", format, "sync", "--all"})
 
 	if err == nil {
 		t.Fatal("expected a non-zero exit when accounts could not be synced")
@@ -190,5 +196,26 @@ func TestSyncSingleAccountThatNeedsReconnect_SaysSoOnce(t *testing.T) {
 
 	if err == nil || strings.Count(err.Error(), "reconnect") != 1 {
 		t.Fatalf("err = %v, want the reconnect advice exactly once", err)
+	}
+}
+
+func TestSyncSingleAccountPiped_IsJSON(t *testing.T) {
+	bundle := fixtureBundle(t)
+	srv := startAPIServer(t, bundle.APIKey)
+	cfg := writeConfig(t, bundle, srv.URL)
+
+	for _, format := range []string{"json", "csv"} {
+		var out, errOut bytes.Buffer
+		app := &App{Stdout: &out, Stderr: &errOut, ConfigPath: cfg}
+		if err := app.Run([]string{"-o", format, "sync", "11111111-1111-4111-8111-111111111111"}); err != nil {
+			t.Fatalf("%s: sync: %v\n%s", format, err, errOut.String())
+		}
+		var view struct {
+			NewTransactions int64 `json:"newTransactions"`
+			TotalFetched    int64 `json:"totalFetched"`
+		}
+		if err := json.Unmarshal(out.Bytes(), &view); err != nil || view.TotalFetched != 1 {
+			t.Errorf("%s: stdout = %q (%v)", format, out.String(), err)
+		}
 	}
 }

@@ -34,7 +34,7 @@ func (a *App) sync(args []string) error {
 		if err != nil {
 			return fmt.Errorf("sync failed: %w", err)
 		}
-		if a.ui().Format == ui.FormatJSON {
+		if a.ui().Format != ui.FormatTable {
 			if err := writeSyncAllJSON(a, result); err != nil {
 				return err
 			}
@@ -84,10 +84,20 @@ func (a *App) sync(args []string) error {
 		}
 		return fmt.Errorf("sync failed: %w", err)
 	}
+	if a.ui().Format != ui.FormatTable {
+		enc := json.NewEncoder(a.stdout())
+		enc.SetIndent("", "  ")
+		return enc.Encode(syncView{NewTransactions: result.NewTransactions, TotalFetched: result.TotalFetched})
+	}
 	fmt.Fprintln(a.stdout(), a.ui().Color(
 		fmt.Sprintf("Synced: %d new transaction(s) (%d fetched)", result.NewTransactions, result.TotalFetched),
 		ui.StyleSuccess))
 	return nil
+}
+
+type syncView struct {
+	NewTransactions int64 `json:"newTransactions"`
+	TotalFetched    int64 `json:"totalFetched"`
 }
 
 // syncHint is what to do about a refusal, keyed on the stable reason the service sends.
