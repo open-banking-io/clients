@@ -1,4 +1,7 @@
-export { OpenBankingClient } from "./client.js";
+export { OpenBankingClient, psuHeaders } from "./client.js";
+export { SyncError } from "./errors.js";
+export { closeReplacedConsents } from "./consents.js";
+export type { CloseReplacedConsentsOptions, CloseReplacedConsentsResult } from "./consents.js";
 export { decryptEnvelope, decryptTo, importPrivateKey } from "./envelope.js";
 export {
   answerRecipientKeyChallenge,
@@ -49,6 +52,10 @@ export type {
   Connection,
   SyncResult,
   SyncAllResult,
+  SyncFailure,
+  SyncFailureReason,
+  SyncOptions,
+  PsuHeaders,
   CredentialsBundle,
   EncryptionKey,
   OpenBankingClientOptions,

@@ -78,6 +78,10 @@ export interface Connection {
   accountCount: number;
   lastSyncedAt: string | null;
   psuType: string | null;
+  /** Whether the consent still works, by the service's clock. `status` stays `Active` after `validUntil`. */
+  isLive: boolean;
+  /** The accounts this connection holds. */
+  accountIds: string[];
 }
 
 export interface SyncResult {
@@ -85,9 +89,52 @@ export interface SyncResult {
   totalFetched: number;
 }
 
+/**
+ * The stable reason a sync failed. Branch on this, never on the HTTP status.
+ * A reason added later arrives as its raw string.
+ */
+export type SyncFailureReason =
+  | "reconnect_needed"
+  | "consent_withdrawn"
+  | "uid_outdated"
+  | "psu_present_required"
+  | "rate_limited"
+  | "bank_error"
+  | "transient"
+  | "partner_app_inactive"
+  | (string & {});
+
+export interface SyncFailure {
+  accountId: string;
+  reason: SyncFailureReason;
+  bankErrorCode: string | null;
+}
+
 export interface SyncAllResult {
   accounts: number;
   newTransactions: number;
+  /** The accounts that did not sync, and why. */
+  failures: SyncFailure[];
+}
+
+/**
+ * The account holder's own request, forwarded while they are on your page: some banks only share
+ * data with the person present. Never send it from a background job.
+ */
+export interface PsuHeaders {
+  /** The user's public IP address. */
+  ipAddress: string;
+  userAgent: string;
+  referer?: string;
+  accept?: string;
+  acceptLanguage?: string;
+  acceptCharset?: string;
+  acceptEncoding?: string;
+}
+
+export interface SyncOptions {
+  /** The present user's request details; see {@link PsuHeaders}. */
+  psu?: PsuHeaders;
 }
 
 /** Options for {@link OpenBankingClient.getTransactions}. */
@@ -197,6 +244,8 @@ export interface ConnectionWire {
   accountCount: number;
   lastSyncedAt?: string | null;
   psuType?: string | null;
+  isLive?: boolean;
+  accountIds?: string[];
 }
 
 export interface SyncResultWire {
@@ -207,6 +256,21 @@ export interface SyncResultWire {
 export interface SyncAllResultWire {
   accounts: number;
   newTransactions: number;
+  failures?: { accountId: string; reason: string; bankErrorCode?: string | null }[];
+}
+
+export interface OpenConsentWire {
+  connectionId: string;
+  aspspName: string;
+  aspspCountry: string;
+  endsAt: string;
+  sessionIdEnc?: string | null;
+  superseded: boolean;
+  weCanEndIt: boolean;
+}
+
+export interface SessionIdEnc {
+  sessionId?: string | null;
 }
 
 // ---- Decrypted envelope payloads (the camelCase contract with the backend) -----------------------

@@ -15,7 +15,7 @@ import (
 )
 
 // Version is the released version of this client. It should track the release tag.
-const Version = "0.4.1"
+const Version = "0.5.0"
 
 // Client is a decrypting client for the open-banking.io API. Authenticates with an API key
 // (X-Api-Key) and decrypts the zero-knowledge data envelopes locally with the exported private key.
@@ -251,8 +251,9 @@ func (c *Client) GetConnections() ([]Connection, error) {
 		return nil, err
 	}
 	conns := make([]Connection, 0, len(wires))
+	now := time.Now()
 	for _, w := range wires {
-		conns = append(conns, Connection(w))
+		conns = append(conns, connectionFrom(w, now))
 	}
 	return conns, nil
 }
@@ -290,7 +291,22 @@ func (c *Client) StartAuthorization(req AuthorizationRequest) (string, error) {
 
 // Sync triggers an online sync of one account: decrypts that account's Enable Banking uid and posts
 // it, so the service can fetch fresh data without ever holding the uid in plaintext.
+//
+// A refusal is a *SyncError. A uid a renewal replaced (uid_outdated) is re-read and retried once.
 func (c *Client) Sync(accountID string) (SyncResult, error) {
+	return c.SyncWithOptions(accountID, SyncOptions{})
+}
+
+// SyncWithOptions is Sync with forwarded request details; see PsuHeaders.
+func (c *Client) SyncWithOptions(accountID string, opts SyncOptions) (SyncResult, error) {
+	result, err := c.syncOnce(accountID, opts)
+	if isUidOutdated(err) {
+		return c.syncOnce(accountID, opts)
+	}
+	return result, err
+}
+
+func (c *Client) syncOnce(accountID string, opts SyncOptions) (SyncResult, error) {
 	if err := c.requireKey(); err != nil {
 		return SyncResult{}, err
 	}
@@ -313,42 +329,111 @@ func (c *Client) Sync(accountID string) (SyncResult, error) {
 		return SyncResult{}, err
 	}
 	if uid == "" {
-		return SyncResult{}, fmt.Errorf("account has no active session (reconnect required) — cannot sync")
+		return SyncResult{}, &SyncError{
+			Status:  http.StatusConflict,
+			Reason:  ReasonReconnectNeeded,
+			message: "account has no active session (reconnect required) — cannot sync",
+		}
 	}
 
 	var result syncResultWire
-	if err := c.postJSON("/api/accounts/"+url.PathEscape(accountID)+"/sync",
-		map[string]any{"uid": uid}, &result); err != nil {
+	if err := c.postJSONWithHeaders("/api/accounts/"+url.PathEscape(accountID)+"/sync",
+		map[string]any{"uid": uid}, opts.headers(), &result); err != nil {
 		return SyncResult{}, err
 	}
 	return SyncResult(result), nil
 }
 
-// SyncAll triggers an online sync of every account that has an active session.
+// SyncAll triggers an online sync of every account that has an active session. Per-account refusals
+// are in Failures; accounts answering uid_outdated are re-read and retried once.
 func (c *Client) SyncAll() (SyncAllResult, error) {
+	return c.SyncAllWithOptions(SyncOptions{})
+}
+
+// SyncAllWithOptions is SyncAll with forwarded request details; see PsuHeaders.
+func (c *Client) SyncAllWithOptions(opts SyncOptions) (SyncAllResult, error) {
 	if err := c.requireKey(); err != nil {
 		return SyncAllResult{}, err
 	}
-	wires, err := c.getAccountWires()
+	items, err := c.syncItems()
 	if err != nil {
 		return SyncAllResult{}, err
+	}
+	first, err := c.postSyncAll(items, opts)
+	if err != nil {
+		return SyncAllResult{}, err
+	}
+
+	outdated := map[string]bool{}
+	for _, f := range first.Failures {
+		if f.Reason == ReasonUidOutdated {
+			outdated[f.AccountID] = true
+		}
+	}
+	if len(outdated) == 0 {
+		return first, nil
+	}
+	fresh, err := c.syncItems()
+	if err != nil {
+		return SyncAllResult{}, err
+	}
+	retry := make([]map[string]string, 0, len(outdated))
+	retried := map[string]bool{}
+	for _, item := range fresh {
+		if outdated[item["accountId"]] {
+			retry = append(retry, item)
+			retried[item["accountId"]] = true
+		}
+	}
+	if len(retry) == 0 {
+		return first, nil
+	}
+	second, err := c.postSyncAll(retry, opts)
+	if err != nil {
+		return SyncAllResult{}, err
+	}
+
+	failures := make([]SyncFailure, 0, len(first.Failures)+len(second.Failures))
+	for _, f := range first.Failures {
+		if !retried[f.AccountID] {
+			failures = append(failures, f)
+		}
+	}
+	return SyncAllResult{
+		Accounts:        first.Accounts + second.Accounts,
+		NewTransactions: first.NewTransactions + second.NewTransactions,
+		Failures:        append(failures, second.Failures...),
+	}, nil
+}
+
+func (c *Client) syncItems() ([]map[string]string, error) {
+	wires, err := c.getAccountWires()
+	if err != nil {
+		return nil, err
 	}
 	items := make([]map[string]string, 0, len(wires))
 	for i := range wires {
 		uid, err := c.decryptUid(&wires[i])
 		if err != nil {
-			return SyncAllResult{}, err
+			return nil, err
 		}
 		if uid != "" {
 			items = append(items, map[string]string{"accountId": wires[i].ID, "uid": uid})
 		}
 	}
+	return items, nil
+}
 
+func (c *Client) postSyncAll(items []map[string]string, opts SyncOptions) (SyncAllResult, error) {
 	var result syncAllResultWire
-	if err := c.postJSON("/api/sync", map[string]any{"items": items}, &result); err != nil {
+	if err := c.postJSONWithHeaders("/api/sync", map[string]any{"items": items}, opts.headers(), &result); err != nil {
 		return SyncAllResult{}, err
 	}
-	return SyncAllResult(result), nil
+	failures := make([]SyncFailure, 0, len(result.Failures))
+	for _, f := range result.Failures {
+		failures = append(failures, SyncFailure{AccountID: f.AccountID, Reason: f.Reason, BankErrorCode: f.BankErrorCode})
+	}
+	return SyncAllResult{Accounts: result.Accounts, NewTransactions: result.NewTransactions, Failures: failures}, nil
 }
 
 // ---- internals ----
@@ -462,6 +547,10 @@ func (c *Client) getJSON(path string, out any) error {
 }
 
 func (c *Client) postJSON(path string, body, out any) error {
+	return c.postJSONWithHeaders(path, body, nil, out)
+}
+
+func (c *Client) postJSONWithHeaders(path string, body any, headers map[string]string, out any) error {
 	payload, err := json.Marshal(body)
 	if err != nil {
 		return err
@@ -469,6 +558,9 @@ func (c *Client) postJSON(path string, body, out any) error {
 	req, err := http.NewRequest(http.MethodPost, c.baseURL+path, bytes.NewReader(payload))
 	if err != nil {
 		return err
+	}
+	for name, value := range headers {
+		req.Header.Set(name, value)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	return c.do(req, path, out)
@@ -483,6 +575,10 @@ func (c *Client) do(req *http.Request, path string, out any) error {
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		if req.Method == http.MethodPost && strings.HasSuffix(path, "/sync") {
+			body, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
+			return syncErrorFrom(req.Method, path, resp, body)
+		}
 		return fmt.Errorf("%s %s failed: %d %s", req.Method, path, resp.StatusCode, resp.Status)
 	}
 	data, err := io.ReadAll(resp.Body)

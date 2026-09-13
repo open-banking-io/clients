@@ -184,6 +184,50 @@ or `partner_suspended` when the server said so in as many words. `exchangeCode`,
 `invalid_grant` is terminal for that code — restart the flow. A flow is valid for 45 minutes on the
 server; keep your own `state` at least that long.
 
+### Sync failures, renewal and the present user
+
+```ts
+import { closeReplacedConsents, SyncError } from "@open-banking-io/client";
+
+// Per-account refusals come back in failures; branch on reason, never on the status.
+const { failures } = await client.syncAll();
+for (const f of failures) {
+  if (f.reason === "reconnect_needed") promptRenewal(f.accountId);
+  if (f.reason === "psu_present_required") askToSyncWhilePresent(f.accountId);
+}
+
+// A single-account sync throws SyncError with the same reason (and retryAfterSeconds on a 429).
+// Both calls re-read the account and retry once on uid_outdated.
+
+// Some banks only share data while the account holder is present. Forward their own request —
+// only from a request they made, never from a background job.
+await client.syncAll({
+  psu: {
+    ipAddress: req.ip,
+    userAgent: req.get("user-agent"),
+    acceptLanguage: req.get("accept-language"),
+  },
+});
+
+// Renew a consent before validUntil (or after it lapsed): send the user through the same flow
+// with renewConnection, then close what the previous key still holds open and revoke it.
+const expiring = (await client.getConnections()).filter(
+  (c) => Date.parse(c.validUntil) - Date.now() < 7 * 86_400_000,
+);
+buildAuthorizeUrl({ ...authorizeOptions, renewConnection: expiring[0].sessionId });
+// …in the callback, after exchangeCode:
+await closeReplacedConsents({
+  issuer,
+  clientId: CLIENT_ID,
+  clientSecret: CLIENT_SECRET,
+  token: previousToken.accessToken,
+  privateKey: RECIPIENT_PRIVATE_KEY,
+});
+```
+
+`Connection.isLive` is decided by the service's clock; `status` stays `Active` after `validUntil`.
+`Connection.accountIds` names the connection to renew for an account `syncAll` reported.
+
 ## Money
 
 Amounts (`balance.amount`, `transaction.amount`, `transaction.balanceAfterTransaction`) are exposed

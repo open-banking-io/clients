@@ -1,0 +1,20 @@
+{
+  "accounts": 1,
+  "newTransactions": 4,
+  "failures": [
+    {
+      "accountId": "33333333-3333-4333-8333-333333333333",
+      "reason": "reconnect_needed",
+      "bankErrorCode": "ASPSP_ACCOUNT_NOT_ACCESSIBLE"
+    },
+    {
+      "accountId": "44444444-4444-4444-8444-444444444444",
+      "reason": "psu_present_required",
+      "bankErrorCode": "PSU_HEADER_NOT_PROVIDED"
+    },
+    {
+      "accountId": "55555555-5555-4555-8555-555555555555",
+      "reason": "rate_limited"
+    }
+  ]
+}
