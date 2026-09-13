@@ -78,7 +78,11 @@ func (a *App) sync(args []string) error {
 	if err != nil {
 		var refused *openbanking.SyncError
 		if errors.As(err, &refused) {
-			if hint := syncHint(refused.Reason); hint != "" && !strings.Contains(err.Error(), "reconnect required") {
+			hint := syncHint(refused.Reason)
+			if refused.Reason == openbanking.ReasonRateLimited && refused.RetryAfterSeconds > 0 {
+				hint = fmt.Sprintf("the bank is throttling; try again in about %d minute(s)", (refused.RetryAfterSeconds+59)/60)
+			}
+			if hint != "" && !strings.Contains(err.Error(), "reconnect required") {
 				return fmt.Errorf("sync failed: %w — %s", err, hint)
 			}
 		}

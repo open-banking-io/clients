@@ -219,3 +219,28 @@ func TestSyncSingleAccountPiped_IsJSON(t *testing.T) {
 		}
 	}
 }
+
+func TestSyncSingleAccountThrottled_SaysWhenToTryAgain(t *testing.T) {
+	bundle := fixtureBundle(t)
+	accounts, _ := os.ReadFile(filepath.Join("testdata", "api", "accounts.json"))
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/api/accounts" {
+			_, _ = w.Write(accounts)
+			return
+		}
+		w.Header().Set("Retry-After", "3599")
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = w.Write([]byte(`{"status":429,"reason":"rate_limited"}`))
+	}))
+	t.Cleanup(srv.Close)
+	cfg := writeConfig(t, bundle, srv.URL)
+
+	var out, errOut bytes.Buffer
+	app := &App{Stdout: &out, Stderr: &errOut, ConfigPath: cfg}
+	err := app.Run([]string{"sync", "11111111-1111-4111-8111-111111111111"})
+
+	if err == nil || !strings.Contains(err.Error(), "try again in about 60 minute(s)") {
+		t.Fatalf("err = %v, want when to try again", err)
+	}
+}
