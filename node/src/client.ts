@@ -1,6 +1,7 @@
 import { bundleFromToken, type TokenResponse } from "./connect.js";
 import { readFileSync } from "node:fs";
 import { decryptTo, importPrivateKey, type CryptoKey } from "./envelope.js";
+import { SyncError } from "./errors.js";
 import { USER_AGENT } from "./version.js";
 import type {
   Account,
@@ -12,8 +13,11 @@ import type {
   CredentialsBundle,
   DisplayNameEnc,
   OpenBankingClientOptions,
+  PsuHeaders,
   SyncAllResult,
   SyncAllResultWire,
+  SyncFailure,
+  SyncOptions,
   SyncResult,
   SyncResultWire,
   Transaction,
@@ -136,48 +140,120 @@ export class OpenBankingClient {
       accountCount: c.accountCount,
       lastSyncedAt: c.lastSyncedAt ?? null,
       psuType: c.psuType ?? null,
+      isLive: c.isLive ?? (c.status === "Active" && Date.parse(c.validUntil) > Date.now()),
+      accountIds: c.accountIds ?? [],
     }));
   }
 
   /**
    * Triggers an online sync of one account: decrypts that account's Enable Banking uid and posts
    * it, so the service can fetch fresh data without ever holding the uid in plaintext.
+   *
+   * A refusal throws {@link SyncError}. A uid a renewal replaced (`uid_outdated`) is re-read and
+   * retried once.
    */
-  async sync(accountId: string): Promise<SyncResult> {
-    const wires = await this.getAccountWires();
-    const account = wires.find((a) => a.id === accountId);
-    if (!account) throw new Error(`Account ${accountId} not found`);
+  async sync(accountId: string, options: SyncOptions = {}): Promise<SyncResult> {
+    for (let attempt = 0; ; attempt++) {
+      const wires = await this.getAccountWires();
+      const account = wires.find((a) => a.id === accountId);
+      if (!account) throw new Error(`Account ${accountId} not found`);
 
-    const uid = await this.decryptUid(account);
-    if (uid == null) {
-      throw new Error("Account has no active session (reconnect required) — cannot sync");
+      const uid = account.needsReconnect ? null : await this.decryptUid(account);
+      if (uid == null) {
+        throw new SyncError(
+          "Account has no active session (reconnect required) — cannot sync",
+          409,
+          "reconnect_needed",
+        );
+      }
+
+      try {
+        const result = await this.postJson<SyncResultWire>(
+          `/api/accounts/${encodeURIComponent(accountId)}/sync`,
+          { uid },
+          psuHeaders(options.psu),
+        );
+        return { newTransactions: result.newTransactions, totalFetched: result.totalFetched };
+      } catch (e) {
+        if (attempt === 0 && e instanceof SyncError && e.reason === "uid_outdated") continue;
+        throw e;
+      }
     }
-
-    const result = await this.postJson<SyncResultWire>(
-      `/api/accounts/${encodeURIComponent(accountId)}/sync`,
-      { uid },
-    );
-    return { newTransactions: result.newTransactions, totalFetched: result.totalFetched };
   }
 
-  /** Triggers an online sync of every account that has an active session. */
-  async syncAll(): Promise<SyncAllResult> {
-    const wires = await this.getAccountWires();
-    const decrypted = await Promise.all(
-      wires.map(async (a) => ({ accountId: a.id, uid: await this.decryptUid(a) })),
+  /**
+   * Triggers an online sync of every account that has an active session. Per-account refusals are
+   * in `failures`, and so is every account whose consent needs renewing (`reconnect_needed`, never
+   * sent); accounts answering `uid_outdated` are re-read and retried once.
+   */
+  async syncAll(options: SyncOptions = {}): Promise<SyncAllResult> {
+    const read = await this.syncItems();
+    const first = await this.postSyncAll(read.items, options);
+    first.failures.push(...read.lapsed);
+    const outdated = new Set(
+      first.failures.filter((f) => f.reason === "uid_outdated").map((f) => f.accountId),
     );
-    const items = decrypted
-      .filter((x): x is { accountId: string; uid: string } => x.uid != null)
-      .map((x) => ({ accountId: x.accountId, uid: x.uid }));
+    if (outdated.size === 0) return first;
 
-    const result = await this.postJson<SyncAllResultWire>("/api/sync", { items });
-    return { accounts: result.accounts, newTransactions: result.newTransactions };
+    const reread = await this.syncItems();
+    const retryItems = reread.items.filter((i) => outdated.has(i.accountId));
+    const lapsedNow = reread.lapsed.filter((f) => outdated.has(f.accountId));
+    const settled = new Set([...retryItems, ...lapsedNow].map((i) => i.accountId));
+    const kept = first.failures.filter((f) => !settled.has(f.accountId));
+    if (retryItems.length === 0) return { ...first, failures: [...kept, ...lapsedNow] };
+
+    const second = await this.postSyncAll(retryItems, options);
+    return {
+      accounts: first.accounts + second.accounts,
+      newTransactions: first.newTransactions + second.newTransactions,
+      failures: [...kept, ...lapsedNow, ...second.failures],
+    };
   }
 
   // ---- internals ---------------------------------------------------------------------------------
 
   private getAccountWires(): Promise<AccountWire[]> {
     return this.getJson<AccountWire[]>("/api/accounts");
+  }
+
+  private async syncItems(): Promise<{
+    items: { accountId: string; uid: string }[];
+    lapsed: SyncFailure[];
+  }> {
+    const wires = await this.getAccountWires();
+    const decrypted = await Promise.all(
+      wires.map(async (a) => ({
+        accountId: a.id,
+        needsReconnect: a.needsReconnect,
+        uid: a.needsReconnect ? null : await this.decryptUid(a),
+      })),
+    );
+    return {
+      items: decrypted
+        .filter((x): x is typeof x & { uid: string } => x.uid != null)
+        .map((x) => ({ accountId: x.accountId, uid: x.uid })),
+      lapsed: decrypted
+        .filter((x) => x.uid == null && x.needsReconnect)
+        .map((x) => ({ accountId: x.accountId, reason: "reconnect_needed", bankErrorCode: null })),
+    };
+  }
+
+  private async postSyncAll(
+    items: { accountId: string; uid: string }[],
+    options: SyncOptions,
+  ): Promise<SyncAllResult> {
+    if (items.length === 0) return { accounts: 0, newTransactions: 0, failures: [] };
+    const result = await this.postJson<SyncAllResultWire>(
+      "/api/sync",
+      { items },
+      psuHeaders(options.psu),
+    );
+    const failures: SyncFailure[] = (result.failures ?? []).map((f) => ({
+      accountId: f.accountId,
+      reason: f.reason,
+      bankErrorCode: f.bankErrorCode ?? null,
+    }));
+    return { accounts: result.accounts, newTransactions: result.newTransactions, failures };
   }
 
   private async decryptUid(a: AccountWire): Promise<string | null> {
@@ -261,10 +337,15 @@ export class OpenBankingClient {
     return (await res.json()) as T;
   }
 
-  private async postJson<T>(path: string, body: unknown): Promise<T> {
+  private async postJson<T>(
+    path: string,
+    body: unknown,
+    extraHeaders: Record<string, string> = {},
+  ): Promise<T> {
     const res = await this.fetchImpl(this.baseUrl + path, {
       method: "POST",
       headers: {
+        ...extraHeaders,
         "X-Api-Key": this.apiKey,
         "Content-Type": "application/json",
         "User-Agent": USER_AGENT,
@@ -273,8 +354,48 @@ export class OpenBankingClient {
       signal: AbortSignal.timeout(this.timeoutMs),
     });
     if (!res.ok) {
-      throw new Error(`POST ${path} failed: ${res.status} ${res.statusText}`);
+      const problem = await readProblem(res);
+      const retryAfter = Number.parseInt(res.headers.get("Retry-After") ?? "", 10);
+      throw new SyncError(
+        `POST ${path} failed: ${res.status} ${problem.reason ?? res.statusText}`,
+        res.status,
+        problem.reason,
+        problem.bankErrorCode,
+        Number.isFinite(retryAfter) ? retryAfter : null,
+      );
     }
     return (await res.json()) as T;
   }
+}
+
+async function readProblem(
+  res: Response,
+): Promise<{ reason: string | null; bankErrorCode: string | null }> {
+  try {
+    const body = (await res.json()) as { reason?: unknown; bankErrorCode?: unknown };
+    return {
+      reason: typeof body.reason === "string" ? body.reason : null,
+      bankErrorCode: typeof body.bankErrorCode === "string" ? body.bankErrorCode : null,
+    };
+  } catch {
+    return { reason: null, bankErrorCode: null };
+  }
+}
+
+/** The `X-Psu-*` request headers for a forwarded {@link PsuHeaders}; empty when none is given. */
+export function psuHeaders(psu: PsuHeaders | undefined): Record<string, string> {
+  if (!psu?.ipAddress || !psu.userAgent) return {};
+  const headers: Record<string, string> = {
+    "X-Psu-Ip-Address": psu.ipAddress,
+    "X-Psu-User-Agent": psu.userAgent,
+  };
+  const optional: [string, string | undefined][] = [
+    ["X-Psu-Referer", psu.referer],
+    ["X-Psu-Accept", psu.accept],
+    ["X-Psu-Accept-Language", psu.acceptLanguage],
+    ["X-Psu-Accept-Charset", psu.acceptCharset],
+    ["X-Psu-Accept-Encoding", psu.acceptEncoding],
+  ];
+  for (const [name, value] of optional) if (value) headers[name] = value;
+  return headers;
 }

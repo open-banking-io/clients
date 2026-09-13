@@ -29,6 +29,17 @@ Detailed, auto-generated notes for every release live on the
 
 ### 2026-09
 
+- Node 1.3.0, Go 0.5.0: consent renewal and sync failures. `Connection` gains `isLive` and
+  `accountIds`; `syncAll` returns `failures` (`reconnect_needed`, `uid_outdated`,
+  `psu_present_required`, …) instead of dropping them, and a refused single sync throws a typed
+  `SyncError` with `reason`, `bankErrorCode` and `retryAfterSeconds`. Both re-read the account and
+  retry once on `uid_outdated`. A sync can forward the present user's request as `X-Psu-*` headers
+  (`{ psu }` / `SyncOptions{Psu}`). Node only: `buildAuthorizeUrl({ renewConnection })` and
+  `closeReplacedConsents`, which closes the consents a renewal replaced in the revoke of the
+  previous key. `syncAll` also reports every account whose consent needs renewing as
+  `reconnect_needed` (it has no uid to send, and used to vanish from the result). New fixture
+  `api/sync-all-failures.json`; `api/connections.json` gains `isLive` and `accountIds`. Go: the new
+  slice fields make `Connection` and `SyncAllResult` no longer comparable with `==`.
 - Node 1.2.0, Go 0.4.1, CLI: every partner now holds its own decryption key on open-banking.io,
   and the relay carries an empty `privateKey` for its users. `parseRelay` takes
   `expectPrivateKey: "optional"` (the default stays `"required"`), `RelayError.reason` names the

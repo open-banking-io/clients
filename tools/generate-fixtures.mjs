@@ -151,6 +151,7 @@ const main = async () => {
     sessionId, aspspName: 'Lunar', aspspCountry: 'DK',
     validUntil: '2026-09-07T16:00:00.000Z', status: 'Active', accountCount: 1,
     lastSyncedAt: '2026-06-09T16:00:00.000Z', psuType: 'business',
+    accountIds: [accountId], isLive: false,
   }];
 
   // --- write everything ---
@@ -166,6 +167,15 @@ const main = async () => {
   w('api/connections.json', connectionsResponse);
   w('api/sync.json', { newTransactions: 0, totalFetched: 1 });
   w('api/sync-all.json', { accounts: 1, newTransactions: 0 });
+  w('api/sync-all-failures.json', {
+    accounts: 1,
+    newTransactions: 4,
+    failures: [
+      { accountId: '33333333-3333-4333-8333-333333333333', reason: 'reconnect_needed', bankErrorCode: 'ASPSP_ACCOUNT_NOT_ACCESSIBLE' },
+      { accountId: '44444444-4444-4444-8444-444444444444', reason: 'psu_present_required', bankErrorCode: 'PSU_HEADER_NOT_PROVIDED' },
+      { accountId: '55555555-5555-4555-8555-555555555555', reason: 'rate_limited' },
+    ],
+  });
 
   console.log('Fixtures written to', FIX);
 };
