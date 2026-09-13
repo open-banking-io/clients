@@ -153,7 +153,7 @@ func TestConnectionsCommandRendersTable(t *testing.T) {
 	}
 
 	got := out.String()
-	for _, want := range []string{"Lunar", "Active", "business"} {
+	for _, want := range []string{"Lunar", "Active", "ended", "business"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("connections output missing %q\n--- output ---\n%s", want, got)
 		}
