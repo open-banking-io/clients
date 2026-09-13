@@ -183,24 +183,30 @@ export class OpenBankingClient {
 
   /**
    * Triggers an online sync of every account that has an active session. Per-account refusals are
-   * in `failures`; accounts answering `uid_outdated` are re-read and retried once.
+   * in `failures`, and so is every account whose consent needs renewing (`reconnect_needed`, never
+   * sent); accounts answering `uid_outdated` are re-read and retried once.
    */
   async syncAll(options: SyncOptions = {}): Promise<SyncAllResult> {
-    const first = await this.postSyncAll(await this.syncItems(), options);
+    const read = await this.syncItems();
+    const first = await this.postSyncAll(read.items, options);
+    first.failures.push(...read.lapsed);
     const outdated = new Set(
       first.failures.filter((f) => f.reason === "uid_outdated").map((f) => f.accountId),
     );
     if (outdated.size === 0) return first;
 
-    const retryItems = (await this.syncItems()).filter((i) => outdated.has(i.accountId));
-    if (retryItems.length === 0) return first;
+    const reread = await this.syncItems();
+    const retryItems = reread.items.filter((i) => outdated.has(i.accountId));
+    const lapsedNow = reread.lapsed.filter((f) => outdated.has(f.accountId));
+    const settled = new Set([...retryItems, ...lapsedNow].map((i) => i.accountId));
+    const kept = first.failures.filter((f) => !settled.has(f.accountId));
+    if (retryItems.length === 0) return { ...first, failures: [...kept, ...lapsedNow] };
 
     const second = await this.postSyncAll(retryItems, options);
-    const retried = new Set(retryItems.map((i) => i.accountId));
     return {
       accounts: first.accounts + second.accounts,
       newTransactions: first.newTransactions + second.newTransactions,
-      failures: [...first.failures.filter((f) => !retried.has(f.accountId)), ...second.failures],
+      failures: [...kept, ...lapsedNow, ...second.failures],
     };
   }
 
@@ -210,14 +216,26 @@ export class OpenBankingClient {
     return this.getJson<AccountWire[]>("/api/accounts");
   }
 
-  private async syncItems(): Promise<{ accountId: string; uid: string }[]> {
+  private async syncItems(): Promise<{
+    items: { accountId: string; uid: string }[];
+    lapsed: SyncFailure[];
+  }> {
     const wires = await this.getAccountWires();
     const decrypted = await Promise.all(
-      wires.map(async (a) => ({ accountId: a.id, uid: await this.decryptUid(a) })),
+      wires.map(async (a) => ({
+        accountId: a.id,
+        needsReconnect: a.needsReconnect,
+        uid: await this.decryptUid(a),
+      })),
     );
-    return decrypted
-      .filter((x): x is { accountId: string; uid: string } => x.uid != null)
-      .map((x) => ({ accountId: x.accountId, uid: x.uid }));
+    return {
+      items: decrypted
+        .filter((x): x is typeof x & { uid: string } => x.uid != null)
+        .map((x) => ({ accountId: x.accountId, uid: x.uid })),
+      lapsed: decrypted
+        .filter((x) => x.uid == null && x.needsReconnect)
+        .map((x) => ({ accountId: x.accountId, reason: "reconnect_needed", bankErrorCode: null })),
+    };
   }
 
   private async postSyncAll(
@@ -365,7 +383,7 @@ async function readProblem(
 
 /** The `X-Psu-*` request headers for a forwarded {@link PsuHeaders}; empty when none is given. */
 export function psuHeaders(psu: PsuHeaders | undefined): Record<string, string> {
-  if (!psu) return {};
+  if (!psu?.ipAddress || !psu.userAgent) return {};
   const headers: Record<string, string> = {
     "X-Psu-Ip-Address": psu.ipAddress,
     "X-Psu-User-Agent": psu.userAgent,

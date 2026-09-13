@@ -1,6 +1,13 @@
 package openbanking
 
 import (
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/ecdh"
+	"crypto/hkdf"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
@@ -29,6 +36,68 @@ type recorded struct {
 
 type route func(r recorded, w http.ResponseWriter) bool
 
+const renewedUid = "0e8a4c7b-9d1f-4c2a-8b6e-renewed00001"
+
+func sealForTest(t *testing.T, payload any) string {
+	t.Helper()
+	var kp struct {
+		Public string `json:"publicKeyRawB64"`
+	}
+	if err := json.Unmarshal(readFixture(t, "keypair.json"), &kp); err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := base64.StdEncoding.DecodeString(kp.Public)
+	recipient, err := ecdh.P256().NewPublicKey(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	eph, err := ecdh.P256().GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	shared, err := eph.ECDH(recipient)
+	if err != nil {
+		t.Fatal(err)
+	}
+	key, err := hkdf.Key(sha256.New, shared, make([]byte, 32), "bank.core.ci/zk/v1", 32)
+	if err != nil {
+		t.Fatal(err)
+	}
+	block, _ := aes.NewCipher(key)
+	gcm, _ := cipher.NewGCM(block)
+	nonce := make([]byte, 12)
+	_, _ = rand.Read(nonce)
+	plain, _ := json.Marshal(payload)
+	sealed := gcm.Seal(nil, nonce, plain, nil)
+	ct, tag := sealed[:len(sealed)-16], sealed[len(sealed)-16:]
+	out := append([]byte{1}, eph.PublicKey().Bytes()...)
+	out = append(out, nonce...)
+	out = append(out, tag...)
+	out = append(out, ct...)
+	return base64.StdEncoding.EncodeToString(out)
+}
+
+func accountsWith(t *testing.T, edit func([]map[string]any) []map[string]any) []byte {
+	t.Helper()
+	var accounts []map[string]any
+	if err := json.Unmarshal(readFixture(t, "api/accounts.json"), &accounts); err != nil {
+		t.Fatal(err)
+	}
+	out, _ := json.Marshal(edit(accounts))
+	return out
+}
+
+func lapsed(account map[string]any, id string) map[string]any {
+	copied := map[string]any{}
+	for k, v := range account {
+		copied[k] = v
+	}
+	copied["id"] = id
+	copied["needsReconnect"] = true
+	copied["uidEnc"] = nil
+	return copied
+}
+
 func twoAccountsFixture(t *testing.T) []byte {
 	t.Helper()
 	var accounts []map[string]any
@@ -49,6 +118,12 @@ func stubAPI(t *testing.T, accounts []byte, handle route) (*Client, *[]recorded)
 	if accounts == nil {
 		accounts = readFixture(t, "api/accounts.json")
 	}
+	return stubAPIReads(t, func(int) []byte { return accounts }, handle)
+}
+
+func stubAPIReads(t *testing.T, accounts func(read int) []byte, handle route) (*Client, *[]recorded) {
+	t.Helper()
+	reads := 0
 	calls := []recorded{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		raw, _ := io.ReadAll(r.Body)
@@ -62,7 +137,8 @@ func stubAPI(t *testing.T, accounts []byte, handle route) (*Client, *[]recorded)
 		calls = append(calls, rec)
 		if r.Method == http.MethodGet && r.URL.Path == "/api/accounts" {
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write(accounts)
+			_, _ = w.Write(accounts(reads))
+			reads++
 			return
 		}
 		if !handle(rec, w) {
@@ -242,8 +318,20 @@ func TestSync_GivesUpAfterASecondUidOutdated(t *testing.T) {
 	}
 }
 
-func TestSyncAll_RetriesOnlyOutdatedAccounts_AndMergesCounts(t *testing.T) {
-	c, calls := stubAPI(t, twoAccountsFixture(t), func(r recorded, w http.ResponseWriter) bool {
+func TestSyncAll_RetriesOnlyOutdatedAccounts_WithTheReReadUid_AndMergesCounts(t *testing.T) {
+	renewed := accountsWith(t, func(a []map[string]any) []map[string]any {
+		var two []map[string]any
+		_ = json.Unmarshal(twoAccountsFixture(t), &two)
+		two[0]["uidEnc"] = sealForTest(t, map[string]string{"uid": renewedUid})
+		return two
+	})
+	reads := func(read int) []byte {
+		if read == 0 {
+			return twoAccountsFixture(t)
+		}
+		return renewed
+	}
+	c, calls := stubAPIReads(t, reads, func(r recorded, w http.ResponseWriter) bool {
 		if r.Path != "/api/sync" {
 			return false
 		}
@@ -272,7 +360,7 @@ func TestSyncAll_RetriesOnlyOutdatedAccounts_AndMergesCounts(t *testing.T) {
 		t.Errorf("first post items = %d, want 2", n)
 	}
 	retry := posts[1].Body["items"].([]any)
-	if len(retry) != 1 || retry[0].(map[string]any)["accountId"] != testAccount || retry[0].(map[string]any)["uid"] != testUid {
+	if len(retry) != 1 || retry[0].(map[string]any)["accountId"] != testAccount || retry[0].(map[string]any)["uid"] != renewedUid {
 		t.Errorf("retry items = %v", retry)
 	}
 	want := SyncAllResult{
@@ -342,6 +430,85 @@ func TestSyncWithOptions_ForwardsThePresentUsersHeaders(t *testing.T) {
 	for name := range posts[2].Header {
 		if strings.HasPrefix(name, "X-Psu-") {
 			t.Errorf("plain SyncAll sent %s", name)
+		}
+	}
+}
+
+func TestSyncAll_ReportsAccountsWhoseConsentNeedsRenewing(t *testing.T) {
+	const lapsedID = "77777777-7777-4777-8777-777777777777"
+	accounts := accountsWith(t, func(a []map[string]any) []map[string]any { return append(a, lapsed(a[0], lapsedID)) })
+	c, calls := stubAPI(t, accounts, func(r recorded, w http.ResponseWriter) bool {
+		if r.Path != "/api/sync" {
+			return false
+		}
+		return reply(w, 200, `{"accounts":1,"newTransactions":0,"failures":[]}`)
+	})
+
+	result, err := c.SyncAll()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, call := range *calls {
+		if call.Path == "/api/sync" && len(call.Body["items"].([]any)) != 1 {
+			t.Errorf("posted items = %v, want only the account with a uid", call.Body["items"])
+		}
+	}
+	if !reflect.DeepEqual(result.Failures, []SyncFailure{{AccountID: lapsedID, Reason: ReasonReconnectNeeded}}) {
+		t.Errorf("failures = %+v", result.Failures)
+	}
+}
+
+func TestSyncAll_AnAccountThatLapsedBetweenReads_IsReconnectNeeded(t *testing.T) {
+	gone := accountsWith(t, func(a []map[string]any) []map[string]any { return []map[string]any{lapsed(a[0], testAccount)} })
+	reads := func(read int) []byte {
+		if read == 0 {
+			return readFixture(t, "api/accounts.json")
+		}
+		return gone
+	}
+	c, calls := stubAPIReads(t, reads, func(r recorded, w http.ResponseWriter) bool {
+		if r.Path != "/api/sync" {
+			return false
+		}
+		return reply(w, 200, `{"accounts":0,"newTransactions":0,"failures":[{"accountId":"`+testAccount+`","reason":"uid_outdated"}]}`)
+	})
+
+	result, err := c.SyncAll()
+	if err != nil {
+		t.Fatal(err)
+	}
+	posts := 0
+	for _, call := range *calls {
+		if call.Path == "/api/sync" {
+			posts++
+		}
+	}
+	if posts != 1 {
+		t.Errorf("posts = %d, want 1", posts)
+	}
+	if !reflect.DeepEqual(result.Failures, []SyncFailure{{AccountID: testAccount, Reason: ReasonReconnectNeeded}}) {
+		t.Errorf("failures = %+v", result.Failures)
+	}
+}
+
+func TestSyncAllWithOptions_SendsNoPsuHeaders_WithoutAddressOrUserAgent(t *testing.T) {
+	c, calls := stubAPI(t, nil, func(r recorded, w http.ResponseWriter) bool {
+		if r.Path != "/api/sync" {
+			return false
+		}
+		return reply(w, 200, `{"accounts":1,"newTransactions":0}`)
+	})
+
+	for _, psu := range []PsuHeaders{{IPAddress: "203.0.113.7"}, {UserAgent: "Mozilla/5.0"}} {
+		if _, err := c.SyncAllWithOptions(SyncOptions{Psu: &psu}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, call := range *calls {
+		for name := range call.Header {
+			if strings.HasPrefix(name, "X-Psu-") {
+				t.Errorf("%s sent %s", call.Path, name)
+			}
 		}
 	}
 }

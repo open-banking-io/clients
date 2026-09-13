@@ -345,7 +345,8 @@ func (c *Client) syncOnce(accountID string, opts SyncOptions) (SyncResult, error
 }
 
 // SyncAll triggers an online sync of every account that has an active session. Per-account refusals
-// are in Failures; accounts answering uid_outdated are re-read and retried once.
+// are in Failures, and so is every account whose consent needs renewing (reconnect_needed, never
+// sent); accounts answering uid_outdated are re-read and retried once.
 func (c *Client) SyncAll() (SyncAllResult, error) {
 	return c.SyncAllWithOptions(SyncOptions{})
 }
@@ -355,7 +356,7 @@ func (c *Client) SyncAllWithOptions(opts SyncOptions) (SyncAllResult, error) {
 	if err := c.requireKey(); err != nil {
 		return SyncAllResult{}, err
 	}
-	items, err := c.syncItems()
+	items, lapsed, err := c.syncItems()
 	if err != nil {
 		return SyncAllResult{}, err
 	}
@@ -363,6 +364,7 @@ func (c *Client) SyncAllWithOptions(opts SyncOptions) (SyncAllResult, error) {
 	if err != nil {
 		return SyncAllResult{}, err
 	}
+	first.Failures = append(first.Failures, lapsed...)
 
 	outdated := map[string]bool{}
 	for _, f := range first.Failures {
@@ -373,31 +375,39 @@ func (c *Client) SyncAllWithOptions(opts SyncOptions) (SyncAllResult, error) {
 	if len(outdated) == 0 {
 		return first, nil
 	}
-	fresh, err := c.syncItems()
+	fresh, lapsedNow, err := c.syncItems()
 	if err != nil {
 		return SyncAllResult{}, err
 	}
+	settled := map[string]bool{}
 	retry := make([]map[string]string, 0, len(outdated))
-	retried := map[string]bool{}
 	for _, item := range fresh {
 		if outdated[item["accountId"]] {
 			retry = append(retry, item)
-			retried[item["accountId"]] = true
+			settled[item["accountId"]] = true
 		}
 	}
+	nowLapsed := make([]SyncFailure, 0)
+	for _, f := range lapsedNow {
+		if outdated[f.AccountID] {
+			nowLapsed = append(nowLapsed, f)
+			settled[f.AccountID] = true
+		}
+	}
+	failures := make([]SyncFailure, 0, len(first.Failures))
+	for _, f := range first.Failures {
+		if !settled[f.AccountID] {
+			failures = append(failures, f)
+		}
+	}
+	failures = append(failures, nowLapsed...)
 	if len(retry) == 0 {
+		first.Failures = failures
 		return first, nil
 	}
 	second, err := c.postSyncAll(retry, opts)
 	if err != nil {
 		return SyncAllResult{}, err
-	}
-
-	failures := make([]SyncFailure, 0, len(first.Failures)+len(second.Failures))
-	for _, f := range first.Failures {
-		if !retried[f.AccountID] {
-			failures = append(failures, f)
-		}
 	}
 	return SyncAllResult{
 		Accounts:        first.Accounts + second.Accounts,
@@ -406,22 +416,26 @@ func (c *Client) SyncAllWithOptions(opts SyncOptions) (SyncAllResult, error) {
 	}, nil
 }
 
-func (c *Client) syncItems() ([]map[string]string, error) {
+func (c *Client) syncItems() ([]map[string]string, []SyncFailure, error) {
 	wires, err := c.getAccountWires()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	items := make([]map[string]string, 0, len(wires))
+	var lapsed []SyncFailure
 	for i := range wires {
 		uid, err := c.decryptUid(&wires[i])
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		if uid != "" {
+		switch {
+		case uid != "":
 			items = append(items, map[string]string{"accountId": wires[i].ID, "uid": uid})
+		case wires[i].NeedsReconnect:
+			lapsed = append(lapsed, SyncFailure{AccountID: wires[i].ID, Reason: ReasonReconnectNeeded})
 		}
 	}
-	return items, nil
+	return items, lapsed, nil
 }
 
 func (c *Client) postSyncAll(items []map[string]string, opts SyncOptions) (SyncAllResult, error) {

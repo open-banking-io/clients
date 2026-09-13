@@ -41,7 +41,9 @@ type SyncFailure struct {
 }
 
 // PsuHeaders is the account holder's own request, forwarded while they are on your page: some banks
-// only share data with the person present. Never send it from a background job.
+// only share data with the person present. Never send it from a background job. The service honours
+// it only from a key a Connect client issued, and only with a public IPAddress and a UserAgent;
+// without both, nothing is sent.
 type PsuHeaders struct {
 	IPAddress      string
 	UserAgent      string
@@ -58,7 +60,7 @@ type SyncOptions struct {
 }
 
 func (o SyncOptions) headers() map[string]string {
-	if o.Psu == nil {
+	if o.Psu == nil || o.Psu.IPAddress == "" || o.Psu.UserAgent == "" {
 		return nil
 	}
 	h := map[string]string{

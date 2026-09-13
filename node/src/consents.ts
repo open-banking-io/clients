@@ -1,4 +1,4 @@
-import { OAuthError, revokeToken, type HttpOptions } from "./connect.js";
+import { OAuthError, revokeToken, userinfo, type HttpOptions } from "./connect.js";
 import { decryptTo, importPrivateKey } from "./envelope.js";
 import type { OpenConsentWire, SessionIdEnc } from "./models.js";
 import { USER_AGENT } from "./version.js";
@@ -27,18 +27,30 @@ export interface CloseReplacedConsentsResult {
 /**
  * After a renewal: closes, at the bank, the consents the previous key still has open, and revokes
  * that key in the same call. Reads `GET /api/connections/open-consents` only — never the live
- * connections, which by now hold the renewal.
+ * connections, which by now hold the renewal. A key that is already gone, or was issued to another
+ * client, closes nothing: the service answers such a revoke with 200 without closing anything.
  */
 export async function closeReplacedConsents(
   options: CloseReplacedConsentsOptions,
 ): Promise<CloseReplacedConsentsResult> {
   const fetchImpl = options.fetch ?? fetch;
   const base = trimSlash(options.apiBaseUrl ?? options.issuer);
+  const nothing = { closed: 0, failed: 0, revoked: false };
+
+  let owner: string | null;
+  try {
+    owner = (await userinfo({ ...options, accessToken: options.token })).clientId;
+  } catch (e) {
+    if (e instanceof OAuthError) return nothing;
+    throw e;
+  }
+  if (owner !== options.clientId) return nothing;
+
   const res = await fetchImpl(`${base}/api/connections/open-consents`, {
     headers: { "X-Api-Key": options.token, "User-Agent": USER_AGENT },
     signal: AbortSignal.timeout(options.timeoutMs ?? 30_000),
   });
-  if (!res.ok) return { closed: 0, failed: 0, revoked: false };
+  if (!res.ok) return nothing;
   const open = (await res.json()) as OpenConsentWire[];
 
   const key = await importPrivateKey(options.privateKey);

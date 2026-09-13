@@ -79,6 +79,32 @@ function twoAccounts(): unknown[] {
   return [account, { ...account, id: SIBLING }];
 }
 
+const RENEWED_UID = "0e8a4c7b-9d1f-4c2a-8b6e-renewed00001";
+
+function readsThenRenews(renewedEnc: string): () => unknown[] {
+  let reads = 0;
+  return () => {
+    const [account, sibling] = twoAccounts() as Record<string, unknown>[];
+    reads += 1;
+    return reads === 1 ? [account, sibling] : [{ ...account, uidEnc: renewedEnc }, sibling];
+  };
+}
+
+function lapsedAccount(id: string): Record<string, unknown> {
+  const [account] = readJson<Record<string, unknown>[]>("api/accounts.json");
+  return { ...account, id, needsReconnect: true, uidEnc: null };
+}
+
+const userinfoFor = (clientId: string) =>
+  json(200, {
+    sub: "wl:7:connect:ada@example.com",
+    email: "ada@example.com",
+    partner_id: "7",
+    client_id: clientId,
+    scope: "accounts.read",
+    expires_at: null,
+  });
+
 function stub(route: Route, accounts: () => unknown = () => readJson("api/accounts.json")) {
   const calls: Call[] = [];
   const fetchImpl: typeof globalThis.fetch = (input, init) => {
@@ -280,7 +306,8 @@ describe("uid_outdated", () => {
     expect(calls.filter((c) => c.method === "POST")).toHaveLength(2);
   });
 
-  it("syncAll retries only the outdated accounts once and merges the counts", async () => {
+  it("syncAll retries only the outdated accounts once, with the re-read uid, and merges the counts", async () => {
+    const renewedEnc = await seal({ uid: RENEWED_UID });
     const { client, calls } = stub((c, i) => {
       if (c.path !== "/api/sync") return undefined;
       if (i === 0)
@@ -293,7 +320,7 @@ describe("uid_outdated", () => {
           ],
         });
       return json(200, { accounts: 1, newTransactions: 7, failures: [] });
-    }, twoAccounts);
+    }, readsThenRenews(renewedEnc));
 
     const result = await client.syncAll();
 
@@ -305,7 +332,9 @@ describe("uid_outdated", () => {
         { accountId: SIBLING, uid: UID },
       ],
     });
-    expect(JSON.parse(posts[1]!.body)).toEqual({ items: [{ accountId: ACCOUNT, uid: UID }] });
+    expect(JSON.parse(posts[1]!.body)).toEqual({
+      items: [{ accountId: ACCOUNT, uid: RENEWED_UID }],
+    });
     expect(result).toEqual({
       accounts: 2,
       newTransactions: 10,
@@ -339,6 +368,49 @@ describe("uid_outdated", () => {
   });
 });
 
+describe("lapsed consents", () => {
+  it("syncAll reports an account whose consent needs renewing instead of dropping it", async () => {
+    const LAPSED = "77777777-7777-4777-8777-777777777777";
+    const { client, calls } = stub(
+      (c) =>
+        c.path === "/api/sync"
+          ? json(200, { accounts: 1, newTransactions: 0, failures: [] })
+          : undefined,
+      () => [...readJson<unknown[]>("api/accounts.json"), lapsedAccount(LAPSED)],
+    );
+
+    const result = await client.syncAll();
+
+    const post = calls.find((c) => c.path === "/api/sync")!;
+    expect(JSON.parse(post.body)).toEqual({ items: [{ accountId: ACCOUNT, uid: UID }] });
+    expect(result.failures).toEqual([
+      { accountId: LAPSED, reason: "reconnect_needed", bankErrorCode: null },
+    ]);
+  });
+
+  it("an account whose consent lapsed between the two reads is reported reconnect_needed, not uid_outdated", async () => {
+    let reads = 0;
+    const { client, calls } = stub(
+      (c) =>
+        c.path === "/api/sync"
+          ? json(200, {
+              accounts: 0,
+              newTransactions: 0,
+              failures: [{ accountId: ACCOUNT, reason: "uid_outdated" }],
+            })
+          : undefined,
+      () => (++reads === 1 ? readJson("api/accounts.json") : [lapsedAccount(ACCOUNT)]),
+    );
+
+    const result = await client.syncAll();
+
+    expect(calls.filter((c) => c.path === "/api/sync")).toHaveLength(1);
+    expect(result.failures).toEqual([
+      { accountId: ACCOUNT, reason: "reconnect_needed", bankErrorCode: null },
+    ]);
+  });
+});
+
 describe("forwarded PSU headers", () => {
   const psu = {
     ipAddress: "203.0.113.7",
@@ -364,6 +436,23 @@ describe("forwarded PSU headers", () => {
       expect(post.headers["x-psu-accept-language"]).toBe("da-DK");
       expect(post.headers["x-psu-referer"]).toBeUndefined();
       expect(post.headers["x-api-key"]).toBe("ebk_test");
+    }
+  });
+
+  it("sends none when the address or user agent is missing", async () => {
+    const { client, calls } = stub((c) =>
+      c.method === "POST"
+        ? json(200, { accounts: 1, newTransactions: 0, failures: [] })
+        : undefined,
+    );
+
+    await client.syncAll({ psu: { ipAddress: "203.0.113.7", userAgent: "" } });
+    await client.syncAll({
+      psu: { ipAddress: undefined as unknown as string, userAgent: "Mozilla/5.0" },
+    });
+
+    for (const post of calls.filter((c) => c.method === "POST")) {
+      expect(Object.keys(post.headers).filter((h) => h.startsWith("x-psu-"))).toEqual([]);
     }
   });
 
@@ -431,6 +520,7 @@ describe("renewal", () => {
           },
         ]);
       if (c.path === "/oauth/revoke") return new Response(null, { status: 200 });
+      if (c.path === "/oauth/userinfo") return userinfoFor("obc_x");
       return undefined;
     });
 
@@ -444,18 +534,23 @@ describe("renewal", () => {
     });
 
     expect(result).toEqual({ closed: 1, failed: 1, revoked: true });
-    expect(calls.map((c) => c.path)).toEqual(["/api/connections/open-consents", "/oauth/revoke"]);
-    expect(calls[0]!.headers["x-api-key"]).toBe("ebk_previous");
-    const form = new URLSearchParams(calls[1]!.body);
+    expect(calls.map((c) => c.path)).toEqual([
+      "/oauth/userinfo",
+      "/api/connections/open-consents",
+      "/oauth/revoke",
+    ]);
+    expect(calls[1]!.headers["x-api-key"]).toBe("ebk_previous");
+    const form = new URLSearchParams(calls[2]!.body);
     expect(form.get("token")).toBe("ebk_previous");
     expect(form.getAll("connection_id")).toEqual(["old-1"]);
     expect(form.getAll("eb_session_id")).toEqual(["eb-old-1"]);
   });
 
   it("closeReplacedConsents neither closes nor revokes when it cannot read the list", async () => {
-    const { calls, fetchImpl } = stub((c) =>
-      c.path === "/api/connections/open-consents" ? json(401, {}) : undefined,
-    );
+    const { calls, fetchImpl } = stub((c) => {
+      if (c.path === "/oauth/userinfo") return userinfoFor("obc_x");
+      return c.path === "/api/connections/open-consents" ? json(401, {}) : undefined;
+    });
 
     const result = await closeReplacedConsents({
       issuer: "http://api.test",
@@ -467,7 +562,7 @@ describe("renewal", () => {
     });
 
     expect(result).toEqual({ closed: 0, failed: 0, revoked: false });
-    expect(calls.map((c) => c.path)).toEqual(["/api/connections/open-consents"]);
+    expect(calls.map((c) => c.path)).toEqual(["/oauth/userinfo", "/api/connections/open-consents"]);
   });
 
   it("closeReplacedConsents reports the key alive when the revoke is refused", async () => {
@@ -487,6 +582,7 @@ describe("renewal", () => {
         ]);
       if (c.path === "/oauth/revoke")
         return json(400, { error: "invalid_request", error_description: "unknown connection" });
+      if (c.path === "/oauth/userinfo") return userinfoFor("obc_x");
       return undefined;
     });
 
@@ -500,5 +596,25 @@ describe("renewal", () => {
     });
 
     expect(result).toEqual({ closed: 0, failed: 1, revoked: false });
+  });
+
+  it("closeReplacedConsents closes nothing with a key issued to another client, or one already gone", async () => {
+    for (const answer of [userinfoFor("obc_other"), json(401, { error: "invalid_token" })]) {
+      const { calls, fetchImpl } = stub((c) =>
+        c.path === "/oauth/userinfo" ? answer.clone() : undefined,
+      );
+
+      const result = await closeReplacedConsents({
+        issuer: "http://api.test",
+        clientId: "obc_x",
+        clientSecret: "secret",
+        token: "ebk_previous",
+        privateKey: PRIVATE_KEY,
+        fetch: fetchImpl,
+      });
+
+      expect(result).toEqual({ closed: 0, failed: 0, revoked: false });
+      expect(calls.map((c) => c.path)).toEqual(["/oauth/userinfo"]);
+    }
   });
 });

@@ -119,7 +119,9 @@ export interface SyncAllResult {
 
 /**
  * The account holder's own request, forwarded while they are on your page: some banks only share
- * data with the person present. Never send it from a background job.
+ * data with the person present. Never send it from a background job. The service honours it only
+ * from a key a Connect client issued, and only with a public IP address and a user agent — behind a
+ * proxy, take the address from the header your proxy sets. Without both, nothing is sent.
  */
 export interface PsuHeaders {
   /** The user's public IP address. */
