@@ -29,6 +29,10 @@ Detailed, auto-generated notes for every release live on the
 
 ### 2026-09
 
+- CLI (on Go 0.5.0): `connections` gains an `ACCESS` column (`live`, `live, Nd left`, `ended`) and
+  `isLive`/`accountIds` in JSON. **Breaking for scripts:** `sync --all` now exits 1 when any account
+  could not be refreshed (a lapsed consent included), printing each with its reason, bank code and
+  what to do; with `-o json`, and by default when stdout is piped (as every listing command already does), it prints a JSON document whose `failures` carry the same list instead of the prose summary.
 - Node 1.3.0, Go 0.5.0: consent renewal and sync failures. `Connection` gains `isLive` and
   `accountIds`; `syncAll` returns `failures` (`reconnect_needed`, `uid_outdated`,
   `psu_present_required`, …) instead of dropping them, and a refused single sync throws a typed

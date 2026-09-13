@@ -1,9 +1,11 @@
 package app
 
 import (
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
+	"strings"
 
 	"github.com/open-banking-io/clients/cli/internal/ui"
 	openbanking "github.com/open-banking-io/clients/go"
@@ -32,9 +34,22 @@ func (a *App) sync(args []string) error {
 		if err != nil {
 			return fmt.Errorf("sync failed: %w", err)
 		}
+		if a.ui().Format == ui.FormatJSON {
+			if err := writeSyncAllJSON(a, result); err != nil {
+				return err
+			}
+			if n := len(result.Failures); n > 0 {
+				return fmt.Errorf("%d account(s) could not be synced", n)
+			}
+			return nil
+		}
+		summaryStyle := ui.StyleSuccess
+		if len(result.Failures) > 0 {
+			summaryStyle = ui.StyleStatusWarn
+		}
 		fmt.Fprintln(a.stdout(), a.ui().Color(
 			fmt.Sprintf("Synced %d account(s): %d new transaction(s)", result.Accounts, result.NewTransactions),
-			ui.StyleSuccess))
+			summaryStyle))
 		for _, f := range result.Failures {
 			line := fmt.Sprintf("  %s  %s", f.AccountID, f.Reason)
 			if f.BankErrorCode != "" {
@@ -63,7 +78,7 @@ func (a *App) sync(args []string) error {
 	if err != nil {
 		var refused *openbanking.SyncError
 		if errors.As(err, &refused) {
-			if hint := syncHint(refused.Reason); hint != "" {
+			if hint := syncHint(refused.Reason); hint != "" && !strings.Contains(err.Error(), "reconnect required") {
 				return fmt.Errorf("sync failed: %w — %s", err, hint)
 			}
 		}
@@ -89,4 +104,29 @@ func syncHint(reason string) string {
 	default:
 		return ""
 	}
+}
+
+type syncFailureView struct {
+	AccountID     string `json:"accountId"`
+	Reason        string `json:"reason"`
+	BankErrorCode string `json:"bankErrorCode,omitempty"`
+	Hint          string `json:"hint,omitempty"`
+}
+
+type syncAllView struct {
+	Accounts        int64             `json:"accounts"`
+	NewTransactions int64             `json:"newTransactions"`
+	Failures        []syncFailureView `json:"failures"`
+}
+
+func writeSyncAllJSON(a *App, result openbanking.SyncAllResult) error {
+	view := syncAllView{Accounts: result.Accounts, NewTransactions: result.NewTransactions, Failures: []syncFailureView{}}
+	for _, f := range result.Failures {
+		view.Failures = append(view.Failures, syncFailureView{
+			AccountID: f.AccountID, Reason: f.Reason, BankErrorCode: f.BankErrorCode, Hint: syncHint(f.Reason),
+		})
+	}
+	enc := json.NewEncoder(a.stdout())
+	enc.SetIndent("", "  ")
+	return enc.Encode(view)
 }

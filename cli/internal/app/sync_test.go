@@ -2,6 +2,7 @@ package app
 
 import (
 	"bytes"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -33,7 +34,7 @@ func TestSyncAll(t *testing.T) {
 
 	var out, errOut bytes.Buffer
 	app := &App{Stdout: &out, Stderr: &errOut, ConfigPath: cfg}
-	if err := app.Run([]string{"sync", "--all"}); err != nil {
+	if err := app.Run([]string{"-o", "table", "sync", "--all"}); err != nil {
 		t.Fatalf("sync --all: %v\nstderr: %s", err, errOut.String())
 	}
 	if !strings.Contains(out.String(), "Synced 1 account") {
@@ -50,6 +51,61 @@ func TestSyncRequiresAccountOrAll(t *testing.T) {
 	app := &App{Stdout: &out, Stderr: &errOut, ConfigPath: cfg}
 	if err := app.Run([]string{"sync"}); err == nil {
 		t.Fatal("expected an error when neither an account id nor --all is given")
+	}
+}
+
+func failingSyncServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	accounts, _ := os.ReadFile(filepath.Join("testdata", "api", "accounts.json"))
+	failures, _ := os.ReadFile(filepath.Join("testdata", "api", "sync-all-failures.json"))
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api/accounts":
+			_, _ = w.Write(accounts)
+		case "/api/sync":
+			_, _ = w.Write(failures)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+func TestSyncAllAsJSON_CarriesTheFailures_AndStillExitsNonZero(t *testing.T) {
+	bundle := fixtureBundle(t)
+	cfg := writeConfig(t, bundle, failingSyncServer(t).URL)
+
+	var out, errOut bytes.Buffer
+	app := &App{Stdout: &out, Stderr: &errOut, ConfigPath: cfg}
+	err := app.Run([]string{"-o", "json", "sync", "--all"})
+
+	if err == nil {
+		t.Fatal("expected a non-zero exit when accounts could not be synced")
+	}
+	var view struct {
+		Accounts int64 `json:"accounts"`
+		Failures []struct {
+			AccountID     string `json:"accountId"`
+			Reason        string `json:"reason"`
+			BankErrorCode string `json:"bankErrorCode"`
+			Hint          string `json:"hint"`
+		} `json:"failures"`
+	}
+	if jerr := json.Unmarshal(out.Bytes(), &view); jerr != nil {
+		t.Fatalf("stdout is not JSON: %v\n%s", jerr, out.String())
+	}
+	if view.Accounts != 1 || len(view.Failures) != 3 {
+		t.Fatalf("view = %+v", view)
+	}
+	f := view.Failures[1]
+	if f.AccountID != "44444444-4444-4444-8444-444444444444" || f.Reason != "psu_present_required" ||
+		f.BankErrorCode != "PSU_HEADER_NOT_PROVIDED" || !strings.Contains(f.Hint, "web app") {
+		t.Errorf("failure = %+v", f)
+	}
+	if strings.Contains(errOut.String(), "psu_present_required") {
+		t.Errorf("JSON mode also wrote prose failures to stderr:\n%s", errOut.String())
 	}
 }
 
@@ -73,7 +129,7 @@ func TestSyncAllReportsEveryAccountItCouldNotRefresh(t *testing.T) {
 
 	var out, errOut bytes.Buffer
 	app := &App{Stdout: &out, Stderr: &errOut, ConfigPath: cfg}
-	err := app.Run([]string{"sync", "--all"})
+	err := app.Run([]string{"-o", "table", "sync", "--all"})
 
 	if err == nil || !strings.Contains(err.Error(), "3 account(s) could not be synced") {
 		t.Fatalf("err = %v, want the failure count", err)
@@ -110,5 +166,29 @@ func TestSyncSingleAccountRefusalCarriesAHint(t *testing.T) {
 
 	if err == nil || !strings.Contains(err.Error(), "psu_present_required — this bank only shares data") {
 		t.Fatalf("err = %v, want the reason and its hint", err)
+	}
+}
+
+func TestSyncSingleAccountThatNeedsReconnect_SaysSoOnce(t *testing.T) {
+	bundle := fixtureBundle(t)
+	var accounts []map[string]any
+	raw, _ := os.ReadFile(filepath.Join("testdata", "api", "accounts.json"))
+	_ = json.Unmarshal(raw, &accounts)
+	accounts[0]["needsReconnect"] = true
+	accounts[0]["uidEnc"] = nil
+	body, _ := json.Marshal(accounts)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(body)
+	}))
+	t.Cleanup(srv.Close)
+	cfg := writeConfig(t, bundle, srv.URL)
+
+	var out, errOut bytes.Buffer
+	app := &App{Stdout: &out, Stderr: &errOut, ConfigPath: cfg}
+	err := app.Run([]string{"sync", "11111111-1111-4111-8111-111111111111"})
+
+	if err == nil || strings.Count(err.Error(), "reconnect") != 1 {
+		t.Fatalf("err = %v, want the reconnect advice exactly once", err)
 	}
 }
