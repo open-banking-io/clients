@@ -324,9 +324,11 @@ func (c *Client) syncOnce(accountID string, opts SyncOptions) (SyncResult, error
 	if account == nil {
 		return SyncResult{}, fmt.Errorf("account %s not found", accountID)
 	}
-	uid, err := c.decryptUid(account)
-	if err != nil {
-		return SyncResult{}, err
+	uid := ""
+	if !account.NeedsReconnect {
+		if uid, err = c.decryptUid(account); err != nil {
+			return SyncResult{}, err
+		}
 	}
 	if uid == "" {
 		return SyncResult{}, &SyncError{
@@ -424,21 +426,25 @@ func (c *Client) syncItems() ([]map[string]string, []SyncFailure, error) {
 	items := make([]map[string]string, 0, len(wires))
 	var lapsed []SyncFailure
 	for i := range wires {
+		if wires[i].NeedsReconnect {
+			lapsed = append(lapsed, SyncFailure{AccountID: wires[i].ID, Reason: ReasonReconnectNeeded})
+			continue
+		}
 		uid, err := c.decryptUid(&wires[i])
 		if err != nil {
 			return nil, nil, err
 		}
-		switch {
-		case uid != "":
+		if uid != "" {
 			items = append(items, map[string]string{"accountId": wires[i].ID, "uid": uid})
-		case wires[i].NeedsReconnect:
-			lapsed = append(lapsed, SyncFailure{AccountID: wires[i].ID, Reason: ReasonReconnectNeeded})
 		}
 	}
 	return items, lapsed, nil
 }
 
 func (c *Client) postSyncAll(items []map[string]string, opts SyncOptions) (SyncAllResult, error) {
+	if len(items) == 0 {
+		return SyncAllResult{Failures: []SyncFailure{}}, nil
+	}
 	var result syncAllResultWire
 	if err := c.postJSONWithHeaders("/api/sync", map[string]any{"items": items}, opts.headers(), &result); err != nil {
 		return SyncAllResult{}, err

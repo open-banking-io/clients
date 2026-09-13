@@ -158,7 +158,7 @@ export class OpenBankingClient {
       const account = wires.find((a) => a.id === accountId);
       if (!account) throw new Error(`Account ${accountId} not found`);
 
-      const uid = await this.decryptUid(account);
+      const uid = account.needsReconnect ? null : await this.decryptUid(account);
       if (uid == null) {
         throw new SyncError(
           "Account has no active session (reconnect required) — cannot sync",
@@ -225,7 +225,7 @@ export class OpenBankingClient {
       wires.map(async (a) => ({
         accountId: a.id,
         needsReconnect: a.needsReconnect,
-        uid: await this.decryptUid(a),
+        uid: a.needsReconnect ? null : await this.decryptUid(a),
       })),
     );
     return {
@@ -242,6 +242,7 @@ export class OpenBankingClient {
     items: { accountId: string; uid: string }[],
     options: SyncOptions,
   ): Promise<SyncAllResult> {
+    if (items.length === 0) return { accounts: 0, newTransactions: 0, failures: [] };
     const result = await this.postJson<SyncAllResultWire>(
       "/api/sync",
       { items },

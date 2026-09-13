@@ -617,4 +617,65 @@ describe("renewal", () => {
       expect(calls.map((c) => c.path)).toEqual(["/oauth/userinfo"]);
     }
   });
+
+  it("closeReplacedConsents throws on an outage instead of giving up the only key that can close", async () => {
+    for (const failing of ["/oauth/userinfo", "/api/connections/open-consents", "/oauth/revoke"]) {
+      const { calls, fetchImpl } = stub((c) => {
+        if (c.path === failing) return json(503, { error: "temporarily_unavailable" });
+        if (c.path === "/oauth/userinfo") return userinfoFor("obc_x");
+        if (c.path === "/api/connections/open-consents") return json(200, []);
+        if (c.path === "/oauth/revoke") return new Response(null, { status: 200 });
+        return undefined;
+      });
+
+      await expect(
+        closeReplacedConsents({
+          issuer: "http://api.test",
+          clientId: "obc_x",
+          clientSecret: "secret",
+          token: "ebk_previous",
+          privateKey: PRIVATE_KEY,
+          fetch: fetchImpl,
+        }),
+      ).rejects.toThrow();
+      expect(calls.at(-1)!.path).toBe(failing);
+    }
+  });
+});
+
+describe("accounts that need a reconnect", () => {
+  const V2_ENVELOPE = Buffer.concat([Buffer.from([2]), Buffer.alloc(120, 7)]).toString("base64");
+
+  const needingReconnect = (uidEnc: string | null) => () => [
+    {
+      ...readJson<Record<string, unknown>[]>("api/accounts.json")[0],
+      needsReconnect: true,
+      uidEnc,
+    },
+  ];
+
+  it("a single sync throws a typed reconnect_needed without calling the service", async () => {
+    for (const uidEnc of [null, V2_ENVELOPE]) {
+      const { client, calls } = stub(() => undefined, needingReconnect(uidEnc));
+
+      const error = await client.sync(ACCOUNT).catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(SyncError);
+      expect(error).toMatchObject({ reason: "reconnect_needed" });
+      expect(calls.filter((c) => c.method === "POST")).toEqual([]);
+    }
+  });
+
+  it("syncAll reports an envelope it cannot open as reconnect_needed, and posts nothing when nothing is left", async () => {
+    const { client, calls } = stub(() => undefined, needingReconnect(V2_ENVELOPE));
+
+    const result = await client.syncAll();
+
+    expect(result).toEqual({
+      accounts: 0,
+      newTransactions: 0,
+      failures: [{ accountId: ACCOUNT, reason: "reconnect_needed", bankErrorCode: null }],
+    });
+    expect(calls.filter((c) => c.method === "POST")).toEqual([]);
+  });
 });

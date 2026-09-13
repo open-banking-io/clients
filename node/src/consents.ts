@@ -28,7 +28,9 @@ export interface CloseReplacedConsentsResult {
  * After a renewal: closes, at the bank, the consents the previous key still has open, and revokes
  * that key in the same call. Reads `GET /api/connections/open-consents` only — never the live
  * connections, which by now hold the renewal. A key that is already gone, or was issued to another
- * client, closes nothing: the service answers such a revoke with 200 without closing anything.
+ * client, closes nothing: the service answers such a revoke with 200 without closing anything. A
+ * failure that retrying may clear (5xx, 429) throws, so the key survives for a retry: revoking it
+ * without the close would leave the consents open with nothing left that can list them.
  */
 export async function closeReplacedConsents(
   options: CloseReplacedConsentsOptions,
@@ -41,7 +43,7 @@ export async function closeReplacedConsents(
   try {
     owner = (await userinfo({ ...options, accessToken: options.token })).clientId;
   } catch (e) {
-    if (e instanceof OAuthError) return nothing;
+    if (e instanceof OAuthError && keyRefused(e.status)) return nothing;
     throw e;
   }
   if (owner !== options.clientId) return nothing;
@@ -50,7 +52,8 @@ export async function closeReplacedConsents(
     headers: { "X-Api-Key": options.token, "User-Agent": USER_AGENT },
     signal: AbortSignal.timeout(options.timeoutMs ?? 30_000),
   });
-  if (!res.ok) return nothing;
+  if (keyRefused(res.status)) return nothing;
+  if (!res.ok) throw new Error(`GET /api/connections/open-consents failed: ${res.status}`);
   const open = (await res.json()) as OpenConsentWire[];
 
   const key = await importPrivateKey(options.privateKey);
@@ -80,12 +83,14 @@ export async function closeReplacedConsents(
   try {
     await revokeToken({ ...options, closeConsents });
   } catch (e) {
-    if (e instanceof OAuthError)
+    if (e instanceof OAuthError && e.status < 500 && e.status !== 429)
       return { closed: 0, failed: failed + closeConsents.length, revoked: false };
     throw e;
   }
   return { closed: closeConsents.length, failed, revoked: true };
 }
+
+const keyRefused = (status: number) => status === 401 || status === 403;
 
 function trimSlash(url: string): string {
   let end = url.length;

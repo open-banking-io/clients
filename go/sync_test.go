@@ -512,3 +512,51 @@ func TestSyncAllWithOptions_SendsNoPsuHeaders_WithoutAddressOrUserAgent(t *testi
 		}
 	}
 }
+
+func TestSync_AnAccountNeedingReconnect_IsATypedRefusal_WithoutCallingTheService(t *testing.T) {
+	v2 := base64.StdEncoding.EncodeToString(append([]byte{2}, make([]byte, 120)...))
+	for _, uidEnc := range []any{nil, v2} {
+		accounts := accountsWith(t, func(a []map[string]any) []map[string]any {
+			a[0]["needsReconnect"] = true
+			a[0]["uidEnc"] = uidEnc
+			return a
+		})
+		c, calls := stubAPI(t, accounts, func(recorded, http.ResponseWriter) bool { return false })
+
+		_, err := c.Sync(testAccount)
+
+		var se *SyncError
+		if !errors.As(err, &se) || se.Reason != ReasonReconnectNeeded {
+			t.Errorf("uidEnc %v: err = %v, want a reconnect_needed *SyncError", uidEnc, err)
+		}
+		for _, call := range *calls {
+			if call.Method == http.MethodPost {
+				t.Errorf("uidEnc %v: posted %s", uidEnc, call.Path)
+			}
+		}
+	}
+}
+
+func TestSyncAll_AnEnvelopeItCannotOpen_IsReconnectNeeded_AndNothingIsPosted(t *testing.T) {
+	v2 := base64.StdEncoding.EncodeToString(append([]byte{2}, make([]byte, 120)...))
+	accounts := accountsWith(t, func(a []map[string]any) []map[string]any {
+		a[0]["needsReconnect"] = true
+		a[0]["uidEnc"] = v2
+		return a
+	})
+	c, calls := stubAPI(t, accounts, func(recorded, http.ResponseWriter) bool { return false })
+
+	result, err := c.SyncAll()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := SyncAllResult{Failures: []SyncFailure{{AccountID: testAccount, Reason: ReasonReconnectNeeded}}}
+	if !reflect.DeepEqual(result, want) {
+		t.Errorf("result = %+v", result)
+	}
+	for _, call := range *calls {
+		if call.Method == http.MethodPost {
+			t.Errorf("posted %s", call.Path)
+		}
+	}
+}
