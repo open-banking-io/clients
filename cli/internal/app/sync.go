@@ -1,10 +1,14 @@
 package app
 
 import (
+	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
+	"strings"
 
 	"github.com/open-banking-io/clients/cli/internal/ui"
+	openbanking "github.com/open-banking-io/clients/go"
 )
 
 func (a *App) sync(args []string) error {
@@ -30,9 +34,35 @@ func (a *App) sync(args []string) error {
 		if err != nil {
 			return fmt.Errorf("sync failed: %w", err)
 		}
+		if a.ui().Format != ui.FormatTable {
+			if err := writeSyncAllJSON(a, result); err != nil {
+				return err
+			}
+			if n := len(result.Failures); n > 0 {
+				return fmt.Errorf("%d account(s) could not be synced", n)
+			}
+			return nil
+		}
+		summaryStyle := ui.StyleSuccess
+		if len(result.Failures) > 0 {
+			summaryStyle = ui.StyleStatusWarn
+		}
 		fmt.Fprintln(a.stdout(), a.ui().Color(
 			fmt.Sprintf("Synced %d account(s): %d new transaction(s)", result.Accounts, result.NewTransactions),
-			ui.StyleSuccess))
+			summaryStyle))
+		for _, f := range result.Failures {
+			line := fmt.Sprintf("  %s  %s", f.AccountID, f.Reason)
+			if f.BankErrorCode != "" {
+				line += " (" + f.BankErrorCode + ")"
+			}
+			if hint := syncHint(f.Reason); hint != "" {
+				line += " — " + hint
+			}
+			fmt.Fprintln(a.stderr(), a.ui().Color(line, ui.StyleStatusWarn))
+		}
+		if n := len(result.Failures); n > 0 {
+			return fmt.Errorf("%d account(s) could not be synced", n)
+		}
 		return nil
 	}
 
@@ -46,10 +76,71 @@ func (a *App) sync(args []string) error {
 	result, err := client.Sync(accountID)
 	stop()
 	if err != nil {
+		var refused *openbanking.SyncError
+		if errors.As(err, &refused) {
+			hint := syncHint(refused.Reason)
+			if refused.Reason == openbanking.ReasonRateLimited && refused.RetryAfterSeconds > 0 {
+				hint = fmt.Sprintf("the bank is throttling; try again in about %d minute(s)", (refused.RetryAfterSeconds+59)/60)
+			}
+			if hint != "" && !strings.Contains(err.Error(), "reconnect required") {
+				return fmt.Errorf("sync failed: %w — %s", err, hint)
+			}
+		}
 		return fmt.Errorf("sync failed: %w", err)
+	}
+	if a.ui().Format != ui.FormatTable {
+		enc := json.NewEncoder(a.stdout())
+		enc.SetIndent("", "  ")
+		return enc.Encode(syncView{NewTransactions: result.NewTransactions, TotalFetched: result.TotalFetched})
 	}
 	fmt.Fprintln(a.stdout(), a.ui().Color(
 		fmt.Sprintf("Synced: %d new transaction(s) (%d fetched)", result.NewTransactions, result.TotalFetched),
 		ui.StyleSuccess))
 	return nil
+}
+
+type syncView struct {
+	NewTransactions int64 `json:"newTransactions"`
+	TotalFetched    int64 `json:"totalFetched"`
+}
+
+// syncHint is what to do about a refusal, keyed on the stable reason the service sends.
+func syncHint(reason string) string {
+	switch reason {
+	case openbanking.ReasonReconnectNeeded:
+		return "reconnect this bank at open-banking.io"
+	case openbanking.ReasonPsuPresentRequired:
+		return "this bank only shares data while you use the web app; sync there"
+	case openbanking.ReasonRateLimited:
+		return "the bank is throttling; try again later"
+	case openbanking.ReasonConsentWithdrawn:
+		return "this account was removed from its connection"
+	default:
+		return ""
+	}
+}
+
+type syncFailureView struct {
+	AccountID     string `json:"accountId"`
+	Reason        string `json:"reason"`
+	BankErrorCode string `json:"bankErrorCode,omitempty"`
+	Hint          string `json:"hint,omitempty"`
+}
+
+type syncAllView struct {
+	Accounts        int64             `json:"accounts"`
+	NewTransactions int64             `json:"newTransactions"`
+	Failures        []syncFailureView `json:"failures"`
+}
+
+func writeSyncAllJSON(a *App, result openbanking.SyncAllResult) error {
+	view := syncAllView{Accounts: result.Accounts, NewTransactions: result.NewTransactions, Failures: []syncFailureView{}}
+	for _, f := range result.Failures {
+		view.Failures = append(view.Failures, syncFailureView{
+			AccountID: f.AccountID, Reason: f.Reason, BankErrorCode: f.BankErrorCode, Hint: syncHint(f.Reason),
+		})
+	}
+	enc := json.NewEncoder(a.stdout())
+	enc.SetIndent("", "  ")
+	return enc.Encode(view)
 }
