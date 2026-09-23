@@ -37,7 +37,7 @@ jobs:
         with:
           dotnet-version: 8.0.x
       - run: dotnet test dotnet/ -c Release --collect:"XPlat Code Coverage" --settings dotnet/coverlet.runsettings
-      - uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+      - uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           files: dotnet/tests/OpenBankingIO.Client.Tests/TestResults/**/coverage.cobertura.xml
           flags: dotnet
@@ -57,7 +57,7 @@ jobs:
         working-directory: node
       - run: npm run coverage
         working-directory: node
-      - uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+      - uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           files: node/coverage/cobertura-coverage.xml
           flags: node
@@ -77,7 +77,7 @@ jobs:
         working-directory: python
       - run: pytest --cov=open_banking_io --cov-report=xml
         working-directory: python
-      - uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+      - uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           files: python/coverage.xml
           flags: python
@@ -93,12 +93,12 @@ jobs:
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
         with:
           components: llvm-tools-preview
-      - uses: taiki-e/install-action@7f4eb899022d8fe70b20c4f3de697aa85c309026 # v2.85.11
+      - uses: taiki-e/install-action@94c31af3204a9f15ab40b35ad084410b905bbc73 # v2.87.17
         with:
           tool: cargo-llvm-cov
       - run: cargo llvm-cov --cobertura --output-path cobertura.xml
         working-directory: rust
-      - uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+      - uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           files: rust/cobertura.xml
           flags: rust
@@ -120,7 +120,7 @@ jobs:
           go install github.com/boumenot/gocover-cobertura@v1.5.0
           "$(go env GOPATH)/bin/gocover-cobertura" < coverage.out > coverage.xml
         working-directory: go
-      - uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+      - uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           files: go/coverage.xml
           flags: go
@@ -133,14 +133,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           distribution: temurin
           java-version: '21'
           cache: maven
       - run: mvn -B verify
         working-directory: java
-      - uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+      - uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           files: java/target/site/jacoco/jacoco.xml
           flags: java
@@ -153,14 +153,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1
+      - uses: ruby/setup-ruby@a0102e0972be65f351c307e2d64b9314a57c8073 # v1
         with:
           ruby-version: '3.3'
           bundler-cache: true
           working-directory: ruby
       - run: bundle exec rspec
         working-directory: ruby
-      - uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+      - uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           files: ruby/coverage/coverage.xml
           flags: ruby
@@ -182,7 +182,7 @@ jobs:
         working-directory: php
       - run: vendor/bin/phpunit --coverage-cobertura=coverage/cobertura.xml
         working-directory: php
-      - uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+      - uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           files: php/coverage/cobertura.xml
           flags: php
@@ -202,7 +202,7 @@ jobs:
         working-directory: beancount
       - run: pytest --cov=beancount_openbanking_io --cov-report=xml
         working-directory: beancount
-      - uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+      - uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           files: beancount/coverage.xml
           flags: beancount
