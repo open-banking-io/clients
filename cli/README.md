@@ -45,8 +45,8 @@ openbanking use                         # pick a current account (arrow keys) �
 openbanking transactions                # the current account's statement     (alias: tx)
 openbanking transactions <account-id>   # a specific account (--from --to --limit --offset)
 openbanking sync                        # pull fresh transactions for the current account
-openbanking sync --all                  # …or for every connected account
-openbanking connections                 # list bank connections               (alias: conn)
+openbanking sync --all                  # …or for every connected account; lists any it could not refresh, and exits 1
+openbanking connections                 # list bank connections, with ACCESS: live / live, Nd left / ended   (alias: conn)
 openbanking banks                       # list available banks (connect them in the web app)
 openbanking                             # no args, in a terminal → interactive menu
 openbanking version

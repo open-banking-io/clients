@@ -157,7 +157,7 @@ func TestSyncUsesCurrentAccount(t *testing.T) {
 	if err := config.SaveState(app.ConfigPath, config.State{CurrentAccountID: fixtureAccountID}); err != nil {
 		t.Fatal(err)
 	}
-	if err := app.Run([]string{"sync"}); err != nil {
+	if err := app.Run([]string{"-o", "table", "sync"}); err != nil {
 		t.Fatalf("sync (current account): %v\nstderr: %s", err, errOut.String())
 	}
 	if !strings.Contains(out.String(), "fetched") {
