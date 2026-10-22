@@ -153,7 +153,7 @@ func TestConnectionsCommandRendersTable(t *testing.T) {
 	}
 
 	got := out.String()
-	for _, want := range []string{"Lunar", "Active", "business"} {
+	for _, want := range []string{"Lunar", "Active", "ended", "business"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("connections output missing %q\n--- output ---\n%s", want, got)
 		}
@@ -183,5 +183,29 @@ func TestConnectCommandIsRemoved(t *testing.T) {
 	err := app.Run([]string{"connect", "some-bank"})
 	if err == nil || !strings.Contains(err.Error(), "unknown command") {
 		t.Fatalf("connect should be an unknown command, got: %v", err)
+	}
+}
+
+func TestConnectionsAsJSON_SayWhetherTheConsentStillWorks(t *testing.T) {
+	bundle := fixtureBundle(t)
+	srv := startAPIServer(t, bundle.APIKey)
+	cfg := writeConfig(t, bundle, srv.URL)
+
+	var out, errOut bytes.Buffer
+	app := &App{Stdout: &out, Stderr: &errOut, ConfigPath: cfg}
+	if err := app.Run([]string{"-o", "json", "connections"}); err != nil {
+		t.Fatalf("Run connections: %v\n%s", err, errOut.String())
+	}
+
+	var views []map[string]any
+	if err := json.Unmarshal(out.Bytes(), &views); err != nil {
+		t.Fatalf("not JSON: %v\n%s", err, out.String())
+	}
+	if len(views) != 1 || views[0]["isLive"] != false {
+		t.Fatalf("views = %v", views)
+	}
+	ids, _ := views[0]["accountIds"].([]any)
+	if len(ids) != 1 || ids[0] != "11111111-1111-4111-8111-111111111111" {
+		t.Errorf("accountIds = %v", views[0]["accountIds"])
 	}
 }
