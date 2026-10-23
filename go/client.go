@@ -26,11 +26,39 @@ type Client struct {
 	httpClient *http.Client
 }
 
+// loopbackHosts are the only hosts allowed to be reached over cleartext http://.
+var loopbackHosts = map[string]bool{"localhost": true, "127.0.0.1": true, "::1": true}
+
+// normalizeBaseURL trims the base url and rejects anything that would otherwise only
+// surface later as an opaque transport error, or would put credentials on the wire in
+// the clear.
+func normalizeBaseURL(apiBaseURL string) (string, error) {
+	trimmed := strings.TrimSpace(apiBaseURL)
+	if trimmed == "" {
+		return "", fmt.Errorf("apiBaseUrl is required")
+	}
+	u, err := url.Parse(trimmed)
+	if err != nil {
+		return "", fmt.Errorf("apiBaseUrl is not a valid url: %w", err)
+	}
+	scheme := strings.ToLower(u.Scheme)
+	if (scheme != "http" && scheme != "https") || u.Host == "" {
+		return "", fmt.Errorf("apiBaseUrl must start with http:// or https:// (got %q)", trimmed)
+	}
+	if scheme == "http" && !loopbackHosts[strings.ToLower(u.Hostname())] {
+		return "", fmt.Errorf(
+			"apiBaseUrl must use https:// -- cleartext http:// would send the API key and "+
+				"decrypted session uids over the network (got %q)", trimmed)
+	}
+	return strings.TrimRight(trimmed, "/"), nil
+}
+
 // New builds a client from an API base url, API key, and base64 PKCS#8 encryption private key.
 // A nil httpClient builds an *http.Client with a 30s timeout.
 func New(apiBaseURL, apiKey, privateKeyPKCS8B64 string, httpClient *http.Client) (*Client, error) {
-	if strings.TrimSpace(apiBaseURL) == "" {
-		return nil, fmt.Errorf("apiBaseUrl is required")
+	baseURL, err := normalizeBaseURL(apiBaseURL)
+	if err != nil {
+		return nil, err
 	}
 	if strings.TrimSpace(apiKey) == "" {
 		return nil, fmt.Errorf("apiKey is required")
@@ -46,7 +74,7 @@ func New(apiBaseURL, apiKey, privateKeyPKCS8B64 string, httpClient *http.Client)
 		httpClient = &http.Client{Timeout: 30 * time.Second}
 	}
 	return &Client{
-		baseURL:    strings.TrimRight(apiBaseURL, "/"),
+		baseURL:    baseURL,
 		apiKey:     apiKey,
 		privateKey: priv,
 		httpClient: httpClient,
@@ -132,8 +160,9 @@ func NewWithOptions(apiBaseURL, apiKey, privateKeyPKCS8B64 string, opts ...Optio
 // (GetConnections). It needs no encryption key; the decrypting methods (GetAccounts,
 // GetTransactions, Sync, SyncAll) return an error on a client built this way.
 func NewPublic(apiBaseURL, apiKey string, httpClient *http.Client) (*Client, error) {
-	if strings.TrimSpace(apiBaseURL) == "" {
-		return nil, fmt.Errorf("apiBaseUrl is required")
+	baseURL, err := normalizeBaseURL(apiBaseURL)
+	if err != nil {
+		return nil, err
 	}
 	if strings.TrimSpace(apiKey) == "" {
 		return nil, fmt.Errorf("apiKey is required")
@@ -142,7 +171,7 @@ func NewPublic(apiBaseURL, apiKey string, httpClient *http.Client) (*Client, err
 		httpClient = http.DefaultClient
 	}
 	return &Client{
-		baseURL:    strings.TrimRight(apiBaseURL, "/"),
+		baseURL:    baseURL,
 		apiKey:     apiKey,
 		httpClient: httpClient,
 	}, nil
