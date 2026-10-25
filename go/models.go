@@ -83,6 +83,11 @@ type Connection struct {
 	AccountCount int64
 	LastSyncedAt string
 	PsuType      string
+	// IsLive is whether the consent still works, by the service's clock. Status stays "Active" after
+	// ValidUntil.
+	IsLive bool
+	// AccountIDs names the accounts this connection holds.
+	AccountIDs []string
 }
 
 // SyncResult is the outcome of syncing one account.
@@ -95,6 +100,8 @@ type SyncResult struct {
 type SyncAllResult struct {
 	Accounts        int64
 	NewTransactions int64
+	// Failures lists the accounts that did not sync, and why.
+	Failures []SyncFailure
 }
 
 // Bank is a bank (ASPSP) available for connection.
@@ -174,14 +181,16 @@ type transactionWire struct {
 }
 
 type connectionWire struct {
-	SessionID    string `json:"sessionId"`
-	AspspName    string `json:"aspspName"`
-	AspspCountry string `json:"aspspCountry"`
-	ValidUntil   string `json:"validUntil"`
-	Status       string `json:"status"`
-	AccountCount int64  `json:"accountCount"`
-	LastSyncedAt string `json:"lastSyncedAt"`
-	PsuType      string `json:"psuType"`
+	SessionID    string   `json:"sessionId"`
+	AspspName    string   `json:"aspspName"`
+	AspspCountry string   `json:"aspspCountry"`
+	ValidUntil   string   `json:"validUntil"`
+	Status       string   `json:"status"`
+	AccountCount int64    `json:"accountCount"`
+	LastSyncedAt string   `json:"lastSyncedAt"`
+	PsuType      string   `json:"psuType"`
+	IsLive       *bool    `json:"isLive"`
+	AccountIDs   []string `json:"accountIds"`
 }
 
 type bankWire struct {
@@ -205,6 +214,11 @@ type syncResultWire struct {
 type syncAllResultWire struct {
 	Accounts        int64 `json:"accounts"`
 	NewTransactions int64 `json:"newTransactions"`
+	Failures        []struct {
+		AccountID     string `json:"accountId"`
+		Reason        string `json:"reason"`
+		BankErrorCode string `json:"bankErrorCode"`
+	} `json:"failures"`
 }
 
 // ---- Decrypted envelope payloads (the camelCase contract with the backend) ----

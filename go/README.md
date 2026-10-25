@@ -60,6 +60,14 @@ The package name is `openbanking`. It exposes the same surface as the other SDKs
 `GetTransactions`, `GetConnections`, `Sync`, `SyncAll`. `Sync` decrypts the account's session uid
 locally and posts it, so the service can refresh from the bank without ever holding it in plaintext.
 
+A refused `Sync` returns a `*SyncError`; `SyncAll` reports per-account refusals in `Failures`. Branch on
+`Reason` (`ReasonReconnectNeeded`, `ReasonPsuPresentRequired`, …), never on the status. Both re-read
+the account and retry once on `uid_outdated`, the answer to a uid a renewal replaced.
+`Connection.IsLive` is decided by the service's clock, and `Connection.AccountIDs` names the
+connection holding an account. Some banks share data only while the account holder is present:
+forward their own request with `SyncAllWithOptions(SyncOptions{Psu: &PsuHeaders{…}})` — never from
+a background job.
+
 Optional text fields are empty strings when absent; monetary amounts are returned as the string the
 service emits — parse them into your decimal type of choice to avoid any float round-trip.
 
