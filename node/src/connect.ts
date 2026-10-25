@@ -50,6 +50,11 @@ export interface AuthorizeUrlOptions {
   challenge?: "pin_code";
   /** Space-separated locales; the first one the server publishes forces the language of every screen. */
   uiLocales?: string;
+  /**
+   * A connection's `sessionId` to renew: the user goes straight to that bank, whether its consent
+   * is still live or has lapsed.
+   */
+  renewConnection?: string;
 }
 
 /** The `/oauth/authorize` URL for a top-level browser navigation. */
@@ -67,6 +72,7 @@ export function buildAuthorizeUrl(options: AuthorizeUrlOptions): string {
   if (options.loginHint) params.set("login_hint", options.loginHint);
   if (options.challenge) params.set("challenge", options.challenge);
   if (options.uiLocales) params.set("ui_locales", options.uiLocales);
+  if (options.renewConnection) params.set("renew_connection", options.renewConnection);
   return `${endpoint(options.issuer, "/oauth/authorize")}?${params.toString()}`;
 }
 
@@ -303,11 +309,20 @@ export interface RevokeTokenOptions extends HttpOptions {
   clientSecret: string;
   /** The key to revoke. Only keys issued to this client are touched; an unknown key still succeeds. */
   token: string;
+  /**
+   * Bank consents to close in the same call, with the decrypted Enable Banking session id of each.
+   * Validated before the key is revoked: a refusal leaves the key alive.
+   */
+  closeConsents?: { connectionId: string; ebSessionId: string }[];
 }
 
 /** RFC 7009 revocation. Resolves on 200; throws {@link OAuthError} on a client-authentication failure. */
 export async function revokeToken(options: RevokeTokenOptions): Promise<void> {
   const body = new URLSearchParams({ token: options.token, token_type_hint: "access_token" });
+  for (const c of options.closeConsents ?? []) {
+    body.append("connection_id", c.connectionId);
+    body.append("eb_session_id", c.ebSessionId);
+  }
   const response = await post(
     endpoint(options.issuer, "/oauth/revoke"),
     body,

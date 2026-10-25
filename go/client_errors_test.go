@@ -259,9 +259,8 @@ func TestSyncAllSkipsAccountsWithoutSession(t *testing.T) {
 	if _, err := f.client(t).SyncAll(); err != nil {
 		t.Fatalf("SyncAll: %v", err)
 	}
-	items, ok := f.lastBody["items"].([]any)
-	if !ok || len(items) != 0 {
-		t.Errorf("posted items = %v, want empty list", f.lastBody["items"])
+	if f.lastBody != nil {
+		t.Errorf("posted %v, want no sync request when no account has a session", f.lastBody)
 	}
 }
 
