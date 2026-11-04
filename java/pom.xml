@@ -36,7 +36,7 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <jackson.version>2.22.4</jackson.version>
     <junit.version>6.1.3</junit.version>
-    <jacoco.version>0.8.15</jacoco.version>
+    <jacoco.version>0.8.16</jacoco.version>
     <spotless.version>2.46.1</spotless.version>
     <google-java-format.version>1.27.0</google-java-format.version>
     <spotbugs.version>4.10.5.0</spotbugs.version>
