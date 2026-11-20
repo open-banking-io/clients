@@ -65,6 +65,39 @@ module OpenBankingIO
       )
     end
 
+    LOOPBACK_HOSTS = ["localhost", "127.0.0.1", "::1"].freeze
+
+    # Trims and validates the API base url, returning it as a URI that always ends in "/".
+    # Rejects up front what would otherwise only surface as an opaque Net::HTTP transport
+    # error on the first request, and refuses cleartext http:// to a non-loopback host,
+    # which would put the API key and decrypted session uids on the wire.
+    def self.normalize_base_url(api_base_url)
+      trimmed = api_base_url.to_s.strip
+      raise ArgumentError, "api_base_url is required" if trimmed.empty?
+
+      uri = begin
+        URI.parse(trimmed)
+      rescue URI::InvalidURIError
+        nil
+      end
+      scheme = uri&.scheme&.downcase
+      unless %w[http https].include?(scheme) && !uri.host.to_s.empty?
+        raise ArgumentError, "api_base_url must start with http:// or https:// (got #{trimmed.inspect})"
+      end
+
+      if scheme == "http" && !LOOPBACK_HOSTS.include?(uri.host.to_s.downcase.delete("[]"))
+        raise ArgumentError,
+          "api_base_url must use https:// -- cleartext http:// would send the API key and " \
+          "decrypted session uids over the network (got #{trimmed.inspect})"
+      end
+
+      # Strip any trailing slashes without a backtracking regex (avoids ReDoS on
+      # pathological input) then re-append a single one, so the base always ends in "/".
+      base = trimmed
+      base = base.chomp("/") while base.end_with?("/")
+      URI.parse(base + "/")
+    end
+
     # +open_timeout+/+read_timeout+ are seconds applied to the internally built Net::HTTP.
     # +http_client+, when given, is any object responding to +#request+ (e.g. a preconfigured
     # Net::HTTP for a proxy, custom CA/mTLS or connection pooling); it is used as-is instead
@@ -72,15 +105,10 @@ module OpenBankingIO
     def initialize(api_base_url:, api_key:, private_key_pkcs8:,
       open_timeout: DEFAULT_OPEN_TIMEOUT, read_timeout: DEFAULT_READ_TIMEOUT,
       http_client: nil)
-      raise ArgumentError, "api_base_url is required" if blank?(api_base_url)
       raise ArgumentError, "api_key is required" if blank?(api_key)
       raise ArgumentError, "private_key_pkcs8 is required" if blank?(private_key_pkcs8)
 
-      # Strip any trailing slashes without a backtracking regex (avoids ReDoS on
-      # pathological input) then re-append a single one, so the base always ends in "/".
-      base = api_base_url.to_s
-      base = base.chomp("/") while base.end_with?("/")
-      @base_uri = URI.parse(base + "/")
+      @base_uri = self.class.normalize_base_url(api_base_url)
       @api_key = api_key
       @private_key = Envelope.load_private_key(private_key_pkcs8)
       @open_timeout = open_timeout

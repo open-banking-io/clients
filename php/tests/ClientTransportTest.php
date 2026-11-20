@@ -121,7 +121,7 @@ final class ClientTransportTest extends TestCase
         /** @var array{apiKey: string, encryptionKey: array{privateKey: string}} $credentials */
         $credentials = Fixtures::load('credentials.json');
         $client = new Client(
-            'http://198.51.100.1:9',
+            'https://198.51.100.1:9',
             'api-key',
             $credentials['encryptionKey']['privateKey'],
             ['connect_timeout' => 1],

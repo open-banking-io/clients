@@ -54,6 +54,42 @@ final class Client
      */
     private static ?\WeakMap $transportOptions = null;
 
+    /** Hosts allowed to be reached over cleartext http://. */
+    private const LOOPBACK_HOSTS = ['localhost', '127.0.0.1', '::1'];
+
+    /**
+     * Trims and validates the API base url, rejecting up front what would otherwise only
+     * surface as an opaque cURL transport error on the first request, and refusing cleartext
+     * http:// to a non-loopback host, which would put the API key and decrypted session uids
+     * on the wire.
+     */
+    private static function normalizeBaseUrl(string $apiBaseUrl): string
+    {
+        $trimmed = trim($apiBaseUrl);
+        if ($trimmed === '') {
+            throw new OpenBankingException('apiBaseUrl is required');
+        }
+
+        $scheme = strtolower((string) parse_url($trimmed, PHP_URL_SCHEME));
+        $host = parse_url($trimmed, PHP_URL_HOST);
+        if (!in_array($scheme, ['http', 'https'], true) || !is_string($host) || $host === '') {
+            throw new OpenBankingException(
+                sprintf('apiBaseUrl must start with http:// or https:// (got %s)', var_export($trimmed, true)),
+            );
+        }
+        if ($scheme === 'http' && !in_array(strtolower(trim($host, '[]')), self::LOOPBACK_HOSTS, true)) {
+            throw new OpenBankingException(
+                sprintf(
+                    'apiBaseUrl must use https:// -- cleartext http:// would send the API key and '
+                    . 'decrypted session uids over the network (got %s)',
+                    var_export($trimmed, true),
+                ),
+            );
+        }
+
+        return rtrim($trimmed, '/');
+    }
+
     /**
      * @param array{
      *     curl_options?: array<int, mixed>,
@@ -71,9 +107,6 @@ final class Client
         #[\SensitiveParameter] string $privateKeyPkcs8,
         #[\SensitiveParameter] array $options = [],
     ) {
-        if (trim($apiBaseUrl) === '') {
-            throw new OpenBankingException('apiBaseUrl is required');
-        }
         if (trim($apiKey) === '') {
             throw new OpenBankingException('apiKey is required');
         }
@@ -81,7 +114,7 @@ final class Client
             throw new OpenBankingException('privateKeyPkcs8 is required');
         }
 
-        $this->apiBaseUrl = rtrim($apiBaseUrl, '/');
+        $this->apiBaseUrl = self::normalizeBaseUrl($apiBaseUrl);
         $this->apiKey = new Secret($apiKey);
         $this->envelope = Envelope::fromPkcs8Base64($privateKeyPkcs8);
 
