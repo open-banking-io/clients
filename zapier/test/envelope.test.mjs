@@ -1,17 +1,18 @@
-'use strict';
 
-const { readFileSync } = require('node:fs');
-const { join } = require('node:path');
-const { expect } = require('chai');
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { expect } from 'chai';
 
-const { decryptTo, importPrivateKey } = require('../lib/envelope');
+import { decryptTo, importPrivateKey } from '../lib/envelope.js';
 
 // Decrypt the shared cross-language test vectors and assert byte-identical results
 // to the other SDKs. This proves the port matches the canonical implementation.
 // The vectors are vendored under test/fixtures so they survive the subtree-split
 // to the open-banking-io/zapier mirror repo (the monorepo's fixtures/ does not).
 
-const FIXTURES = join(__dirname, 'fixtures');
+import { fileURLToPath } from 'node:url';
+import { dirname } from 'node:path';
+const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), 'fixtures');
 
 function loadJson(name) {
   return JSON.parse(readFileSync(join(FIXTURES, name), 'utf8'));

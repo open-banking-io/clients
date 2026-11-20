@@ -66,12 +66,33 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: ${{ matrix.node-version }}
+      # vitest 5 and tsup 9 dropped Node 20, but the published package still supports it
+      # (engines: >=20). On Node 20 we therefore build with tsup 8 (last Node-20 line) and
+      # smoke-test the actual dist artifacts on the Node 20 runtime instead of the dev
+      # toolchain; the full suite runs on 22/24.
       - run: npm ci
+        if: matrix.node-version != 20
       - run: npm run lint
+        if: matrix.node-version != 20
       - run: npm run format:check
+        if: matrix.node-version != 20
       - run: npm run typecheck
+        if: matrix.node-version != 20
       - run: npm run build
+        if: matrix.node-version != 20
       - run: npm test
+        if: matrix.node-version != 20
+      - name: Build dist with tsup 8 (last Node-20-compatible line)
+        if: matrix.node-version == 20
+        run: |
+          npm install --no-fund --no-audit --ignore-scripts
+          npm install tsup@8 --no-save --no-fund --no-audit --ignore-scripts
+          npx tsup
+      - name: Smoke test dist on Node 20
+        if: matrix.node-version == 20
+        run: |
+          node -e "const c = require('./dist/index.cjs'); if (typeof c.OpenBankingClient !== 'function') { throw new Error('cjs entry broken'); } console.log('cjs entry ok');"
+          node --input-type=module -e "const m = await import('./dist/index.js'); if (typeof m.OpenBankingClient !== 'function') { throw new Error('esm entry broken'); } console.log('esm entry ok');"
 
   n8n:
     needs: changes
@@ -97,7 +118,10 @@ jobs:
       - run: npm run format:check
       - run: npm run typecheck
       - run: npm run build
+      # vitest 5 dropped Node 20 (package engines stay >=20.15): the compiled node code is
+      # type-checked and built on 20, tests run on 22/24.
       - run: npm test
+        if: matrix.node-version != 20
 
   python:
     needs: changes

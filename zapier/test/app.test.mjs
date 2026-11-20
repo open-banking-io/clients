@@ -1,9 +1,9 @@
-'use strict';
 
-const { expect } = require('chai');
-const schema = require('zapier-platform-schema');
+import { expect } from 'chai';
+import { readFileSync } from 'node:fs';
+import schema from 'zapier-platform-schema';
 
-const app = require('../index');
+import app from '../index.js';
 
 // Validates the full app definition against the real zapier-platform schema —
 // the same check `zapier push` runs. Catches structural mistakes (e.g. arrays
@@ -58,7 +58,7 @@ describe('app definition', () => {
     // schema devDependency is pinned the same way so validation results
     // don't drift under a floating range.
     const EXACT = /^\d+\.\d+\.\d+$/;
-    const pkg = require('../package.json');
+    const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
     expect(pkg.dependencies['zapier-platform-core']).to.match(EXACT);
     expect(pkg.devDependencies['zapier-platform-schema']).to.match(EXACT);
   });
