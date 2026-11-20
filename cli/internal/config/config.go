@@ -9,7 +9,7 @@ import (
 	"os"
 	"path/filepath"
 
-	openbanking "github.com/open-banking-io/clients/go"
+	openbanking "github.com/open-banking-io/clients/go/v2"
 )
 
 // Bundle is the credentials bundle persisted by the CLI.

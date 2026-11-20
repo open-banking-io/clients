@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/open-banking-io/clients/cli/internal/ui"
-	openbanking "github.com/open-banking-io/clients/go"
+	openbanking "github.com/open-banking-io/clients/go/v2"
 )
 
 func TestAccessLabel(t *testing.T) {

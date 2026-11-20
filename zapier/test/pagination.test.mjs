@@ -1,7 +1,6 @@
-'use strict';
 
-const { expect } = require('chai');
-const { collectTransactionWires } = require('../lib/client');
+import { expect } from 'chai';
+import { collectTransactionWires } from '../lib/client.js';
 
 /** A fake paged endpoint over `total` synthetic transactions. */
 function pagedSource(total) {

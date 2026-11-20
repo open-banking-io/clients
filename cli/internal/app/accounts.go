@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/open-banking-io/clients/cli/internal/ui"
-	openbanking "github.com/open-banking-io/clients/go"
+	openbanking "github.com/open-banking-io/clients/go/v2"
 )
 
 func (a *App) accounts(args []string) error {

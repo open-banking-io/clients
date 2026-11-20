@@ -1,6 +1,6 @@
 {
   "name": "@open-banking-io/n8n-nodes-open-banking-io",
-  "version": "0.2.2",
+  "version": "1.0.0",
   "description": "n8n community node for open-banking.io: API-key auth with client-side, zero-knowledge decryption of your bank accounts, balances and transactions.",
   "license": "MIT",
   "author": {
@@ -54,14 +54,14 @@
     "n8n-workflow": "*"
   },
   "devDependencies": {
-    "@types/node": "^25.9.3",
+    "@types/node": "^26.6.6",
     "@typescript-eslint/parser": "^8.61.1",
-    "eslint": "^9.39.4",
-    "eslint-plugin-n8n-nodes-base": "^1.16.6",
+    "eslint": "^10.15.0",
+    "eslint-plugin-n8n-nodes-base": "^2.0.0",
     "gulp": "^5.0.1",
     "n8n-workflow": "^2.16.0",
     "prettier": "^3.8.4",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.9"
+    "vitest": "^5.1.1"
   }
 }

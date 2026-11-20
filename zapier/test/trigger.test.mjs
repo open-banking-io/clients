@@ -1,8 +1,7 @@
-'use strict';
 
-const { expect } = require('chai');
+import { expect } from 'chai';
 
-const trigger = require('../triggers/new_transaction');
+import trigger from '../triggers/new_transaction.js';
 
 // Drives the REAL trigger perform() with a faked Zapier z context (request +
 // cursor store). No envelopes — wires with a null `enc` decrypt to nulls, which

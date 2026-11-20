@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	openbanking "github.com/open-banking-io/clients/go"
+	openbanking "github.com/open-banking-io/clients/go/v2"
 )
 
 func TestSaveLoadRoundTrip(t *testing.T) {

@@ -1,13 +1,14 @@
-'use strict';
 
-const { readFileSync } = require('node:fs');
-const { join } = require('node:path');
-const { expect } = require('chai');
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { expect } from 'chai';
 
-const { resolveBundle } = require('../lib/client');
+import { resolveBundle } from '../lib/client.js';
 
 // Vendored under test/fixtures so it survives the subtree-split to the mirror repo.
-const FIXTURES = join(__dirname, 'fixtures');
+import { fileURLToPath } from 'node:url';
+import { dirname } from 'node:path';
+const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), 'fixtures');
 const BUNDLE = readFileSync(join(FIXTURES, 'credentials.json'), 'utf8');
 // The fixture bundle ships with this apiBaseUrl.
 const BUNDLE_URL = 'http://localhost:8081';

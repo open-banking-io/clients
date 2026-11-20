@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "beancount-openbanking-io"
-version = "0.1.0"
+version = "1.0.0"
 description = "Beancount/beangulp importer for open-banking.io — zero-knowledge PSD2 bank sync for EEA & UK banks."
 readme = "README.md"
 requires-python = ">=3.10"

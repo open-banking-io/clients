@@ -10,7 +10,7 @@ import (
 
 	"github.com/open-banking-io/clients/cli/internal/config"
 	"github.com/open-banking-io/clients/cli/internal/ui"
-	openbanking "github.com/open-banking-io/clients/go"
+	openbanking "github.com/open-banking-io/clients/go/v2"
 )
 
 // deadURL returns the URL of a server that has already been closed: connecting to it fails.
