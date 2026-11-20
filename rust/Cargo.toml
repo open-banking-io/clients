@@ -16,7 +16,7 @@ readme = "README.md"
 name = "open_banking_io"
 
 [dependencies]
-p256 = { version = "0.13", features = ["ecdh", "pkcs8"] }
+p256 = { version = "0.14", features = ["ecdh", "pkcs8"] }
 hkdf = "0.12"
 sha2 = "0.10"
 aes-gcm = "0.10"
