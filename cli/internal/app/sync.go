@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/open-banking-io/clients/cli/internal/ui"
-	openbanking "github.com/open-banking-io/clients/go"
+	openbanking "github.com/open-banking-io/clients/go/v2"
 )
 
 func (a *App) sync(args []string) error {

@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	openbanking "github.com/open-banking-io/clients/go"
+	openbanking "github.com/open-banking-io/clients/go/v2"
 )
 
 var transactionsPath = regexp.MustCompile(`^/api/accounts/[^/]+/transactions$`)

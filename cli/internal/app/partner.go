@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	openbanking "github.com/open-banking-io/clients/go"
+	openbanking "github.com/open-banking-io/clients/go/v2"
 )
 
 const partnerKeyUsage = "usage: openbanking partner key generate [--out FILE] [--print-private] | fingerprint [<file>|-] | answer --key FILE [<envelope>|-]"

@@ -13,7 +13,7 @@ import (
 
 	"github.com/open-banking-io/clients/cli/internal/config"
 	"github.com/open-banking-io/clients/cli/internal/ui"
-	openbanking "github.com/open-banking-io/clients/go"
+	openbanking "github.com/open-banking-io/clients/go/v2"
 )
 
 func (a *App) key(args []string) error {
