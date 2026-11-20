@@ -170,10 +170,11 @@ class OpenBankingClientTest {
     // teardown be immediate (no fixed sleep) so the test stays fast.
     CountDownLatch release = new CountDownLatch(1);
     HttpServer slow =
-        startServer(ex -> {
-          awaitQuietly(release);
-          respond(ex, 200, "[]".getBytes(StandardCharsets.UTF_8));
-        });
+        startServer(
+            ex -> {
+              awaitQuietly(release);
+              respond(ex, 200, "[]".getBytes(StandardCharsets.UTF_8));
+            });
     try {
       String slowUrl = "http://127.0.0.1:" + slow.getAddress().getPort();
       OpenBankingClient c =
@@ -198,14 +199,15 @@ class OpenBankingClientTest {
     byte[] accounts = Files.readAllBytes(FIXTURES.resolve("api/accounts.json"));
     CountDownLatch release = new CountDownLatch(1);
     HttpServer slow =
-        startServer(ex -> {
-          if ("GET".equals(ex.getRequestMethod())) {
-            respond(ex, 200, accounts);
-            return;
-          }
-          awaitQuietly(release);
-          respond(ex, 200, "{}".getBytes(StandardCharsets.UTF_8));
-        });
+        startServer(
+            ex -> {
+              if ("GET".equals(ex.getRequestMethod())) {
+                respond(ex, 200, accounts);
+                return;
+              }
+              awaitQuietly(release);
+              respond(ex, 200, "{}".getBytes(StandardCharsets.UTF_8));
+            });
     try {
       String slowUrl = "http://127.0.0.1:" + slow.getAddress().getPort();
       OpenBankingClient c =
