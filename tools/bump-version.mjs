@@ -17,7 +17,7 @@ import { dirname, join, resolve } from "node:path";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..");
 
-const PACKAGES = ["dotnet", "node", "n8n", "python", "rust", "java", "go", "ruby", "php", "beancount", "erpnext"];
+const PACKAGES = ["dotnet", "node", "n8n", "zapier", "python", "rust", "java", "go", "ruby", "php", "beancount", "erpnext"];
 
 // SemVer 2.0.0 (https://semver.org) — practical, anchored.
 const SEMVER =
@@ -70,6 +70,12 @@ const bumpers = {
     // The n8n community node package — same shape as node/.
     setJsonVersion("n8n/package.json", version);
     setLockfileVersion("n8n/package-lock.json", version);
+  },
+
+  zapier(version) {
+    // The Zapier integration app — same shape as node/.
+    setJsonVersion("zapier/package.json", version);
+    setLockfileVersion("zapier/package-lock.json", version);
   },
 
   python(version) {

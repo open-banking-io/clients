@@ -20,6 +20,7 @@ on:
           - cli
           - beancount
           - erpnext
+          - zapier
       version:
         description: New version, e.g. 0.2.0 (no leading "v")
         required: true
