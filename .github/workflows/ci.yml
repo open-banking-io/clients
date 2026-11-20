@@ -230,7 +230,10 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        java-version: ['17', '21']
+        # Pinned to the CVE-2026-114938 ("Java4Shell") fixed builds — setup-java
+        # resolves feature versions from the runner tool-cache, which can be stale.
+        # Bump these pins on quarterly CPU releases.
+        java-version: ['17.0.21.1+2', '21.0.13.1+2']
     defaults:
       run:
         working-directory: java
