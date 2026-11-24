@@ -18,7 +18,9 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Server-to-server client for open-banking.io. Authenticates with an API key ({@code X-Api-Key})
@@ -44,6 +46,44 @@ public final class OpenBankingClient {
   private final ObjectMapper mapper =
       new ObjectMapper().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 
+  private static final Set<String> LOOPBACK_HOSTS = Set.of("localhost", "127.0.0.1", "::1");
+
+  /**
+   * Trims and validates the API base url, rejecting up front what would otherwise only surface as
+   * an opaque {@link java.io.IOException} on the first request, and refusing cleartext {@code
+   * http://} to a non-loopback host, which would put the API key and decrypted session uids on the
+   * wire.
+   */
+  private static String normalizeBaseUrl(String apiBaseUrl) {
+    if (isBlank(apiBaseUrl)) {
+      throw new OpenBankingException("apiBaseUrl is required");
+    }
+    String trimmed = apiBaseUrl.trim();
+
+    URI uri;
+    try {
+      uri = URI.create(trimmed);
+    } catch (IllegalArgumentException e) {
+      throw new OpenBankingException(
+          "apiBaseUrl must start with http:// or https:// (got \"" + trimmed + "\")");
+    }
+    String scheme = uri.getScheme() == null ? "" : uri.getScheme().toLowerCase(Locale.ROOT);
+    if ((!scheme.equals("http") && !scheme.equals("https")) || uri.getHost() == null) {
+      throw new OpenBankingException(
+          "apiBaseUrl must start with http:// or https:// (got \"" + trimmed + "\")");
+    }
+    String host = uri.getHost().toLowerCase(Locale.ROOT).replace("[", "").replace("]", "");
+    if (scheme.equals("http") && !LOOPBACK_HOSTS.contains(host)) {
+      throw new OpenBankingException(
+          "apiBaseUrl must use https:// -- cleartext http:// would send the API key and decrypted"
+              + " session uids over the network (got \""
+              + trimmed
+              + "\")");
+    }
+
+    return trimmed.replaceAll("/+$", "");
+  }
+
   /**
    * @param apiBaseUrl e.g. {@code https://open-banking.io}
    * @param apiKey the API key from your credentials bundle
@@ -68,16 +108,13 @@ public final class OpenBankingClient {
       String privateKeyPkcs8Base64,
       HttpClient httpClient,
       Duration requestTimeout) {
-    if (isBlank(apiBaseUrl)) {
-      throw new OpenBankingException("apiBaseUrl is required");
-    }
     if (isBlank(apiKey)) {
       throw new OpenBankingException("apiKey is required");
     }
     if (isBlank(privateKeyPkcs8Base64)) {
       throw new OpenBankingException("privateKeyPkcs8 is required");
     }
-    this.baseUrl = apiBaseUrl.replaceAll("/+$", "");
+    this.baseUrl = normalizeBaseUrl(apiBaseUrl);
     this.apiKey = apiKey;
     this.privateKey = Envelope.loadPrivateKey(privateKeyPkcs8Base64);
     this.http =
